@@ -291,22 +291,15 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*P
 func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 	ch := make(chan *Put)
 
-	fctn := func(key, value interface{}) bool {
-		go func() {
-			nodeId := key.(int)
-			client, err := c.clientMapping.getClientForNodeId(nodeId)
-			if err == nil {
-				put, _, err := client.SendGet(ctx, get)
-				// TODO: write better code
-				if err == nil && put != nil {
-					ch <- put
-				}
-			}
-		}()
-		return true
+	fctn := func(client CacheClient) {
+		put, _, err := client.SendGet(ctx, get)
+		if err == nil && put != nil {
+			ch <- put
+		}
 	}
 
 	c.clientMapping.forEach(fctn)
+
 	select {
 	case p := <-ch:
 		return p, nil
@@ -318,19 +311,11 @@ func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error) {
 	ch := make(chan *Putx)
 
-	fctn := func(key, value interface{}) bool {
-		go func() {
-			nodeId := key.(int)
-			client, err := c.clientMapping.getClientForNodeId(nodeId)
-			if err == nil {
-				putx, _, err := client.SendGetx(ctx, getx)
-				// TODO: write better code
-				if err == nil && putx != nil {
-					ch <- putx
-				}
-			}
-		}()
-		return true
+	fctn := func(client CacheClient) {
+		putx, _, err := client.SendGetx(ctx, getx)
+		if err == nil && putx != nil {
+			ch <- putx
+		}
 	}
 
 	c.clientMapping.forEach(fctn)

@@ -59,7 +59,7 @@ type CacheServer interface {
 type cacheClientMapping interface {
 	getClientForNodeId(nodeId int) (CacheClient, error)
 	addClientWithNodeId(nodeId int, addr string)
-	forEach(f func(key, value interface{}) bool)
+	forEach(f func(c CacheClient))
 	printStats()
 	clear()
 }
