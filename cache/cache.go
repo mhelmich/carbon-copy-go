@@ -253,7 +253,6 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 
 		p, oc, err = client.SendGet(ctx, get)
 		if oc != nil {
-			log.Infof("Received owner changed %v", oc)
 			nodeId = int(oc.NewOwnerId)
 		} else if p != nil {
 			return p, nil
