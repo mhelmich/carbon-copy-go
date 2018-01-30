@@ -105,9 +105,8 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 
 		put, err := c.multicastGet(context.Background(), g)
 		if err != nil {
-			msg := fmt.Sprintf("Couldn't find cache line with id %d", lineId)
-			log.Errorf(msg)
-			return nil, errors.New(msg)
+			log.Errorf(err.Error())
+			return nil, err
 		}
 
 		line = c.store.createCacheLineFromPut(lineId, put)
@@ -147,9 +146,8 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 
 			putx, err := c.unicastGetx(context.Background(), line.ownerId, getx)
 			if err != nil {
-				msg := fmt.Sprintf("Didn't get valid response for getx request for line %d", lineId)
-				log.Errorf(msg)
-				return nil, errors.New(msg)
+				log.Errorf(err.Error())
+				return nil, err
 			}
 			c.store.applyChangesFromPutx(line, putx, c.myNodeId)
 			return line.buffer, nil
@@ -164,9 +162,8 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 
 		putx, err := c.multicastGetx(context.Background(), g)
 		if err != nil {
-			msg := fmt.Sprintf("Couldn't find cache line with id %d", lineId)
-			log.Errorf(msg)
-			return nil, errors.New(msg)
+			log.Errorf(err.Error())
+			return nil, err
 		}
 
 		line = c.store.createCacheLineFromPutx(lineId, putx, c.myNodeId)
@@ -273,9 +270,8 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*P
 	for p == nil {
 		client, err = c.clientMapping.getClientForNodeId(nodeId)
 		if err != nil {
-			msg := fmt.Sprintf("Can't find client with node id %d", nodeId)
-			log.Errorf(msg)
-			return nil, errors.New(msg)
+			log.Errorf(err.Error())
+			return nil, err
 		}
 
 		p, oc, err = client.SendGetx(ctx, getx)
