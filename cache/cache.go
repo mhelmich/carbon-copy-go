@@ -241,7 +241,7 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 
 	// as long as we're getting owner changed messages,
 	// we keep iterating and try to find the actual line
-	for p == nil {
+	for { // ever...
 		client, err = c.clientMapping.getClientForNodeId(nodeId)
 		if err != nil {
 			log.Errorf(err.Error())
@@ -267,7 +267,7 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*P
 	var err error
 	var client CacheClient
 
-	for p == nil {
+	for { //ever...
 		client, err = c.clientMapping.getClientForNodeId(nodeId)
 		if err != nil {
 			log.Errorf(err.Error())
