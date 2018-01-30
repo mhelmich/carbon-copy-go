@@ -79,6 +79,10 @@ func (ccm *cacheClientMappingImpl) addClientWithNodeId(nodeId int, addr string) 
 	ccm.nodeIdToAddr.Store(nodeId, addr)
 }
 
+func (ccm *cacheClientMappingImpl) forEach(f func(key, value interface{}) bool) {
+	ccm.nodeIdToAddr.Range(f)
+}
+
 func (ccm *cacheClientMappingImpl) printStats() {
 	stats := &mc.Stats{}
 	ccm.connectionCache.Stats(stats)

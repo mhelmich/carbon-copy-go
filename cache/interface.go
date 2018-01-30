@@ -26,13 +26,13 @@ type Transaction interface {
 }
 
 type Cache interface {
-	AllocateWithData(buffer []byte, txn *Transaction) (int, error)
+	AllocateWithData(buffer []byte, txn Transaction) (int, error)
 	Get(lineId int) ([]byte, error)
-	Gets(lineId int, txn *Transaction) ([]byte, error)
-	Getx(lineId int, txn *Transaction) ([]byte, error)
-	Put(lineId int, buffer []byte, txn *Transaction)
-	Putx(lineId int, buffer []byte, txn *Transaction)
-	NewTransaction() *Transaction
+	Gets(lineId int, txn Transaction) ([]byte, error)
+	Getx(lineId int, txn Transaction) ([]byte, error)
+	Put(lineId int, buffer []byte, txn Transaction)
+	Putx(lineId int, buffer []byte, txn Transaction)
+	NewTransaction() Transaction
 	Stop()
 }
 
@@ -54,4 +54,12 @@ type CacheServer interface {
 	Getx(ctx context.Context, req *Getx) (*GetxResponse, error)
 	Invalidate(ctx context.Context, in *Inv) (*InvAck, error)
 	Stop()
+}
+
+type cacheClientMapping interface {
+	getClientForNodeId(nodeId int) (CacheClient, error)
+	addClientWithNodeId(nodeId int, addr string)
+	forEach(f func(key, value interface{}) bool)
+	printStats()
+	clear()
 }

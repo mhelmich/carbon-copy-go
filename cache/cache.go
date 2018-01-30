@@ -48,13 +48,19 @@ func createNewCache(myNodeId int, serverPort int) (*cacheImpl, error) {
 
 type cacheImpl struct {
 	store         *cacheLineStore
-	clientMapping *cacheClientMappingImpl
+	clientMapping cacheClientMapping
 	server        CacheServer
 	myNodeId      int
 	port          int
 }
 
-func (c *cacheImpl) AllocateWithData(buffer []byte, txn *Transaction) (int, error) {
+////////////////////////////////////////////////////////////////////////
+/////
+/////  INTERFACE DEFINITIONS
+/////
+////////////////////////////////////////////////////////////////////////
+
+func (c *cacheImpl) AllocateWithData(buffer []byte, txn Transaction) (int, error) {
 	newLineId := getNextLineId()
 	line := newCacheLine(newLineId, c.myNodeId, buffer)
 	c.store.addCacheLineToLocalCache(line)
@@ -68,9 +74,11 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 		switch line.cacheLineState {
 
 		case CacheLineState_Exclusive, CacheLineState_Owned:
+			// I have the most current version that means we're good to go
 			return line.buffer, nil
 
 		case CacheLineState_Shared, CacheLineState_Invalid:
+			// need to get latest version of the line as I don't have it
 			g := &Get{
 				SenderId: int32(c.myNodeId),
 				LineId:   int64(lineId),
@@ -78,9 +86,8 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 
 			put, err := c.unicastGet(context.Background(), line.ownerId, g)
 			if err != nil {
-				msg := fmt.Sprintf("Didn't get valid response for get request for line %d", lineId)
-				log.Errorf(msg)
-				return nil, errors.New(msg)
+				log.Errorf(err.Error())
+				return nil, err
 			}
 
 			c.store.applyChangesFromPut(line, put)
@@ -113,11 +120,11 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 	}
 }
 
-func (c *cacheImpl) Gets(lineId int, txn *Transaction) ([]byte, error) {
+func (c *cacheImpl) Gets(lineId int, txn Transaction) ([]byte, error) {
 	return nil, nil
 }
 
-func (c *cacheImpl) Getx(lineId int, txn *Transaction) ([]byte, error) {
+func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -173,7 +180,7 @@ func (c *cacheImpl) Getx(lineId int, txn *Transaction) ([]byte, error) {
 	return nil, nil
 }
 
-func (c *cacheImpl) Put(lineId int, buffer []byte, txn *Transaction) {
+func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) {
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -190,16 +197,12 @@ func (c *cacheImpl) Put(lineId int, buffer []byte, txn *Transaction) {
 	}
 }
 
-func (c *cacheImpl) Putx(lineId int, buffer []byte, txn *Transaction) {
+func (c *cacheImpl) Putx(lineId int, buffer []byte, txn Transaction) {
 
 }
 
-func (c *cacheImpl) NewTransaction() *Transaction {
+func (c *cacheImpl) NewTransaction() Transaction {
 	return nil
-}
-
-func (c *cacheImpl) invalidate(lineId int) {
-
 }
 
 func (c *cacheImpl) Stop() {
@@ -219,6 +222,16 @@ func (c *cacheImpl) Stop() {
 	wg.Wait()
 }
 
+////////////////////////////////////////////////////////////////////////
+/////
+/////  INTERNAL HELPERS
+/////
+////////////////////////////////////////////////////////////////////////
+
+func (c *cacheImpl) invalidate(lineId int) {
+
+}
+
 func (c *cacheImpl) addPeerNode(nodeId int, addr string) {
 	c.clientMapping.addClientWithNodeId(nodeId, addr)
 }
@@ -229,12 +242,13 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 	var err error
 	var client CacheClient
 
+	// as long as we're getting owner changed messages,
+	// we keep iterating and try to find the actual line
 	for p == nil {
 		client, err = c.clientMapping.getClientForNodeId(nodeId)
 		if err != nil {
-			msg := fmt.Sprintf("Can't find client with node id %d", nodeId)
-			log.Errorf(msg)
-			return nil, errors.New(msg)
+			log.Errorf(err.Error())
+			return nil, err
 		}
 
 		p, oc, err = client.SendGet(ctx, get)
@@ -288,6 +302,7 @@ func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 			client, err := c.clientMapping.getClientForNodeId(nodeId)
 			if err == nil {
 				put, _, err := client.SendGet(ctx, get)
+				// TODO: write better code
 				if err == nil && put != nil {
 					ch <- put
 				}
@@ -296,7 +311,7 @@ func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 		return true
 	}
 
-	c.clientMapping.nodeIdToAddr.Range(fctn)
+	c.clientMapping.forEach(fctn)
 	select {
 	case p := <-ch:
 		return p, nil
@@ -323,7 +338,7 @@ func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error
 		return true
 	}
 
-	c.clientMapping.nodeIdToAddr.Range(fctn)
+	c.clientMapping.forEach(fctn)
 	select {
 	case p := <-ch:
 		return p, nil
