@@ -31,12 +31,12 @@ type transactionImpl struct {
 }
 
 func (t *transactionImpl) Commit() error {
-	releaseAllLocks()
+	t.releaseAllLocks()
 	return nil
 }
 
 func (t *transactionImpl) Rollback() error {
-	releaseAllLocks()
+	t.releaseAllLocks()
 	return nil
 }
 
@@ -47,7 +47,7 @@ func (t *transactionImpl) addToTxn(cl *CacheLine) {
 
 func (t *transactionImpl) releaseAllLocks() {
 	for e := t.cacheLines.Front(); e != nil; e = e.Next() {
-		cl := e.(*CacheLine)
+		cl := e.Value.(*CacheLine)
 		cl.unlock()
 	}
 }
