@@ -79,7 +79,7 @@ func (ccm *cacheClientMappingImpl) addClientWithNodeId(nodeId int, addr string) 
 	ccm.nodeIdToAddr.Store(nodeId, addr)
 }
 
-func (ccm *cacheClientMappingImpl) forEach(f func(c CacheClient)) {
+func (ccm *cacheClientMappingImpl) forEachParallel(f func(c CacheClient)) {
 	fctn := func(key, value interface{}) bool {
 		go func() {
 			nodeId := key.(int)

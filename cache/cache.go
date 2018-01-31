@@ -272,7 +272,7 @@ func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 		}
 	}
 
-	c.clientMapping.forEach(fctn)
+	c.clientMapping.forEachParallel(fctn)
 
 	select {
 	case p := <-ch:
@@ -319,7 +319,7 @@ func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error
 		}
 	}
 
-	c.clientMapping.forEach(fctn)
+	c.clientMapping.forEachParallel(fctn)
 	select {
 	case p := <-ch:
 		return p, nil
