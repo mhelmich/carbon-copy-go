@@ -20,6 +20,11 @@ import (
 	"golang.org/x/net/context"
 )
 
+type Error string
+func (e Error) Error() string { return string(e) }
+
+const TimeoutError = Error("Timeout")
+
 type Transaction interface {
 	Commit() error
 	Rollback() error

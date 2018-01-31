@@ -130,14 +130,7 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 		switch line.cacheLineState {
 		case CacheLineState_Exclusive:
 			return line.buffer, nil
-		case CacheLineState_Owned:
-			// elevate to exclusive
-			inv := &Inv{
-				SenderId: int32(c.myNodeId),
-				LineId:   int64(line.id),
-			}
-			c.multicastInvalidate(context.Background(), line.sharers, inv)
-			return line.buffer, nil
+
 		case CacheLineState_Shared, CacheLineState_Invalid:
 			getx := &Getx{
 				SenderId: int32(c.myNodeId),
@@ -151,8 +144,26 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 			}
 
 			c.store.applyChangesFromPutx(line, putx, c.myNodeId)
-			return line.buffer, nil
+			// shabang#!
+			// fall through this case and invalidate the line
+			fallthrough
 
+			case CacheLineState_Owned:
+			// elevate to exclusive
+			inv := &Inv{
+				SenderId: int32(c.myNodeId),
+				LineId:   int64(line.id),
+			}
+
+			err := c.multicastInvalidate(context.Background(), line.sharers, inv)
+			if err == nil {
+				line.lock()
+				line.cacheLineState = CacheLineState_Exclusive
+				line.unlock()
+				return line.buffer, nil
+			} else {
+				return nil, err
+			}
 		}
 	} else {
 		// multi cast to everybody I know whether anyone knows this line
@@ -226,10 +237,6 @@ func (c *cacheImpl) Stop() {
 /////
 ////////////////////////////////////////////////////////////////////////
 
-func (c *cacheImpl) invalidate(lineId int) {
-
-}
-
 func (c *cacheImpl) addPeerNode(nodeId int, addr string) {
 	c.clientMapping.addClientWithNodeId(nodeId, addr)
 }
@@ -278,7 +285,7 @@ func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 	case p := <-ch:
 		return p, nil
 	case <-time.After(5 * time.Second):
-		return nil, errors.New("Timeout")
+		return nil, TimeoutError
 	}
 }
 
@@ -324,20 +331,38 @@ func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error
 	case p := <-ch:
 		return p, nil
 	case <-time.After(5 * time.Second):
-		return nil, errors.New("Timeout")
+		return nil, TimeoutError
 	}
 }
 
-func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv *Inv) {
-	for sharerId, _ := range sharers {
+func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv *Inv) error {
+	ch := make(chan interface{}, len(sharers))
+
+	for _, sharerId := range sharers {
 		go func() {
 			client, err := c.clientMapping.getClientForNodeId(sharerId)
 			if err == nil {
 				_, err := client.SendInvalidate(ctx, inv)
 				if err != nil {
-					log.Errorf("Couldn't invalidate %v with %d because of %s", inv, sharerId, err)
+					log.Errorf("Couldn't invalidate %v with %d because of %s", inv, sharerId, err)					
 				}
+				// send to channel anyways
+				// that way we're not stopping the entire train
+				ch <- 1
 			}
 		}()
 	}
+
+	// TODO: waiting for everyone might be too strict and too slow
+	// what happens if one node isn't reachable
+	msgCount := 0
+	for msgCount < len(sharers) {
+		select {
+		case <-ch:
+			msgCount++
+		case <-time.After(5 * time.Second):
+			return TimeoutError
+		}
+	}
+	return nil
 }

@@ -64,7 +64,7 @@ func (c *cacheLineStore) applyChangesFromPut(line *CacheLine, put *Put) {
 func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *Putx, myNodeId int) {
 	line.lock()
 	line.ownerId = myNodeId
-	line.cacheLineState = CacheLineState_Exclusive
+	line.cacheLineState = CacheLineState_Owned
 	line.version = int(p.Version)
 	line.buffer = p.Buffer
 	line.unlock()
