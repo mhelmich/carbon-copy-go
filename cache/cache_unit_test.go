@@ -17,11 +17,11 @@
 package cache
 
 import (
-	"testing"
-	"errors"
 	"context"
-	"github.com/stretchr/testify/mock"
+	"errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"testing"
 )
 
 ////////////////////////////////////////////////////////////////////////
@@ -37,7 +37,7 @@ type mockCacheClient struct {
 
 func (cc *mockCacheClient) SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error) {
 	args := cc.Called(ctx, g)
-	
+
 	if cc.fGet == nil {
 		// take care of nil pointers
 		p := args.Get(0)
@@ -95,7 +95,7 @@ func (ccm *mockCacheClientMapping) printStats() {
 func (ccm *mockCacheClientMapping) clear() {
 }
 
-func mockCache(mapping cacheClientMapping) (*cacheImpl) {
+func mockCache(mapping cacheClientMapping) *cacheImpl {
 	myNodeId := 111
 	clStore := createNewCacheLineStore()
 
@@ -123,18 +123,18 @@ func TestGetUnit(t *testing.T) {
 	var p *Put
 	var oc *OwnerChanged
 	p = &Put{
-		Error: CacheError_NoError,
+		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId: int64(lineId),
-		Version: int32(2),
-		Buffer: []byte(latestBuffer),
+		LineId:   int64(lineId),
+		Version:  int32(2),
+		Buffer:   []byte(latestBuffer),
 	}
 	oc = nil
 	clientMock.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Get")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock, nil)
 	cache := mockCache(m)
-	
+
 	line := newCacheLine(lineId, 111, []byte("lalalalalala"))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
@@ -157,15 +157,15 @@ func TestGetWithOwnerChangedUnit(t *testing.T) {
 	latestBuffer := "testing_test_test_test"
 
 	p := &Put{
-		Error: CacheError_NoError,
+		Error:    CacheError_NoError,
 		SenderId: int32(5678),
-		LineId: int64(lineId),
-		Version: int32(2),
-		Buffer: []byte(latestBuffer),
+		LineId:   int64(lineId),
+		Version:  int32(2),
+		Buffer:   []byte(latestBuffer),
 	}
 	oc := &OwnerChanged{
-		SenderId: int32(1234),
-		LineId: int64(lineId),
+		SenderId:   int32(1234),
+		LineId:     int64(lineId),
 		NewOwnerId: int32(5678),
 	}
 
@@ -178,7 +178,7 @@ func TestGetWithOwnerChangedUnit(t *testing.T) {
 	m.On("getClientForNodeId", 1234).Return(clientMock1234, nil)
 	m.On("getClientForNodeId", 5678).Return(clientMock5678, nil)
 	cache := mockCache(m)
-	
+
 	line := newCacheLine(lineId, 111, []byte("lalalalalala"))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
