@@ -27,7 +27,7 @@ import (
 
 // SERVER IMPLEMENTATION
 
-func createNewServer(myNodeId int, serverPort int, store *cacheLineStore) (CacheServer, error) {
+func createNewServer(myNodeId int, serverPort int, store *cacheLineStore) (*cacheServerImpl, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", serverPort))
 	if err != nil {
 		return nil, err

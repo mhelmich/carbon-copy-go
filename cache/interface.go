@@ -58,7 +58,6 @@ func NewCache(myNodeId int, serverPort int) (Cache, error) {
 	return createNewCache(myNodeId, serverPort)
 }
 
-// TODO make this interface package private
 type cacheClient interface {
 	SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error)
 	SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error)
@@ -66,8 +65,7 @@ type cacheClient interface {
 	Close() error
 }
 
-// TODO make this interface package private
-type CacheServer interface {
+type cacheServer interface {
 	Get(ctx context.Context, req *Get) (*GetResponse, error)
 	Getx(ctx context.Context, req *Getx) (*GetxResponse, error)
 	Invalidate(ctx context.Context, in *Inv) (*InvAck, error)

@@ -49,7 +49,7 @@ func createNewCache(myNodeId int, serverPort int) (*cacheImpl, error) {
 type cacheImpl struct {
 	store         *cacheLineStore
 	clientMapping cacheClientMapping
-	server        CacheServer
+	server        cacheServer
 	myNodeId      int
 	port          int
 }
