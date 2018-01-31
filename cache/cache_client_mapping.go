@@ -59,7 +59,7 @@ type cacheClientMappingImpl struct {
 	nodeIdToAddr    *sync.Map
 }
 
-func (ccm *cacheClientMappingImpl) getClientForNodeId(nodeId int) (CacheClient, error) {
+func (ccm *cacheClientMappingImpl) getClientForNodeId(nodeId int) (cacheClient, error) {
 	addr, ok := ccm.nodeIdToAddr.Load(nodeId)
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("Can't find address for node id %d", nodeId))
@@ -79,7 +79,7 @@ func (ccm *cacheClientMappingImpl) addClientWithNodeId(nodeId int, addr string) 
 	ccm.nodeIdToAddr.Store(nodeId, addr)
 }
 
-func (ccm *cacheClientMappingImpl) forEachParallel(f func(CacheClient)) {
+func (ccm *cacheClientMappingImpl) forEachParallel(f func(cacheClient)) {
 	fctn := func(key, value interface{}) bool {
 		go func() {
 			nodeId := key.(int)

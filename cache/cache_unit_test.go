@@ -90,15 +90,15 @@ type mockCacheClientMapping struct {
 	mock.Mock
 }
 
-func (ccm *mockCacheClientMapping) getClientForNodeId(nodeId int) (CacheClient, error) {
+func (ccm *mockCacheClientMapping) getClientForNodeId(nodeId int) (cacheClient, error) {
 	args := ccm.Called(nodeId)
-	return args.Get(0).(CacheClient), args.Error(1)
+	return args.Get(0).(cacheClient), args.Error(1)
 }
 
 func (ccm *mockCacheClientMapping) addClientWithNodeId(nodeId int, addr string) {
 }
 
-func (ccm *mockCacheClientMapping) forEachParallel(f func(c CacheClient)) {
+func (ccm *mockCacheClientMapping) forEachParallel(f func(c cacheClient)) {
 }
 
 func (ccm *mockCacheClientMapping) printStats() {

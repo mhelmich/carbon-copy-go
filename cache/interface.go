@@ -59,7 +59,7 @@ func NewCache(myNodeId int, serverPort int) (Cache, error) {
 }
 
 // TODO make this interface package private
-type CacheClient interface {
+type cacheClient interface {
 	SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error)
 	SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error)
 	SendInvalidate(ctx context.Context, i *Inv) (*InvAck, error)
@@ -75,9 +75,9 @@ type CacheServer interface {
 }
 
 type cacheClientMapping interface {
-	getClientForNodeId(nodeId int) (CacheClient, error)
+	getClientForNodeId(nodeId int) (cacheClient, error)
 	addClientWithNodeId(nodeId int, addr string)
-	forEachParallel(f func(c CacheClient))
+	forEachParallel(f func(c cacheClient))
 	printStats()
 	clear()
 }

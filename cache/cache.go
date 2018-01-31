@@ -245,7 +245,7 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 	var p *Put
 	var oc *OwnerChanged
 	var err error
-	var client CacheClient
+	var client cacheClient
 
 	// as long as we're getting owner changed messages,
 	// we keep iterating and try to find the actual line
@@ -272,7 +272,7 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 	ch := make(chan *Put)
 
-	fctn := func(client CacheClient) {
+	fctn := func(client cacheClient) {
 		put, _, err := client.SendGet(ctx, get)
 		if err == nil && put != nil {
 			ch <- put
@@ -293,7 +293,7 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*P
 	var p *Putx
 	var oc *OwnerChanged
 	var err error
-	var client CacheClient
+	var client cacheClient
 
 	for { //ever...
 		client, err = c.clientMapping.getClientForNodeId(nodeId)
@@ -319,7 +319,7 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*P
 func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error) {
 	ch := make(chan *Putx)
 
-	fctn := func(client CacheClient) {
+	fctn := func(client cacheClient) {
 		putx, _, err := client.SendGetx(ctx, getx)
 		if err == nil && putx != nil {
 			ch <- putx
