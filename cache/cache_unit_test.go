@@ -79,7 +79,17 @@ func (cc *mockCacheClient) SendGetx(ctx context.Context, g *Getx) (*Putx, *Owner
 }
 
 func (cc *mockCacheClient) SendInvalidate(ctx context.Context, i *Inv) (*InvAck, error) {
-	return nil, nil
+	args := cc.Called(ctx, i)
+	// take care of nil pointers
+	ia := args.Get(0)
+	var invAck *InvAck
+	if ia == nil {
+		invAck = nil
+	} else {
+		invAck = ia.(*InvAck)
+	}
+
+	return invAck, args.Error(1)
 }
 
 func (cc *mockCacheClient) Close() error {
