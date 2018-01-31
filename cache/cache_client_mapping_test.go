@@ -45,7 +45,7 @@ func TestTheConnectionCache(t *testing.T) {
 
 	connCache := mc.NewLoadingCache(
 		loader,
-		mc.WithExpireAfterAccess(2*time.Second),
+		mc.WithExpireAfterAccess(1*time.Second),
 		mc.WithRemovalListener(removalListener),
 	)
 
@@ -59,7 +59,7 @@ func TestTheConnectionCache(t *testing.T) {
 	m.getClientForNodeId(1234)
 	assert.True(t, waitTimeoutChan(loadedChan, 5*time.Second), "Loading callback wasn't executed")
 	// wait for key to expire
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
 	log.Infof("Adding second client and hopefully trigger clean up logic...")
 	m.addClientWithNodeId(9999, "addr.doesnt.exist:1234")
 	m.getClientForNodeId(9999)
