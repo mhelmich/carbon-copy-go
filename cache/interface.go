@@ -20,27 +20,40 @@ import (
 	"golang.org/x/net/context"
 )
 
-type Error string
-func (e Error) Error() string { return string(e) }
+type CarbonGridError string
+func (e CarbonGridError) Error() string { return string(e) }
 
-const TimeoutError = Error("Timeout")
+// This error is returned when remote operations time out.
+const TimeoutError = CarbonGridError("Timeout")
 
 type Transaction interface {
+	// Makes all operations that are part of this transaction durable.
 	Commit() error
+	// Reverts all operations being done as part of this transaction.
 	Rollback() error
 }
 
 type Cache interface {
+	// Allocates a new item and returns its newly created id.
 	AllocateWithData(buffer []byte, txn Transaction) (int, error)
+	// Retrieves a particular item (if necessary remotely) and returns its contents.
 	Get(lineId int) ([]byte, error)
+	// Retrieves a particular item and registers to be a sharer of this item with the owner.
 	Gets(lineId int, txn Transaction) ([]byte, error)
+	// Retrieves a particular item cluster-exclusively.
+	// All other copies of this item will be invalidated.
 	Getx(lineId int, txn Transaction) ([]byte, error)
+	// Not needed...
 	Put(lineId int, buffer []byte, txn Transaction)
+	// Acquires exclusive ownership of an item and overrides its contents.
 	Putx(lineId int, buffer []byte, txn Transaction)
+	// Creates a new transaction.
 	NewTransaction() Transaction
+	// Stops the operation of this cache.
 	Stop()
 }
 
+// Constructor-type function creating a cache instance.
 func NewCache(myNodeId int, serverPort int) (Cache, error) {
 	return createNewCache(myNodeId, serverPort)
 }
