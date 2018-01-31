@@ -20,6 +20,7 @@ package cache;
 
 service CacheComm {
     rpc get(Get) returns (GetResponse) {}
+    rpc gets(Gets) returns (GetsResponse) {}
     rpc getx(Getx) returns (GetxResponse) {}
     rpc invalidate(Inv) returns (InvAck) {}
 }
@@ -49,6 +50,14 @@ message GetResponse {
     }
 }
 
+message GetsResponse {
+    oneof innerMessage {
+        Puts puts = 1;
+        OwnerChanged ownerChanged = 2;
+        Ack ack = 3;
+    }
+}
+
 message GetxResponse {
     oneof innerMessage {
         Putx putx = 1;
@@ -73,6 +82,20 @@ message Put {
 message Ack {
     int32 senderId = 1;
     int64 lineId = 2;
+}
+
+message Gets {
+    int32 senderId = 1;
+    int64 lineId = 2;
+}
+
+message Puts {
+    CacheError error = 1;
+    int32 senderId = 2;
+    int64 lineId = 3;
+    int32 version = 4;
+    repeated int32 sharers = 5;
+    bytes buffer = 6;
 }
 
 message Getx {
