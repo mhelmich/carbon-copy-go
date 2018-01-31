@@ -261,6 +261,27 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 	return nil, errors.New(fmt.Sprintf("Couldn't find cache lines for %v", get))
 }
 
+func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
+	log.Infof("milticast get")
+	ch := make(chan *Put)
+
+	fctn := func(client CacheClient) {
+		put, _, err := client.SendGet(ctx, get)
+		if err == nil && put != nil {
+			ch <- put
+		}
+	}
+
+	c.clientMapping.forEach(fctn)
+
+	select {
+	case p := <-ch:
+		return p, nil
+	case <-time.After(5 * time.Second):
+		return nil, errors.New("Timeout")
+	}
+}
+
 func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*Putx, error) {
 	var p *Putx
 	var oc *OwnerChanged
@@ -286,26 +307,6 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*P
 	}
 
 	return nil, errors.New(fmt.Sprintf("Couldn't find cache lines for %v", getx))
-}
-
-func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
-	ch := make(chan *Put)
-
-	fctn := func(client CacheClient) {
-		put, _, err := client.SendGet(ctx, get)
-		if err == nil && put != nil {
-			ch <- put
-		}
-	}
-
-	c.clientMapping.forEach(fctn)
-
-	select {
-	case p := <-ch:
-		return p, nil
-	case <-time.After(5 * time.Second):
-		return nil, errors.New("Timeout")
-	}
 }
 
 func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error) {
