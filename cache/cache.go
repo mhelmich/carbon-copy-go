@@ -262,7 +262,6 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 }
 
 func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
-	log.Infof("milticast get")
 	ch := make(chan *Put)
 
 	fctn := func(client CacheClient) {
