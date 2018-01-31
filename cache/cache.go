@@ -211,7 +211,7 @@ func (c *cacheImpl) Putx(lineId int, buffer []byte, txn Transaction) {
 }
 
 func (c *cacheImpl) NewTransaction() Transaction {
-	return nil
+	return createNewTransaction()
 }
 
 func (c *cacheImpl) Stop() {
