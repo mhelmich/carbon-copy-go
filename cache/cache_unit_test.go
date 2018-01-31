@@ -32,38 +32,50 @@ import (
 
 type mockCacheClient struct {
 	mock.Mock
-	fGet func() (*Put, *OwnerChanged, error)
 }
 
 func (cc *mockCacheClient) SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error) {
 	args := cc.Called(ctx, g)
-
-	if cc.fGet == nil {
-		// take care of nil pointers
-		p := args.Get(0)
-		var pr *Put
-		if p == nil {
-			pr = nil
-		} else {
-			pr = p.(*Put)
-		}
-
-		oc := args.Get(1)
-		var ocr *OwnerChanged
-		if oc == nil {
-			ocr = nil
-		} else {
-			ocr = oc.(*OwnerChanged)
-		}
-
-		return pr, ocr, args.Error(2)
+	// take care of nil pointers
+	p := args.Get(0)
+	var pr *Put
+	if p == nil {
+		pr = nil
 	} else {
-		return cc.fGet()
+		pr = p.(*Put)
 	}
+
+	oc := args.Get(1)
+	var ocr *OwnerChanged
+	if oc == nil {
+		ocr = nil
+	} else {
+		ocr = oc.(*OwnerChanged)
+	}
+
+	return pr, ocr, args.Error(2)
 }
 
 func (cc *mockCacheClient) SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error) {
-	return nil, nil, nil
+	args := cc.Called(ctx, g)
+	// take care of nil pointers
+	p := args.Get(0)
+	var pr *Putx
+	if p == nil {
+		pr = nil
+	} else {
+		pr = p.(*Putx)
+	}
+
+	oc := args.Get(1)
+	var ocr *OwnerChanged
+	if oc == nil {
+		ocr = nil
+	} else {
+		ocr = oc.(*OwnerChanged)
+	}
+
+	return pr, ocr, args.Error(2)
 }
 
 func (cc *mockCacheClient) SendInvalidate(ctx context.Context, i *Inv) (*InvAck, error) {
@@ -149,6 +161,42 @@ func TestGetUnit(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 2, l.version)
 	assert.Equal(t, CacheLineState_Shared, l.cacheLineState)
+	m.AssertNumberOfCalls(t, "getClientForNodeId", 1)
+}
+
+func TestGetxUnit(t *testing.T) {
+	lineId := 12345679
+	latestBuffer := "testing_test_test_test"
+	clientMock := new(mockCacheClient)
+	var p *Putx
+	var oc *OwnerChanged
+	p = &Putx{
+		Error:    CacheError_NoError,
+		SenderId: int32(1234),
+		LineId:   int64(lineId),
+		Version:  int32(2),
+		Buffer:   []byte(latestBuffer),
+	}
+	oc = nil
+	clientMock.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Getx")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
+	m := new(mockCacheClientMapping)
+	m.On("getClientForNodeId", 1234).Return(clientMock, nil)
+	cache := mockCache(m)
+
+	line := newCacheLine(lineId, 111, []byte("lalalalalala"))
+	line, loaded := cache.store.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Invalid
+	line.ownerId = 1234
+
+	// now run test
+	readBites, err := cache.Getx(lineId, nil)
+	assert.Nil(t, err)
+	assert.Equal(t, latestBuffer, string(readBites))
+	l, ok := cache.store.getCacheLineById(lineId)
+	assert.True(t, ok)
+	assert.Equal(t, 2, l.version)
+	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 1)
 }
 

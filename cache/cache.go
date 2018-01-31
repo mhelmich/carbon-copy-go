@@ -149,6 +149,7 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 				log.Errorf(err.Error())
 				return nil, err
 			}
+
 			c.store.applyChangesFromPutx(line, putx, c.myNodeId)
 			return line.buffer, nil
 
