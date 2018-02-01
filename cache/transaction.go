@@ -18,20 +18,54 @@ package cache
 
 import (
 	"container/list"
+	"fmt"
 )
 
 func createNewTransaction() *transactionImpl {
 	return &transactionImpl{
-		cacheLines: list.New(),
+		undo: list.New(),
 	}
 }
 
 type transactionImpl struct {
-	cacheLines *list.List
+	undo *list.List
+}
+
+type undo struct {
+	line    *CacheLine
+	version int
+	buf     []byte
 }
 
 func (t *transactionImpl) Commit() error {
+	for e := t.undo.Front(); e != nil; e = e.Next() {
+		undo := e.Value.(*undo)
+		err := t.canCommit(undo.line)
+		if err != nil {
+			t.releaseAllLocks()
+			return err
+		}
+	}
+
+	for e := t.undo.Front(); e != nil; e = e.Next() {
+		undo := e.Value.(*undo)
+		undo.line.version = undo.version
+		undo.line.buffer = undo.buf
+	}
+
 	t.releaseAllLocks()
+	return nil
+}
+
+func (t *transactionImpl) canCommit(line *CacheLine) error {
+	if !line.isLocked() {
+		return CarbonGridError(fmt.Sprintf("Line %d is not locked", line.id))
+	}
+
+	if line.cacheLineState != CacheLineState_Exclusive {
+		return CarbonGridError(fmt.Sprintf("Line %d is in state %v instead exclusive", line.id, line.cacheLineState))
+	}
+
 	return nil
 }
 
@@ -40,14 +74,19 @@ func (t *transactionImpl) Rollback() error {
 	return nil
 }
 
-func (t *transactionImpl) addToTxn(cl *CacheLine) {
-	t.cacheLines.PushBack(cl)
+func (t *transactionImpl) addToTxn(cl *CacheLine, newBuffer []byte) {
+	u := &undo{
+		line:    cl,
+		version: cl.version + 1,
+		buf:     newBuffer,
+	}
 	cl.lock()
+	t.undo.PushBack(u)
 }
 
 func (t *transactionImpl) releaseAllLocks() {
-	for e := t.cacheLines.Front(); e != nil; e = e.Next() {
-		cl := e.Value.(*CacheLine)
-		cl.unlock()
+	for e := t.undo.Front(); e != nil; e = e.Next() {
+		undo := e.Value.(*undo)
+		undo.line.unlock()
 	}
 }
