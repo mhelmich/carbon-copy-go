@@ -186,10 +186,11 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 
 		return line.buffer, nil
 	}
-	return nil, nil
+	return nil, errors.New("Unknown error!")
 }
 
 func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) {
+	Getx(lineId, txn)
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
