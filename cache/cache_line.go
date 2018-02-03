@@ -28,6 +28,7 @@ func newCacheLine(id int, myNodeId int, buffer []byte) *CacheLine {
 		version:        1,
 		ownerId:        myNodeId,
 		buffer:         buffer,
+		locked:         false,
 		mutex:          &sync.Mutex{},
 	}
 }
@@ -39,21 +40,24 @@ type CacheLine struct {
 	ownerId        int
 	sharers        []int
 	buffer         []byte
-	// used as a boolean
-	// 0 => false
-	// 1 => true
-	isLocked int
-	mutex    *sync.Mutex
+	locked         bool
+	mutex          *sync.Mutex
 }
 
 func (cl *CacheLine) lock() {
 	cl.mutex.Lock()
+	cl.locked = true
 }
 
 func (cl *CacheLine) unlock() {
+	cl.locked = false
 	cl.mutex.Unlock()
 }
 
+func (cl *CacheLine) isLocked() bool {
+	return cl.locked
+}
+
 func (cl *CacheLine) String() string {
-	return fmt.Sprintf("<id: %d state: %s version: %d owner: %d buffer length: %d>", cl.id, cl.cacheLineState.String(), cl.version, cl.ownerId, len(cl.buffer))
+	return fmt.Sprintf("<id: %d state: %s version: %d owner: %d locked: %b buffer length: %d>", cl.id, cl.cacheLineState.String(), cl.version, cl.ownerId, cl.locked, len(cl.buffer))
 }

@@ -56,6 +56,28 @@ func (cc *mockCacheClient) SendGet(ctx context.Context, g *Get) (*Put, *OwnerCha
 	return pr, ocr, args.Error(2)
 }
 
+func (cc *mockCacheClient) SendGets(ctx context.Context, g *Gets) (*Puts, *OwnerChanged, error) {
+	args := cc.Called(ctx, g)
+	// take care of nil pointers
+	p := args.Get(0)
+	var pr *Puts
+	if p == nil {
+		pr = nil
+	} else {
+		pr = p.(*Puts)
+	}
+
+	oc := args.Get(1)
+	var ocr *OwnerChanged
+	if oc == nil {
+		ocr = nil
+	} else {
+		ocr = oc.(*OwnerChanged)
+	}
+
+	return pr, ocr, args.Error(2)
+}
+
 func (cc *mockCacheClient) SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error) {
 	args := cc.Called(ctx, g)
 	// take care of nil pointers
@@ -333,9 +355,9 @@ func TestGetxOwnedUnit(t *testing.T) {
 	clientMock := new(mockCacheClient)
 
 	invAck := &InvAck{
-		Error: CacheError_NoError,
+		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId: int64(lineId),
+		LineId:   int64(lineId),
 	}
 
 	clientMock.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Inv")).Return(invAck, nil)
@@ -348,7 +370,7 @@ func TestGetxOwnedUnit(t *testing.T) {
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
 	line.cacheLineState = CacheLineState_Owned
-	line.sharers = []int {1234}
+	line.sharers = []int{1234}
 	line.ownerId = 1111
 
 	// now run test
@@ -371,14 +393,14 @@ func TestGetxSharedUnit(t *testing.T) {
 		SenderId: int32(5678),
 		LineId:   int64(lineId),
 		Version:  int32(2),
-		Sharers: []int32 {int32(1234)},
+		Sharers:  []int32{int32(1234)},
 		Buffer:   []byte(latestBuffer),
 	}
 
 	invAck := &InvAck{
-		Error: CacheError_NoError,
+		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId: int64(lineId),
+		LineId:   int64(lineId),
 	}
 
 	clientMock1234 := new(mockCacheClient)
@@ -397,7 +419,7 @@ func TestGetxSharedUnit(t *testing.T) {
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
 	line.cacheLineState = CacheLineState_Shared
-	line.sharers = []int {1234}
+	line.sharers = []int{1234}
 	line.ownerId = 5678
 
 	// now run test

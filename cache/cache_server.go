@@ -106,6 +106,11 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 	}
 }
 
+func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, error) {
+	_, _ = cs.store.getCacheLineById(int(req.LineId))
+	return nil, nil
+}
+
 func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, error) {
 	cl, ok := cs.store.getCacheLineById(int(req.LineId))
 

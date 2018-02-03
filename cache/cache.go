@@ -148,7 +148,7 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 			// fall through this case and invalidate the line
 			fallthrough
 
-			case CacheLineState_Owned:
+		case CacheLineState_Owned:
 			// elevate to exclusive
 			inv := &Inv{
 				SenderId: int32(c.myNodeId),
@@ -190,7 +190,7 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 }
 
 func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) {
-	Getx(lineId, txn)
+	c.Getx(lineId, txn)
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -345,7 +345,7 @@ func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv 
 			if err == nil {
 				_, err := client.SendInvalidate(ctx, inv)
 				if err != nil {
-					log.Errorf("Couldn't invalidate %v with %d because of %s", inv, sharerId, err)					
+					log.Errorf("Couldn't invalidate %v with %d because of %s", inv, sharerId, err)
 				}
 				// send to channel anyways
 				// that way we're not stopping the entire train

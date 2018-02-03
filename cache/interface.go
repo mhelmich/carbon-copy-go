@@ -21,6 +21,7 @@ import (
 )
 
 type CarbonGridError string
+
 func (e CarbonGridError) Error() string { return string(e) }
 
 // This error is returned when remote operations time out.
@@ -60,6 +61,7 @@ func NewCache(myNodeId int, serverPort int) (Cache, error) {
 
 type cacheClient interface {
 	SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error)
+	SendGets(ctx context.Context, g *Gets) (*Puts, *OwnerChanged, error)
 	SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error)
 	SendInvalidate(ctx context.Context, i *Inv) (*InvAck, error)
 	Close() error
@@ -67,6 +69,7 @@ type cacheClient interface {
 
 type cacheServer interface {
 	Get(ctx context.Context, req *Get) (*GetResponse, error)
+	Gets(ctx context.Context, req *Gets) (*GetsResponse, error)
 	Getx(ctx context.Context, req *Getx) (*GetxResponse, error)
 	Invalidate(ctx context.Context, in *Inv) (*InvAck, error)
 	Stop()

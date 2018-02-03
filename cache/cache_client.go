@@ -40,6 +40,11 @@ func (cc *cacheClientImpl) SendGet(ctx context.Context, g *Get) (*Put, *OwnerCha
 	return cc.handleGetResponse(getResp, err)
 }
 
+func (cc *cacheClientImpl) SendGets(ctx context.Context, g *Gets) (*Puts, *OwnerChanged, error) {
+	getsResp, err := cc.client.Gets(ctx, g)
+	return cc.handleGetsResponse(getsResp, err)
+}
+
 func (cc *cacheClientImpl) SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error) {
 	getxResp, err := cc.client.Getx(ctx, g)
 	return cc.handleGetxResponse(getxResp, err)
@@ -58,24 +63,6 @@ func (cc *cacheClientImpl) Close() error {
 	return nil
 }
 
-func (cc *cacheClientImpl) handleGetxResponse(getxResp *GetxResponse, err error) (*Putx, *OwnerChanged, error) {
-	switch {
-	case err != nil:
-		log.Errorf("%v", err)
-		return nil, nil, err
-	case getxResp.GetAck() != nil:
-		log.Infof("ack: %s", getxResp.GetAck().String())
-		return nil, nil, errors.New("response was ack")
-	case getxResp.GetPutx() != nil:
-		log.Infof("putx: %s", getxResp.GetPutx().String())
-		return getxResp.GetPutx(), nil, nil
-	case getxResp.GetOwnerChanged() != nil:
-		return nil, getxResp.GetOwnerChanged(), nil
-	}
-
-	return nil, nil, errors.New("Unknown response!")
-}
-
 func (cc *cacheClientImpl) handleGetResponse(getResp *GetResponse, err error) (*Put, *OwnerChanged, error) {
 	switch {
 	case err != nil:
@@ -91,6 +78,46 @@ func (cc *cacheClientImpl) handleGetResponse(getResp *GetResponse, err error) (*
 		return getResp.GetPut(), nil, nil
 	case getResp.GetOwnerChanged() != nil:
 		return nil, getResp.GetOwnerChanged(), nil
+	}
+
+	return nil, nil, errors.New("Unknown response!")
+}
+
+func (cc *cacheClientImpl) handleGetsResponse(getsResp *GetsResponse, err error) (*Puts, *OwnerChanged, error) {
+	switch {
+	case err != nil:
+		log.Errorf("%v", err)
+		return nil, nil, err
+	case getsResp.GetAck() != nil:
+		log.Infof("ack: %s", getsResp.GetAck().String())
+		// TODO -- solve this better :/
+		// I don't like the way I'm (mis-)using the error for this non-error case
+		return nil, nil, errors.New("response was ack")
+	case getsResp.GetPuts() != nil:
+		log.Infof("puts: %s", getsResp.GetPuts().String())
+		return getsResp.GetPuts(), nil, nil
+	case getsResp.GetOwnerChanged() != nil:
+		return nil, getsResp.GetOwnerChanged(), nil
+	}
+
+	return nil, nil, errors.New("Unknown response!")
+}
+
+func (cc *cacheClientImpl) handleGetxResponse(getxResp *GetxResponse, err error) (*Putx, *OwnerChanged, error) {
+	switch {
+	case err != nil:
+		log.Errorf("%v", err)
+		return nil, nil, err
+	case getxResp.GetAck() != nil:
+		log.Infof("ack: %s", getxResp.GetAck().String())
+		// TODO -- solve this better :/
+		// I don't like the way I'm (mis-)using the error for this non-error case
+		return nil, nil, errors.New("response was ack")
+	case getxResp.GetPutx() != nil:
+		log.Infof("putx: %s", getxResp.GetPutx().String())
+		return getxResp.GetPutx(), nil, nil
+	case getxResp.GetOwnerChanged() != nil:
+		return nil, getxResp.GetOwnerChanged(), nil
 	}
 
 	return nil, nil, errors.New("Unknown response!")
