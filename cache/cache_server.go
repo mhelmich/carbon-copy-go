@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 	// "google.golang.org/grpc/codes"
 	"net"
+	"errors"
 )
 
 // SERVER IMPLEMENTATION
@@ -107,8 +108,8 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 }
 
 func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, error) {
-	_, _ = cs.store.getCacheLineById(int(req.LineId))
-	return nil, nil
+	// _, _ = cs.store.getCacheLineById(int(req.LineId))
+	return nil, errors.New("Not implemented yet!")
 }
 
 func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, error) {
