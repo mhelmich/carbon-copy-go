@@ -45,9 +45,9 @@ type Cache interface {
 	// All other copies of this item will be invalidated.
 	Getx(lineId int, txn Transaction) ([]byte, error)
 	// Not needed...
-	Put(lineId int, buffer []byte, txn Transaction)
+	Put(lineId int, buffer []byte, txn Transaction) error
 	// Acquires exclusive ownership of an item and overrides its contents.
-	Putx(lineId int, buffer []byte, txn Transaction)
+	Putx(lineId int, buffer []byte, txn Transaction) error
 	// Creates a new transaction.
 	NewTransaction() Transaction
 	// Stops the operation of this cache.

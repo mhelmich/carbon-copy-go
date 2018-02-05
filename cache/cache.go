@@ -189,7 +189,7 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 	return nil, errors.New("Unknown error!")
 }
 
-func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) {
+func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) error {
 	c.Getx(lineId, txn)
 	line, ok := c.store.getCacheLineById(lineId)
 
@@ -203,12 +203,15 @@ func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) {
 		default:
 			log.Infof("No interesting state in put %v", line.cacheLineState)
 		}
+
+		return nil
 	} else {
+		return errors.New("Not implemented yet!")
 	}
 }
 
-func (c *cacheImpl) Putx(lineId int, buffer []byte, txn Transaction) {
-
+func (c *cacheImpl) Putx(lineId int, buffer []byte, txn Transaction) error {
+	return errors.New("Not implemented yet!")
 }
 
 func (c *cacheImpl) NewTransaction() Transaction {
