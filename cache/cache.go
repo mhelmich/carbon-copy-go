@@ -132,61 +132,69 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 			return line.buffer, nil
 
 		case CacheLineState_Shared, CacheLineState_Invalid:
-			getx := &Getx{
-				SenderId: int32(c.myNodeId),
-				LineId:   int64(line.id),
-			}
-
-			putx, err := c.unicastGetx(context.Background(), line.ownerId, getx)
+			err := c.unicastExclusiveGet(context.Background(), line)
 			if err != nil {
 				log.Errorf(err.Error())
 				return nil, err
 			}
-
-			c.store.applyChangesFromPutx(line, putx, c.myNodeId)
 			// shabang#!
 			// fall through this case and invalidate the line
 			fallthrough
 
 		case CacheLineState_Owned:
-
 			err := c.elevateOwnedToExclusive(line)
 			if err == nil {
 				return line.buffer, nil
 			} else {
+				log.Errorf(err.Error())
 				return nil, err
 			}
 		}
 	} else {
-		// multi cast to everybody I know whether anyone knows this line
-		g := &Getx{
-			SenderId: int32(c.myNodeId),
-			LineId:   int64(lineId),
-		}
-
-		putx, err := c.multicastGetx(context.Background(), g)
+		// if we don't know about the line,
+		// let's ask around and see whether somebody else knows it
+		err := c.multicastExclusiveGet(context.Background(), lineId)
 		if err != nil {
 			log.Errorf(err.Error())
 			return nil, err
 		}
 
-		line = c.store.createCacheLineFromPutx(lineId, putx, c.myNodeId)
-		val, loaded := c.store.putIfAbsent(lineId, line)
-		if loaded {
-			c.store.applyChangesFromPutx(val, putx, c.myNodeId)
+		line, ok := c.store.getCacheLineById(lineId)
+		if ok {
+			return line.buffer, nil
+		} else {
+			err := errors.New("Can't find line with id " + lineId + " even after get.")
+			log.Errorf(err.Error())
+			return nil, err
 		}
 
-		return line.buffer, nil
 	}
 	return nil, errors.New("Unknown error!")
 }
 
 func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) error {
-	c.Getx(lineId, txn)
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
 		switch line.cacheLineState {
+		case CacheLineState_Shared, CacheLineState_Invalid:
+			err := c.unicastExclusiveGet(context.Background(), line)
+			if err != nil {
+				log.Errorf(err.Error())
+				return nil, err
+			}
+			// shabang#!
+			// fall through this case and invalidate the line
+			fallthrough
+		case CacheLineState_Owned:
+			err := c.elevateOwnedToExclusive(line)
+			if err != nil {
+				log.Errorf(err.Error())
+				return nil, err
+			}
+			// shabang#!
+			// fall through this case and invalidate the line
+			fallthrough
 		case CacheLineState_Exclusive:
 			line.lock()
 			line.version++
@@ -232,6 +240,40 @@ func (c *cacheImpl) Stop() {
 /////  INTERNAL HELPERS
 /////
 ////////////////////////////////////////////////////////////////////////
+
+func (c *cacheImpl) unicastExclusiveGet(ctx context.Context, line *CacheLine) error {
+	getx := &Getx{
+		SenderId: int32(c.myNodeId),
+		LineId:   int64(line.id),
+	}
+
+	putx, err := c.unicastGetx(context.Background(), line.ownerId, getx)
+	if err != nil {
+		return err
+	}
+
+	c.store.applyChangesFromPutx(line, putx, c.myNodeId)
+	return nil
+}
+
+func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId int) error {
+	g := &Getx{
+		SenderId: int32(c.myNodeId),
+		LineId:   int64(lineId),
+	}
+
+	putx, err := c.multicastGetx(ctx, g)
+	if err != nil {
+		return err
+	}
+
+	line := c.store.createCacheLineFromPutx(lineId, putx, c.myNodeId)
+	val, loaded := c.store.putIfAbsent(lineId, line)
+	if loaded {
+		c.store.applyChangesFromPutx(val, putx, c.myNodeId)
+	}
+	return nil
+}
 
 func (c *cacheImpl) elevateOwnedToExclusive(line *CacheLine) error {
 	inv := &Inv{
