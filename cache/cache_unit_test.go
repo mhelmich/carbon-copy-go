@@ -432,3 +432,6 @@ func TestGetxSharedUnit(t *testing.T) {
 	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 2)
 }
+
+func TestPutUnit(t *testing.T) {
+}
