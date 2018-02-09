@@ -156,22 +156,6 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 			} else {
 				return nil, err
 			}
-
-			// // elevate to exclusive
-			// inv := &Inv{
-			// 	SenderId: int32(c.myNodeId),
-			// 	LineId:   int64(line.id),
-			// }
-
-			// err := c.multicastInvalidate(context.Background(), line.sharers, inv)
-			// if err == nil {
-			// 	line.lock()
-			// 	line.cacheLineState = CacheLineState_Exclusive
-			// 	line.unlock()
-			// 	return line.buffer, nil
-			// } else {
-			// 	return nil, err
-			// }
 		}
 	} else {
 		// multi cast to everybody I know whether anyone knows this line
