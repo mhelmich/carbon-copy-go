@@ -163,7 +163,7 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 		if ok {
 			return line.buffer, nil
 		} else {
-			err := errors.New("Can't find line with id " + lineId + " even after get.")
+			err := errors.New(fmt.Sprintf("Can't find line with id %d even after get.", lineId))
 			log.Errorf(err.Error())
 			return nil, err
 		}
@@ -181,7 +181,7 @@ func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) error {
 			err := c.unicastExclusiveGet(context.Background(), line)
 			if err != nil {
 				log.Errorf(err.Error())
-				return nil, err
+				return err
 			}
 			// shabang#!
 			// fall through this case and invalidate the line
@@ -190,7 +190,7 @@ func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) error {
 			err := c.elevateOwnedToExclusive(line)
 			if err != nil {
 				log.Errorf(err.Error())
-				return nil, err
+				return err
 			}
 			// shabang#!
 			// fall through this case and invalidate the line

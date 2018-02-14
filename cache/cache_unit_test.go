@@ -434,4 +434,47 @@ func TestGetxSharedUnit(t *testing.T) {
 }
 
 func TestPutUnit(t *testing.T) {
+	lineId := 12345679
+	latestBuffer := "testing_test_test_test"
+
+	putx := &Putx{
+		Error:    CacheError_NoError,
+		SenderId: int32(5678),
+		LineId:   int64(lineId),
+		Version:  int32(2),
+		Sharers:  []int32{int32(1234)},
+		Buffer:   []byte(latestBuffer),
+	}
+
+	invAck := &InvAck{
+		Error:    CacheError_NoError,
+		SenderId: int32(1234),
+		LineId:   int64(lineId),
+	}
+
+	clientMock1234 := new(mockCacheClient)
+	clientMock1234.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Inv")).Return(invAck, nil)
+
+	clientMock5678 := new(mockCacheClient)
+	clientMock5678.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Getx")).Return(putx, nil, nil)
+
+	m := new(mockCacheClientMapping)
+	m.On("getClientForNodeId", 5678).Return(clientMock5678, nil)
+	cache := mockCache(m)
+
+	initialBuffer := "lalalalalala"
+	line := newCacheLine(lineId, 111, []byte(initialBuffer))
+	line, loaded := cache.store.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Invalid
+	line.ownerId = 5678
+
+	// now run test
+	err := cache.Put(lineId, []byte(latestBuffer), nil)
+	assert.Nil(t, err)
+	l, ok := cache.store.getCacheLineById(lineId)
+	assert.True(t, ok)
+	assert.Equal(t, 3, l.version)
+	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
+	m.AssertNumberOfCalls(t, "getClientForNodeId", 1)
 }
