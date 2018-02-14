@@ -281,6 +281,7 @@ func (c *cacheImpl) elevateOwnedToExclusive(line *CacheLine) error {
 		LineId:   int64(line.id),
 	}
 
+	log.Infof("sharers %v", line.sharers)
 	err := c.multicastInvalidate(context.Background(), line.sharers, inv)
 	if err == nil {
 		line.lock()
@@ -397,6 +398,7 @@ func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv 
 		go func() {
 			client, err := c.clientMapping.getClientForNodeId(sharerId)
 			if err == nil {
+				log.Infof("Send invalidate to %d", sharerId)
 				_, err := client.SendInvalidate(ctx, inv)
 				if err != nil {
 					log.Errorf("Couldn't invalidate %v with %d because of %s", inv, sharerId, err)

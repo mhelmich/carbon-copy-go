@@ -66,6 +66,7 @@ func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *Putx, myNodeId
 	line.ownerId = myNodeId
 	line.cacheLineState = CacheLineState_Owned
 	line.version = int(p.Version)
+	line.sharers = concertInt32ArrayToIntArray(p.Sharers)
 	line.buffer = p.Buffer
 	line.unlock()
 }
@@ -96,4 +97,12 @@ func (cls *cacheLineStore) createCacheLineFromPutx(lineId int, p *Putx, myNodeId
 		mutex:          &sync.Mutex{},
 	}
 	return line
+}
+
+func concertInt32ArrayToIntArray(in []int32) []int {
+	out := make([]int, len(in))
+	for idx, val := range in {
+		out[idx] = int(val)
+	}
+	return out
 }

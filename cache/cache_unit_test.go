@@ -459,6 +459,7 @@ func TestPutUnit(t *testing.T) {
 	clientMock5678.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Getx")).Return(putx, nil, nil)
 
 	m := new(mockCacheClientMapping)
+	m.On("getClientForNodeId", 1234).Return(clientMock1234, nil)
 	m.On("getClientForNodeId", 5678).Return(clientMock5678, nil)
 	cache := mockCache(m)
 
@@ -476,5 +477,5 @@ func TestPutUnit(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 3, l.version)
 	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
-	m.AssertNumberOfCalls(t, "getClientForNodeId", 1)
+	m.AssertNumberOfCalls(t, "getClientForNodeId", 2)
 }
