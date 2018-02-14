@@ -22,8 +22,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	// "google.golang.org/grpc/codes"
-	"net"
 	"errors"
+	"net"
 )
 
 // SERVER IMPLEMENTATION
@@ -108,8 +108,88 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 }
 
 func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, error) {
-	// _, _ = cs.store.getCacheLineById(int(req.LineId))
-	return nil, errors.New("Not implemented yet!")
+	cl, ok := cs.store.getCacheLineById(int(req.LineId))
+
+	if ok {
+		switch cl.cacheLineState {
+		case CacheLineState_Exclusive:
+			cl.lock()
+
+			puts := &Puts{
+				Error:    CacheError_NoError,
+				SenderId: cs.myNodeId,
+				LineId:   int64(cl.id),
+				Version:  int32(cl.version),
+				Sharers:  convertIntTo32Array(cl.sharers),
+				Buffer:   cl.buffer,
+			}
+
+			resp := &GetsResponse{
+				InnerMessage: &GetsResponse_Puts{
+					Puts: puts,
+				},
+			}
+
+			cl.cacheLineState = CacheLineState_Owned
+			cl.sharers = append(cl.sharers, int(req.SenderId))
+			cl.unlock()
+			return resp, nil
+
+		case CacheLineState_Owned:
+			cl.lock()
+
+			puts := &Puts{
+				Error:    CacheError_NoError,
+				SenderId: cs.myNodeId,
+				LineId:   int64(cl.id),
+				Version:  int32(cl.version),
+				Sharers:  convertIntTo32Array(cl.sharers),
+				Buffer:   cl.buffer,
+			}
+
+			resp := &GetsResponse{
+				InnerMessage: &GetsResponse_Puts{
+					Puts: puts,
+				},
+			}
+
+			cl.sharers = append(cl.sharers, int(req.SenderId))
+			cl.unlock()
+			return resp, nil
+
+		case CacheLineState_Shared, CacheLineState_Invalid:
+			oc := &OwnerChanged{
+				SenderId:            cs.myNodeId,
+				LineId:              req.LineId,
+				NewOwnerId:          int32(cl.ownerId),
+				OriginalMessageType: 0,
+			}
+
+			resp := &GetsResponse{
+				InnerMessage: &GetsResponse_OwnerChanged{
+					OwnerChanged: oc,
+				},
+			}
+
+			return resp, nil
+
+		default:
+			return nil, errors.New(fmt.Sprintf("Cacheline %d is in invalid state %v", req.LineId, cl.cacheLineState))
+		}
+	} else {
+		ack := &Ack{
+			SenderId: cs.myNodeId,
+			LineId:   req.LineId,
+		}
+
+		resp := &GetsResponse{
+			InnerMessage: &GetsResponse_Ack{
+				Ack: ack,
+			},
+		}
+
+		return resp, nil
+	}
 }
 
 func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, error) {
@@ -198,7 +278,7 @@ func (cs *cacheServerImpl) Stop() {
 
 func convertIntTo32Array(in []int) []int32 {
 	out := make([]int32, len(in))
-	for val, idx := range in {
+	for idx, val := range in {
 		out[idx] = int32(val)
 	}
 	return out
