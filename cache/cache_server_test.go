@@ -70,3 +70,33 @@ func TestServerGetLineNotOwned(t *testing.T) {
 	assert.Equal(t, 258, int(oc.NewOwnerId))
 	assert.Equal(t, 111, int(oc.SenderId))
 }
+
+func TestServerGetLineOwned(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	lineBuffer := []byte("lalalalalala")
+	line := newCacheLine(lineId, serverNodeId, lineBuffer)
+	line, loaded := clStore.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Owned
+	line.ownerId = 258
+
+	req := &Get{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Get(context.Background(), req)
+	assert.Nil(t, err)
+	put := resp.GetPut()
+	assert.NotNil(t, put)
+	assert.Equal(t, lineId, int(put.LineId))
+	assert.Equal(t, lineBuffer, put.Buffer)
+	assert.Equal(t, 111, int(put.SenderId))
+}
