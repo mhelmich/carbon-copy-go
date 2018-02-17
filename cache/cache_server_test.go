@@ -291,3 +291,53 @@ func TestServerGetxLineDoesntExist(t *testing.T) {
 	ack := resp.GetAck()
 	assert.NotNil(t, ack)
 }
+
+func TestServerInvalidateExists(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	lineBuffer := []byte("lalalalalala")
+	line := newCacheLine(lineId, serverNodeId, lineBuffer)
+	line, loaded := clStore.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Invalid
+	line.ownerId = 258
+
+	req := &Inv{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	invAck, err := cacheServer.Invalidate(context.Background(), req)
+	assert.Nil(t, err)
+	assert.NotNil(t, invAck)
+	assert.Equal(t, int64(lineId), invAck.LineId)
+	assert.Equal(t, CacheLineState_Invalid, line.cacheLineState)
+	assert.Nil(t, line.sharers)
+	assert.Nil(t, line.buffer)
+}
+
+func TestServerInvalidateDoesntExist(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	req := &Inv{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	invAck, err := cacheServer.Invalidate(context.Background(), req)
+	assert.Nil(t, err)
+	assert.NotNil(t, invAck)
+	assert.Equal(t, int64(lineId), invAck.LineId)
+}
