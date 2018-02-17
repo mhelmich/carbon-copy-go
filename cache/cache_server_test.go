@@ -19,6 +19,7 @@ package cache
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"sort"
 	"testing"
 )
 
@@ -99,4 +100,116 @@ func TestServerGetLineOwned(t *testing.T) {
 	assert.Equal(t, lineId, int(put.LineId))
 	assert.Equal(t, lineBuffer, put.Buffer)
 	assert.Equal(t, 111, int(put.SenderId))
+}
+
+func TestServerGetsLineExclusive(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	lineBuffer := []byte("lalalalalala")
+	line := newCacheLine(lineId, serverNodeId, lineBuffer)
+	line, loaded := clStore.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Exclusive
+	line.ownerId = serverNodeId
+
+	req := &Gets{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Gets(context.Background(), req)
+	assert.Nil(t, err)
+	put := resp.GetPuts()
+	assert.NotNil(t, put)
+
+	sort.Ints(line.sharers)
+	idxToInsert := sort.SearchInts(line.sharers, 555)
+	assert.True(t, line.sharers[idxToInsert] == 555)
+	assert.Equal(t, CacheLineState_Owned, line.cacheLineState)
+}
+
+func TestServerGetsLineOwned(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	lineBuffer := []byte("lalalalalala")
+	line := newCacheLine(lineId, serverNodeId, lineBuffer)
+	line, loaded := clStore.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Owned
+	line.ownerId = serverNodeId
+
+	req := &Gets{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Gets(context.Background(), req)
+	assert.Nil(t, err)
+	put := resp.GetPuts()
+	assert.NotNil(t, put)
+
+	sort.Ints(line.sharers)
+	idxToInsert := sort.SearchInts(line.sharers, 555)
+	assert.True(t, line.sharers[idxToInsert] == 555)
+	assert.Equal(t, CacheLineState_Owned, line.cacheLineState)
+}
+
+func TestServerGetsLineShared(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	lineBuffer := []byte("lalalalalala")
+	line := newCacheLine(lineId, serverNodeId, lineBuffer)
+	line, loaded := clStore.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Shared
+	line.ownerId = 258
+
+	req := &Gets{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Gets(context.Background(), req)
+	assert.Nil(t, err)
+	oc := resp.GetOwnerChanged()
+	assert.NotNil(t, oc)
+	assert.Equal(t, int32(258), oc.NewOwnerId)
+}
+
+func TestServerGetsLineDoesntExist(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	req := &Gets{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Gets(context.Background(), req)
+	assert.Nil(t, err)
+	ack := resp.GetAck()
+	assert.NotNil(t, ack)
 }
