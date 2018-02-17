@@ -213,3 +213,81 @@ func TestServerGetsLineDoesntExist(t *testing.T) {
 	ack := resp.GetAck()
 	assert.NotNil(t, ack)
 }
+
+func TestServerGetxLineOwned(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	lineBuffer := []byte("lalalalalala")
+	line := newCacheLine(lineId, serverNodeId, lineBuffer)
+	line, loaded := clStore.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Owned
+	line.ownerId = serverNodeId
+
+	req := &Getx{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Getx(context.Background(), req)
+	assert.Nil(t, err)
+	putx := resp.GetPutx()
+	assert.NotNil(t, putx)
+	assert.Equal(t, lineBuffer, putx.Buffer)
+	assert.Equal(t, CacheLineState_Invalid, line.cacheLineState)
+}
+
+func TestServerGetxLineInvalid(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	lineBuffer := []byte("lalalalalala")
+	line := newCacheLine(lineId, serverNodeId, lineBuffer)
+	line, loaded := clStore.putIfAbsent(lineId, line)
+	assert.False(t, loaded)
+	line.cacheLineState = CacheLineState_Invalid
+	line.ownerId = 258
+
+	req := &Getx{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Getx(context.Background(), req)
+	assert.Nil(t, err)
+	oc := resp.GetOwnerChanged()
+	assert.NotNil(t, oc)
+	assert.Equal(t, CacheLineState_Invalid, line.cacheLineState)
+	assert.Equal(t, int32(258), oc.NewOwnerId)
+}
+
+func TestServerGetxLineDoesntExist(t *testing.T) {
+	lineId := 654321
+	serverNodeId := 111
+	clStore := createNewCacheLineStore()
+	cacheServer := &cacheServerImpl{
+		myNodeId:   int32(serverNodeId),
+		grpcServer: nil,
+		store:      clStore,
+	}
+
+	req := &Getx{
+		SenderId: int32(555),
+		LineId:   int64(lineId),
+	}
+	resp, err := cacheServer.Getx(context.Background(), req)
+	assert.Nil(t, err)
+	ack := resp.GetAck()
+	assert.NotNil(t, ack)
+}
