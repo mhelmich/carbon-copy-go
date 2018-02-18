@@ -16,8 +16,27 @@
 
 package cluster
 
-type Cluster interface{}
+import (
+	"context"
+)
 
-func NewCluster() Cluster {
+type Cluster interface {
+	myNodeId() int
+	getAllocator() GlobalIdAllocator
+}
+
+type GlobalIdAllocator interface {
+	nextId() int
+}
+
+func NewCluster() (Cluster, error) {
 	return createNewCluster()
+}
+
+type consensusClient interface {
+	Get(ctx context.Context, key string) (string, error)
+	GetSortedRange(ctx context.Context, keyPrefix string) ([]string, error)
+	Put(ctx context.Context, key string, value string) error
+	PutIfAbsent(ctx context.Context, key string, value string) (bool, error)
+	Close() error
 }

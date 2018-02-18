@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
-syntax = "proto3";
+package cluster
 
-package cluster;
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
-message NodeInfo {
-    string addr = 1;
-    int32 nodeId = 2;
+func TestClusterConnect(t *testing.T) {
+	_, err := NewCluster()
+	assert.Nil(t, err)
 }

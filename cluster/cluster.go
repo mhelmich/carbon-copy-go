@@ -17,28 +17,62 @@
 package cluster
 
 import (
-	"github.com/coreos/etcd/client"
-	log "github.com/sirupsen/logrus"
-	"time"
+	"context"
+)
+
+const (
+	nameSeparator          = "/"
+	consensusNamespaceName = "carbon-copy"
+	consensusNodesName     = consensusNamespaceName + nameSeparator + "nodes"
 )
 
 type clusterImpl struct {
-	etcdClient client.Client
+	consensus consensusClient
 }
 
-func createNewCluster() *clusterImpl {
-	cfg := client.Config{
-		Endpoints: []string{"http://127.0.0.1:2379"},
-		Transport: client.DefaultTransport,
-		// set timeout per request to fail fast when the target endpoint is unavailable
-		HeaderTimeoutPerRequest: time.Second,
-	}
-	c, err := client.New(cfg)
+func createNewCluster() (*clusterImpl, error) {
+	ctx := context.Background()
+	etcd, err := createNewEtcdConsensus(ctx)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	return &clusterImpl{
-		etcdClient: c,
-	}
+		consensus: etcd,
+	}, nil
+}
+
+// func (ci *clusterImpl) allocateNodeId(ctx context.Context, client *clientv3.Client) (int, error) {
+// 	resp, err := client.Get(ctx, consensusNodesName+"_", clientv3.WithPrefix(), clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend))
+// 	if err != nil {
+// 		return -1, err
+// 	}
+
+// 	myNodeId := -1
+// 	idx := -1
+
+// 	for idx, ev := range resp.Kvs {
+// 		key := string(ev.Key)
+// 		log.Infof("Found node %s", key)
+// 		tokens := strings.Split(key, "_")
+// 		if len(tokens) == 2 {
+// 			nodeId, err := strconv.Atoi(tokens[1])
+// 			if err == nil {
+// 				if nodeId != idx {
+// 					myNodeId = idx
+// 					return myNodeId, nil
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	return idx + 1, nil
+// }
+
+func (ci *clusterImpl) myNodeId() int {
+	return 0
+}
+
+func (ci *clusterImpl) getAllocator() GlobalIdAllocator {
+	return nil
 }
