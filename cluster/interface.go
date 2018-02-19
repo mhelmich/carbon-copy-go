@@ -35,7 +35,7 @@ func NewCluster() (Cluster, error) {
 
 type consensusClient interface {
 	Get(ctx context.Context, key string) (string, error)
-	GetSortedRange(ctx context.Context, keyPrefix string) ([]string, error)
+	GetSortedRange(ctx context.Context, keyPrefix string) ([]kv, error)
 	Put(ctx context.Context, key string, value string) error
 	PutIfAbsent(ctx context.Context, key string, value string) (bool, error)
 	Close() error

@@ -26,6 +26,11 @@ const (
 	consensusNodesName     = consensusNamespaceName + nameSeparator + "nodes"
 )
 
+type kv struct {
+	key   string
+	value string
+}
+
 type clusterImpl struct {
 	consensus consensusClient
 }

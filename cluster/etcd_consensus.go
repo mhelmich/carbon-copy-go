@@ -64,8 +64,22 @@ func (ec *etcdConsensus) Get(ctx context.Context, key string) (string, error) {
 	}
 }
 
-func (ec *etcdConsensus) GetSortedRange(ctx context.Context, keyPrefix string) ([]string, error) {
-	return nil, errors.New("Not implemented yet!")
+func (ec *etcdConsensus) GetSortedRange(ctx context.Context, keyPrefix string) ([]kv, error) {
+	resp, err := ec.etcdSession.Client().Get(ctx, keyPrefix, clientv3.WithPrefix(), clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend))
+	if err != nil {
+		return nil, err
+	} else {
+		if resp.Count == int64(0) {
+			return make([]kv, 0), nil
+		} else {
+			strs := make([]kv, len(resp.Kvs))
+			for idx, ev := range resp.Kvs {
+				strs[idx].key = string(ev.Key)
+				strs[idx].value = string(ev.Value)
+			}
+			return strs, nil
+		}
+	}
 }
 
 func (ec *etcdConsensus) Put(ctx context.Context, key string, value string) error {

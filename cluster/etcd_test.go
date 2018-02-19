@@ -18,8 +18,10 @@ package cluster
 
 import (
 	"context"
+	"github.com/google/uuid"
 	// log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"strconv"
 	"testing"
 )
 
@@ -84,6 +86,27 @@ func TestEtcdPutIfAbsent(t *testing.T) {
 	v, err = etcd1.Get(context.Background(), key)
 	assert.Nil(t, err)
 	assert.Equal(t, val, v)
+
+	assert.Nil(t, etcd1.Close())
+}
+
+func TestEtcdGetSortedRange(t *testing.T) {
+	count := 17
+	key := "key_key_key_"
+	etcd1, err := createNewEtcdConsensus(context.Background())
+	assert.Nil(t, err)
+
+	for i := 0; i < count; i++ {
+		val, err := uuid.NewRandom()
+		assert.Nil(t, err)
+		didPut, err := etcd1.PutIfAbsent(context.Background(), key+strconv.Itoa(i), val.String())
+		assert.Nil(t, err)
+		assert.True(t, didPut)
+	}
+
+	kvs, err := etcd1.GetSortedRange(context.Background(), key)
+	assert.Nil(t, err)
+	assert.Equal(t, count, len(kvs))
 
 	assert.Nil(t, etcd1.Close())
 }
