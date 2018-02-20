@@ -18,6 +18,8 @@ syntax = "proto3";
 
 package cache;
 
+// each node is client and server at the same time
+// these operations are possible on a server
 service CacheComm {
     rpc get(Get) returns (GetResponse) {}
     rpc gets(Gets) returns (GetsResponse) {}
@@ -40,6 +42,13 @@ enum CacheLineState {
     Exclusive = 1;
     Shared = 2;
     Owned = 3;
+}
+
+// we could store cache line ids in UUIDs one day
+// if we want to be really cool, we could take these
+// 16 bytes apart and store them in two var-int64s
+message Uuid {
+    bytes data = 1;
 }
 
 message GetResponse {

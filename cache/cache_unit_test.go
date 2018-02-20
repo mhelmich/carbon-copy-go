@@ -19,6 +19,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"testing"
@@ -478,4 +479,18 @@ func TestPutUnit(t *testing.T) {
 	assert.Equal(t, 3, l.version)
 	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 2)
+}
+
+func TestCacheUuidMarshalling(t *testing.T) {
+	// in googles implementation, a UUID is nothing but a type
+	// alias for [16]byte
+	uuid1, err := uuid.NewRandom()
+	assert.Nil(t, err)
+	bites, err := uuid1.MarshalBinary()
+	assert.Nil(t, err)
+	assert.Equal(t, 16, len(bites))
+	assert.Equal(t, 16, len(uuid1))
+	uuid2, err := uuid.FromBytes(bites)
+	assert.Nil(t, err)
+	assert.Equal(t, uuid1.String(), uuid2.String())
 }
