@@ -89,6 +89,36 @@ func initIdAllocator(cc consensusClient) {
 
 func startMyNodeIdProvider(ctx context.Context, cc consensusClient) chan int {
 	ch := make(chan int, 1)
+
+	go func() {
+		for {
+			kvs, err := cc.getSortedRange(ctx, consensusNodesRootName)
+			if err != nil {
+				log.Errorf("Can't connect to consensus %s", err.Error())
+			}
+			keySet := make(map[string]bool)
+
+			for _, kv := range kvs {
+				keySet[kv.key] = true
+			}
+
+			i := 0
+			for i < 16384 {
+				_, ok := keySet[strconv.Itoa(i)]
+				if !ok {
+					b, err := cc.putIfAbsent(ctx, consensusNodesRootName+strconv.Itoa(i), "")
+					if b && err == nil {
+						ch <- i
+						close(ch)
+						log.Infof("Aqcuired node id %d", i)
+						return
+					}
+				}
+				i++
+			}
+		}
+	}()
+
 	return ch
 }
 
