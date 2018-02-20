@@ -51,7 +51,7 @@ type etcdConsensus struct {
 	etcdSession *concurrency.Session
 }
 
-func (ec *etcdConsensus) Get(ctx context.Context, key string) (string, error) {
+func (ec *etcdConsensus) get(ctx context.Context, key string) (string, error) {
 	resp, err := ec.etcdSession.Client().Get(ctx, key, clientv3.WithLimit(1))
 	if err != nil {
 		return "", err
@@ -64,7 +64,7 @@ func (ec *etcdConsensus) Get(ctx context.Context, key string) (string, error) {
 	}
 }
 
-func (ec *etcdConsensus) GetSortedRange(ctx context.Context, keyPrefix string) ([]kv, error) {
+func (ec *etcdConsensus) getSortedRange(ctx context.Context, keyPrefix string) ([]kv, error) {
 	resp, err := ec.etcdSession.Client().Get(ctx, keyPrefix, clientv3.WithPrefix(), clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend))
 	if err != nil {
 		return nil, err
@@ -82,12 +82,12 @@ func (ec *etcdConsensus) GetSortedRange(ctx context.Context, keyPrefix string) (
 	}
 }
 
-func (ec *etcdConsensus) Put(ctx context.Context, key string, value string) error {
+func (ec *etcdConsensus) put(ctx context.Context, key string, value string) error {
 	_, err := ec.etcdSession.Client().Put(ctx, key, value, clientv3.WithLease(ec.etcdSession.Lease()))
 	return err
 }
 
-func (ec *etcdConsensus) PutIfAbsent(ctx context.Context, key string, value string) (bool, error) {
+func (ec *etcdConsensus) putIfAbsent(ctx context.Context, key string, value string) (bool, error) {
 	resp, err := ec.etcdSession.Client().Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(key), ">", 0)).
 		Then().
@@ -101,6 +101,20 @@ func (ec *etcdConsensus) PutIfAbsent(ctx context.Context, key string, value stri
 	}
 }
 
-func (ec *etcdConsensus) Close() error {
+func (ec *etcdConsensus) compareAndPut(ctx context.Context, key string, oldValue string, newValue string) (bool, error) {
+	resp, err := ec.etcdSession.Client().Txn(ctx).
+		If(clientv3.Compare(clientv3.Value(key), "=", oldValue)).
+		Then(clientv3.OpPut(key, newValue)).
+		Else().
+		Commit()
+
+	if err != nil {
+		return false, err
+	} else {
+		return resp.Succeeded, nil
+	}
+}
+
+func (ec *etcdConsensus) close() error {
 	return ec.etcdSession.Close()
 }

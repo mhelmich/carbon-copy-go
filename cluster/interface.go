@@ -22,11 +22,8 @@ import (
 
 type Cluster interface {
 	myNodeId() int
-	getAllocator() GlobalIdAllocator
-}
-
-type GlobalIdAllocator interface {
-	nextId() int
+	getIdAllocator() chan int
+	close()
 }
 
 func NewCluster() (Cluster, error) {
@@ -34,9 +31,10 @@ func NewCluster() (Cluster, error) {
 }
 
 type consensusClient interface {
-	Get(ctx context.Context, key string) (string, error)
-	GetSortedRange(ctx context.Context, keyPrefix string) ([]kv, error)
-	Put(ctx context.Context, key string, value string) error
-	PutIfAbsent(ctx context.Context, key string, value string) (bool, error)
-	Close() error
+	get(ctx context.Context, key string) (string, error)
+	getSortedRange(ctx context.Context, keyPrefix string) ([]kv, error)
+	put(ctx context.Context, key string, value string) error
+	putIfAbsent(ctx context.Context, key string, value string) (bool, error)
+	compareAndPut(ctx context.Context, key string, oldValue string, newValue string) (bool, error)
+	close() error
 }

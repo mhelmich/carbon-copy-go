@@ -19,78 +19,77 @@ package cluster
 import (
 	"context"
 	"github.com/google/uuid"
-	// log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 )
 
-func TestEtcdCreateConsensus(t *testing.T) {
+func _TestEtcdCreateConsensus(t *testing.T) {
 	etcd, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
 	assert.NotNil(t, etcd.etcdSession.Lease())
-	assert.Nil(t, etcd.Close())
+	assert.Nil(t, etcd.close())
 }
 
-func TestEtcdPutGet(t *testing.T) {
+func _TestEtcdPutGet(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
 	etcd, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
-	assert.Nil(t, etcd.Put(context.Background(), key, val))
-	v, err := etcd.Get(context.Background(), key)
+	assert.Nil(t, etcd.put(context.Background(), key, val))
+	v, err := etcd.get(context.Background(), key)
 	assert.Nil(t, err)
 	assert.Equal(t, val, v)
-	assert.Nil(t, etcd.Close())
+	assert.Nil(t, etcd.close())
 }
 
-func TestEtcdPutGetExpireGet(t *testing.T) {
+func _TestEtcdPutGetExpireGet(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
 	etcd1, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
-	assert.Nil(t, etcd1.Put(context.Background(), key, val))
-	v, err := etcd1.Get(context.Background(), key)
+	assert.Nil(t, etcd1.put(context.Background(), key, val))
+	v, err := etcd1.get(context.Background(), key)
 	assert.Nil(t, err)
 	assert.Equal(t, val, v)
-	assert.Nil(t, etcd1.Close())
+	assert.Nil(t, etcd1.close())
 
 	etcd2, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
-	v, err = etcd1.Get(context.Background(), key)
+	v, err = etcd1.get(context.Background(), key)
 	assert.NotNil(t, err)
 	assert.Equal(t, "", v)
-	assert.Nil(t, etcd2.Close())
+	assert.Nil(t, etcd2.close())
 }
 
-func TestEtcdPutIfAbsent(t *testing.T) {
+func _TestEtcdPutIfAbsent(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
 	etcd1, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
-	didPut, err := etcd1.PutIfAbsent(context.Background(), key, val)
+	didPut, err := etcd1.putIfAbsent(context.Background(), key, val)
 	assert.Nil(t, err)
 	assert.True(t, didPut)
 
-	v, err := etcd1.Get(context.Background(), key)
+	v, err := etcd1.get(context.Background(), key)
 	assert.Nil(t, err)
 	assert.Equal(t, val, v)
 
-	didPut, err = etcd1.PutIfAbsent(context.Background(), key, "narf_narf_narf")
+	didPut, err = etcd1.putIfAbsent(context.Background(), key, "narf_narf_narf")
 	assert.Nil(t, err)
 	assert.False(t, didPut)
 
-	v, err = etcd1.Get(context.Background(), key)
+	v, err = etcd1.get(context.Background(), key)
 	assert.Nil(t, err)
 	assert.Equal(t, val, v)
 
-	assert.Nil(t, etcd1.Close())
+	assert.Nil(t, etcd1.close())
 }
 
-func TestEtcdGetSortedRange(t *testing.T) {
+func _TestEtcdGetSortedRange(t *testing.T) {
 	count := 17
 	key := "key_key_key_"
 	etcd1, err := createNewEtcdConsensus(context.Background())
@@ -99,14 +98,14 @@ func TestEtcdGetSortedRange(t *testing.T) {
 	for i := 0; i < count; i++ {
 		val, err := uuid.NewRandom()
 		assert.Nil(t, err)
-		didPut, err := etcd1.PutIfAbsent(context.Background(), key+strconv.Itoa(i), val.String())
+		didPut, err := etcd1.putIfAbsent(context.Background(), key+strconv.Itoa(i), val.String())
 		assert.Nil(t, err)
 		assert.True(t, didPut)
 	}
 
-	kvs, err := etcd1.GetSortedRange(context.Background(), key)
+	kvs, err := etcd1.getSortedRange(context.Background(), key)
 	assert.Nil(t, err)
 	assert.Equal(t, count, len(kvs))
 
-	assert.Nil(t, etcd1.Close())
+	assert.Nil(t, etcd1.close())
 }
