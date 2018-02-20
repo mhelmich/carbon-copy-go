@@ -27,8 +27,8 @@ import (
 const (
 	nameSeparator          = "/"
 	consensusNamespaceName = "carbon-copy"
-	consensusNodesName     = consensusNamespaceName + nameSeparator + "nodes"
-	consensusIdAllocator   = consensusNamespaceName + nameSeparator + "cache-line-id"
+	consensusNodesRootName = consensusNamespaceName + nameSeparator + "nodes" + nameSeparator
+	consensusIdAllocator   = consensusNamespaceName + nameSeparator + "cache-line-ids"
 
 	// TODO: move this into a config
 	idBufferSize = 7
@@ -40,8 +40,12 @@ type kv struct {
 }
 
 type clusterImpl struct {
-	consensus   consensusClient
-	newIdsCh    chan int
+	consensus consensusClient
+	newIdsCh  chan int
+	myNodeId  int
+	// this channel will only receive one int
+	// after that it is closed
+	myNodeIdCh  chan int
 	shouldClose bool
 }
 
@@ -56,16 +60,17 @@ func createNewCluster() (*clusterImpl, error) {
 	return createNewClusterWithConsensus(ctx, etcd)
 }
 
-func createNewClusterWithConsensus(ctx context.Context, etcd consensusClient) (*clusterImpl, error) {
-	initIdAllocator(etcd)
+func createNewClusterWithConsensus(ctx context.Context, cc consensusClient) (*clusterImpl, error) {
+	initIdAllocator(cc)
 
 	c := &clusterImpl{
-		consensus:   etcd,
+		consensus:   cc,
 		shouldClose: false,
-		newIdsCh:    nil,
+		newIdsCh:    startGlobalIdProvider(ctx, cc),
+		myNodeIdCh:  startMyNodeIdProvider(ctx, cc),
+		myNodeId:    -1,
 	}
 
-	c.startGlobalIdProvider(ctx)
 	return c, nil
 }
 
@@ -82,22 +87,23 @@ func initIdAllocator(cc consensusClient) {
 	}
 }
 
-func (ci *clusterImpl) startGlobalIdProvider(ctx context.Context) chan int {
-	if ci.newIdsCh == nil {
-		idChan := make(chan int, idBufferSize/2)
-		go func() {
-			ci.getIdBatchesForever(ctx, idChan)
-		}()
-		ci.newIdsCh = idChan
-		return idChan
-	} else {
-		return ci.newIdsCh
-	}
+func startMyNodeIdProvider(ctx context.Context, cc consensusClient) chan int {
+	ch := make(chan int, 1)
+	return ch
 }
 
-func (ci *clusterImpl) getIdBatchesForever(ctx context.Context, idChan chan int) {
+func startGlobalIdProvider(ctx context.Context, cc consensusClient) chan int {
+	idChan := make(chan int, idBufferSize/2)
+	go func() {
+		getIdBatchesForever(ctx, idChan, cc)
+	}()
+	return idChan
+}
+
+// loops forever (hopefully) in its own go routine
+func getIdBatchesForever(ctx context.Context, idChan chan int, cc consensusClient) {
 	for { // ever...
-		low, high, err := ci.getNextIdBatch(ctx)
+		low, high, err := getNextIdBatch(ctx, cc)
 		if err != nil {
 			log.Warnf("Couldn't allocate new id batch %s", err.Error())
 			time.Sleep(3 * time.Second)
@@ -105,34 +111,35 @@ func (ci *clusterImpl) getIdBatchesForever(ctx context.Context, idChan chan int)
 			for i := low; i < high; i++ {
 				idChan <- i
 
-				if ci.shouldClose {
-					break
+				if cc.isClosed() {
+					return
 				}
 			}
 		}
 
-		if ci.shouldClose {
-			break
+		if cc.isClosed() {
+			return
 		}
 	}
 }
 
-func (ci *clusterImpl) getNextIdBatch(ctx context.Context) (int, int, error) {
+// allocates the next available batch of unique cache line ids
+func getNextIdBatch(ctx context.Context, cc consensusClient) (int, int, error) {
 	succeeded := false
-	nextHighWatermarkStr := ""
-	currentHighWatermarkStr := ""
-	var err error
+	var nextHighWatermarkStr string = ""
+	var currentHighWatermarkStr string = ""
+	var err error = nil
 	for !succeeded {
-		currentHighWatermarkStr, err = ci.consensus.get(ctx, consensusIdAllocator)
-		log.Infof("Got from get %v %v", currentHighWatermarkStr, err)
+		currentHighWatermarkStr, err = cc.get(ctx, consensusIdAllocator)
+		log.Infof("Got from get %s %v", currentHighWatermarkStr, err)
 		currentHighWatermark, err := strconv.Atoi(currentHighWatermarkStr)
 		if err != nil {
 			return -1, -1, err
 		}
 
 		nextHighWatermarkStr = strconv.Itoa(currentHighWatermark + idBufferSize)
-		succeeded, err = ci.consensus.compareAndPut(ctx, consensusIdAllocator, currentHighWatermarkStr, nextHighWatermarkStr)
-		log.Infof("Got from compareAndPut %v %v", succeeded, err)
+		succeeded, err = cc.compareAndPut(ctx, consensusIdAllocator, currentHighWatermarkStr, nextHighWatermarkStr)
+		log.Infof("Got from compareAndPut %t %v", succeeded, err)
 		if err != nil {
 			return -1, -1, err
 		}
@@ -152,8 +159,11 @@ func (ci *clusterImpl) getNextIdBatch(ctx context.Context) (int, int, error) {
 	return low, high, nil
 }
 
-func (ci *clusterImpl) myNodeId() int {
-	return 0
+func (ci *clusterImpl) getMyNodeId() int {
+	if ci.myNodeId == -1 {
+		ci.myNodeId = <-ci.myNodeIdCh
+	}
+	return ci.myNodeId
 }
 
 func (ci *clusterImpl) getIdAllocator() chan int {
@@ -161,8 +171,7 @@ func (ci *clusterImpl) getIdAllocator() chan int {
 }
 
 func (ci *clusterImpl) close() {
-	ci.shouldClose = true
+	ci.consensus.close()
 	// read one id to close the allocator go routine
 	<-ci.newIdsCh
-	ci.consensus.close()
 }

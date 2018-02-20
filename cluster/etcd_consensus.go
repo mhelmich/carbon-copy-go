@@ -44,11 +44,13 @@ func createNewEtcdConsensus(ctx context.Context) (*etcdConsensus, error) {
 	log.Infof("Created etcd session for %v", cfg.Endpoints)
 	return &etcdConsensus{
 		etcdSession: etcdSession,
+		closed:      false,
 	}, nil
 }
 
 type etcdConsensus struct {
 	etcdSession *concurrency.Session
+	closed      bool
 }
 
 func (ec *etcdConsensus) get(ctx context.Context, key string) (string, error) {
@@ -115,6 +117,19 @@ func (ec *etcdConsensus) compareAndPut(ctx context.Context, key string, oldValue
 	}
 }
 
+func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (chan kv, error) {
+	return nil, errors.New("Not implemented yet!")
+}
+
+func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (chan kv, error) {
+	return nil, errors.New("Not implemented yet!")
+}
+
+func (ec *etcdConsensus) isClosed() bool {
+	return ec.closed
+}
+
 func (ec *etcdConsensus) close() error {
+	ec.closed = true
 	return ec.etcdSession.Close()
 }

@@ -21,7 +21,7 @@ import (
 )
 
 type Cluster interface {
-	myNodeId() int
+	getMyNodeId() int
 	getIdAllocator() chan int
 	close()
 }
@@ -36,5 +36,8 @@ type consensusClient interface {
 	put(ctx context.Context, key string, value string) error
 	putIfAbsent(ctx context.Context, key string, value string) (bool, error)
 	compareAndPut(ctx context.Context, key string, oldValue string, newValue string) (bool, error)
+	watchKey(ctx context.Context, key string) (chan kv, error)
+	watchKeyPrefix(ctx context.Context, prefix string) (chan kv, error)
+	isClosed() bool
 	close() error
 }

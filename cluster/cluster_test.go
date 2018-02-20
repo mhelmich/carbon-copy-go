@@ -33,6 +33,7 @@ import (
 
 type mockConsensusClient struct {
 	mock.Mock
+	closed bool
 }
 
 func (ec *mockConsensusClient) get(ctx context.Context, key string) (string, error) {
@@ -60,7 +61,22 @@ func (ec *mockConsensusClient) compareAndPut(ctx context.Context, key string, ol
 	return args.Bool(0), args.Error(1)
 }
 
+func (ec *mockConsensusClient) watchKey(ctx context.Context, key string) (chan kv, error) {
+	args := ec.Called(ctx, key)
+	return args.Get(0).(chan kv), args.Error(1)
+}
+
+func (ec *mockConsensusClient) watchKeyPrefix(ctx context.Context, prefix string) (chan kv, error) {
+	args := ec.Called(ctx, prefix)
+	return args.Get(0).(chan kv), args.Error(1)
+}
+
+func (ec *mockConsensusClient) isClosed() bool {
+	return ec.closed
+}
+
 func (ec *mockConsensusClient) close() error {
+	ec.closed = true
 	return nil
 }
 
@@ -81,7 +97,7 @@ func TestClusterAllocateGlobalIds(t *testing.T) {
 	cluster, err := createNewClusterWithConsensus(context.Background(), mockEtcd)
 	assert.Nil(t, err)
 	assert.NotNil(t, cluster)
-	idChan := cluster.startGlobalIdProvider(context.Background())
+	idChan := startGlobalIdProvider(context.Background(), cluster.consensus)
 	assert.Equal(t, 13, <-idChan)
 	assert.Equal(t, 14, <-idChan)
 	assert.Equal(t, 15, <-idChan)
