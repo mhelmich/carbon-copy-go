@@ -40,8 +40,9 @@ type kv struct {
 }
 
 type clusterImpl struct {
-	consensus consensusClient
-	newIdsCh  chan int
+	consensus   consensusClient
+	newIdsCh    chan int
+	shouldClose bool
 }
 
 func createNewCluster() (*clusterImpl, error) {
@@ -56,16 +57,20 @@ func createNewCluster() (*clusterImpl, error) {
 }
 
 func createNewClusterWithConsensus(ctx context.Context, etcd consensusClient) (*clusterImpl, error) {
+	initIdAllocator(etcd)
+
 	c := &clusterImpl{
-		consensus: etcd,
+		consensus:   etcd,
+		shouldClose: false,
+		newIdsCh:    nil,
 	}
 
-	c.initIdAllocator()
+	c.startGlobalIdProvider(ctx)
 	return c, nil
 }
 
-func (ci *clusterImpl) initIdAllocator() {
-	b, err := ci.consensus.putIfAbsent(context.Background(), consensusIdAllocator, strconv.Itoa(math.MinInt64))
+func initIdAllocator(cc consensusClient) {
+	b, err := cc.putIfAbsent(context.Background(), consensusIdAllocator, strconv.Itoa(math.MinInt64))
 	if err != nil {
 		log.Infof("Initializing the id allocator failed!", err.Error())
 	} else {
@@ -78,11 +83,16 @@ func (ci *clusterImpl) initIdAllocator() {
 }
 
 func (ci *clusterImpl) startGlobalIdProvider(ctx context.Context) chan int {
-	idChan := make(chan int, idBufferSize/2)
-	go func() {
-		ci.getIdBatchesForever(ctx, idChan)
-	}()
-	return idChan
+	if ci.newIdsCh == nil {
+		idChan := make(chan int, idBufferSize/2)
+		go func() {
+			ci.getIdBatchesForever(ctx, idChan)
+		}()
+		ci.newIdsCh = idChan
+		return idChan
+	} else {
+		return ci.newIdsCh
+	}
 }
 
 func (ci *clusterImpl) getIdBatchesForever(ctx context.Context, idChan chan int) {
@@ -94,7 +104,15 @@ func (ci *clusterImpl) getIdBatchesForever(ctx context.Context, idChan chan int)
 		} else {
 			for i := low; i < high; i++ {
 				idChan <- i
+
+				if ci.shouldClose {
+					break
+				}
 			}
+		}
+
+		if ci.shouldClose {
+			break
 		}
 	}
 }
@@ -143,5 +161,8 @@ func (ci *clusterImpl) getIdAllocator() chan int {
 }
 
 func (ci *clusterImpl) close() {
+	ci.shouldClose = true
+	// read one id to close the allocator go routine
+	<-ci.newIdsCh
 	ci.consensus.close()
 }
