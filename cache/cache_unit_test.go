@@ -18,8 +18,11 @@ package cache
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"github.com/google/uuid"
+	"github.com/oklog/ulid"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"testing"
@@ -493,4 +496,9 @@ func TestCacheUuidMarshalling(t *testing.T) {
 	uuid2, err := uuid.FromBytes(bites)
 	assert.Nil(t, err)
 	assert.Equal(t, uuid1.String(), uuid2.String())
+}
+
+func TestCacheUlidMatshalling(t *testing.T) {
+	id := ulid.MustNew(ulid.Now(), rand.Reader)
+	log.Infof("New id %s", id.String())
 }
