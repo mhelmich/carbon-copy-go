@@ -18,20 +18,21 @@ package cluster
 
 import (
 	"context"
-	"github.com/google/uuid"
+	"crypto/rand"
+	"github.com/oklog/ulid"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 )
 
-func _TestEtcdCreateConsensus(t *testing.T) {
+func TestEtcdCreateConsensus(t *testing.T) {
 	etcd, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
 	assert.NotNil(t, etcd.etcdSession.Lease())
 	assert.Nil(t, etcd.close())
 }
 
-func _TestEtcdPutGet(t *testing.T) {
+func TestEtcdPutGet(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
@@ -44,7 +45,7 @@ func _TestEtcdPutGet(t *testing.T) {
 	assert.Nil(t, etcd.close())
 }
 
-func _TestEtcdPutGetExpireGet(t *testing.T) {
+func TestEtcdPutGetExpireGet(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
@@ -64,7 +65,7 @@ func _TestEtcdPutGetExpireGet(t *testing.T) {
 	assert.Nil(t, etcd2.close())
 }
 
-func _TestEtcdPutIfAbsent(t *testing.T) {
+func TestEtcdPutIfAbsent(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
@@ -89,15 +90,14 @@ func _TestEtcdPutIfAbsent(t *testing.T) {
 	assert.Nil(t, etcd1.close())
 }
 
-func _TestEtcdGetSortedRange(t *testing.T) {
+func TestEtcdGetSortedRange(t *testing.T) {
 	count := 17
 	key := "key_key_key_"
 	etcd1, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
 
 	for i := 0; i < count; i++ {
-		val, err := uuid.NewRandom()
-		assert.Nil(t, err)
+		val := ulid.MustNew(ulid.Now(), rand.Reader)
 		didPut, err := etcd1.putIfAbsent(context.Background(), key+strconv.Itoa(i), val.String())
 		assert.Nil(t, err)
 		assert.True(t, didPut)
@@ -107,5 +107,24 @@ func _TestEtcdGetSortedRange(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, count, len(kvs))
 
+	assert.Nil(t, etcd1.close())
+}
+
+func TestEtcdWatchKeyPrefix(t *testing.T) {
+	count := 17
+	commonPrefix := "prefix___"
+	etcd1, err := createNewEtcdConsensus(context.Background())
+	assert.Nil(t, err, err.Error())
+
+	for i := 0; i < count; i++ {
+		val := ulid.MustNew(ulid.Now(), rand.Reader)
+		didPut, err := etcd1.putIfAbsent(context.Background(), commonPrefix+strconv.Itoa(i), val.String())
+		assert.Nil(t, err)
+		assert.True(t, didPut)
+	}
+
+	kvCh, err := etcd1.watchKeyPrefix(context.Background(), commonPrefix)
+	assert.Nil(t, err)
+	assert.NotNil(t, kvCh)
 	assert.Nil(t, etcd1.close())
 }

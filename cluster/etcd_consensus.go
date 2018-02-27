@@ -27,8 +27,8 @@ import (
 
 func createNewEtcdConsensus(ctx context.Context) (*etcdConsensus, error) {
 	cfg := clientv3.Config{
-		Endpoints:   []string{"http://127.0.0.1:2379"},
-		DialTimeout: 3 * time.Second,
+		Endpoints:   []string{"http://127.0.0.1:5566"},
+		DialTimeout: time.Second,
 	}
 
 	etcdClient, err := clientv3.New(cfg)
@@ -117,11 +117,13 @@ func (ec *etcdConsensus) compareAndPut(ctx context.Context, key string, oldValue
 	}
 }
 
-func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (chan kv, error) {
+func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (chan *kv, error) {
 	return nil, errors.New("Not implemented yet!")
 }
 
-func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (chan kv, error) {
+func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (chan []*kv, error) {
+	rch := ec.etcdSession.Client().Watch(ctx, prefix, clientv3.WithPrefix())
+	log.Infof("response channel: %v", rch)
 	return nil, errors.New("Not implemented yet!")
 }
 

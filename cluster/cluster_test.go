@@ -62,14 +62,14 @@ func (ec *mockConsensusClient) compareAndPut(ctx context.Context, key string, ol
 	return args.Bool(0), args.Error(1)
 }
 
-func (ec *mockConsensusClient) watchKey(ctx context.Context, key string) (chan kv, error) {
+func (ec *mockConsensusClient) watchKey(ctx context.Context, key string) (chan *kv, error) {
 	args := ec.Called(ctx, key)
-	return args.Get(0).(chan kv), args.Error(1)
+	return args.Get(0).(chan *kv), args.Error(1)
 }
 
-func (ec *mockConsensusClient) watchKeyPrefix(ctx context.Context, prefix string) (chan kv, error) {
+func (ec *mockConsensusClient) watchKeyPrefix(ctx context.Context, prefix string) (chan []*kv, error) {
 	args := ec.Called(ctx, prefix)
-	return args.Get(0).(chan kv), args.Error(1)
+	return args.Get(0).(chan []*kv), args.Error(1)
 }
 
 func (ec *mockConsensusClient) isClosed() bool {
