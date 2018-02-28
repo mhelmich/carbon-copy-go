@@ -27,8 +27,8 @@ import (
 
 func createNewEtcdConsensus(ctx context.Context) (*etcdConsensus, error) {
 	cfg := clientv3.Config{
-		Endpoints:   []string{"http://127.0.0.1:5566"},
-		DialTimeout: time.Second,
+		Endpoints:   []string{"http://127.0.0.1:2379"},
+		DialTimeout: 3 * time.Second,
 	}
 
 	etcdClient, err := clientv3.New(cfg)
@@ -117,14 +117,31 @@ func (ec *etcdConsensus) compareAndPut(ctx context.Context, key string, oldValue
 	}
 }
 
-func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (chan *kv, error) {
+func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (<-chan *kv, error) {
 	return nil, errors.New("Not implemented yet!")
 }
 
-func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (chan []*kv, error) {
-	rch := ec.etcdSession.Client().Watch(ctx, prefix, clientv3.WithPrefix())
-	log.Infof("response channel: %v", rch)
-	return nil, errors.New("Not implemented yet!")
+func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kv, error) {
+	kvChan := make(chan []*kv)
+
+	go func() {
+		watcherCh := ec.etcdSession.Client().Watch(ctx, prefix, clientv3.WithPrefix())
+		// listen to the channel forever
+		for resp := range watcherCh {
+			kvPacket := make([]*kv, len(resp.Events))
+			for idx, event := range resp.Events {
+				log.Infof("Recevied the following event: %s %s %s", event.Type.String(), string(event.Kv.Key), string(event.Kv.Value))
+				kvPacket[idx] = &kv{
+					key:   string(event.Kv.Key),
+					value: string(event.Kv.Value),
+				}
+			}
+			kvChan <- kvPacket
+		}
+	}()
+
+	log.Infof("Watching for key prefix '%s'", prefix)
+	return kvChan, nil
 }
 
 func (ec *etcdConsensus) isClosed() bool {
@@ -133,5 +150,9 @@ func (ec *etcdConsensus) isClosed() bool {
 
 func (ec *etcdConsensus) close() error {
 	ec.closed = true
-	return ec.etcdSession.Close()
+	err := ec.etcdSession.Close()
+	if err != nil {
+		log.Warnf("Too bad: error while shutting down: %s", err.Error())
+	}
+	return ec.etcdSession.Client().Close()
 }

@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-// +build integration
-
 package cluster
 
 import (
 	"context"
 	"crypto/rand"
 	"github.com/oklog/ulid"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
+	"time"
 	// I could toy around with this one day
 	// "github.com/araddon/qlbridge"
 	// "github.com/couchbase/blance"
@@ -120,20 +120,45 @@ func TestEtcdGetSortedRange(t *testing.T) {
 }
 
 func TestEtcdWatchKeyPrefix(t *testing.T) {
-	count := 17
 	commonPrefix := "prefix___"
 	etcd1, err := createNewEtcdConsensus(context.Background())
-	assert.Nil(t, err, err.Error())
+	assert.Nil(t, err)
 
-	for i := 0; i < count; i++ {
-		val := ulid.MustNew(ulid.Now(), rand.Reader)
-		didPut, err := etcd1.putIfAbsent(context.Background(), commonPrefix+strconv.Itoa(i), val.String())
-		assert.Nil(t, err)
-		assert.True(t, didPut)
-	}
+	// this value won't appear in the watcher!
+	didPut, err := etcd1.putIfAbsent(context.Background(), commonPrefix+"55", ulid.MustNew(ulid.Now(), rand.Reader).String())
+	assert.Nil(t, err)
+	assert.True(t, didPut)
 
-	kvCh, err := etcd1.watchKeyPrefix(context.Background(), commonPrefix)
+	watcherContext, watcherCancel := context.WithCancel(context.Background())
+	kvCh, err := etcd1.watchKeyPrefix(watcherContext, commonPrefix)
 	assert.Nil(t, err)
 	assert.NotNil(t, kvCh)
+
+	didPut, err = etcd1.putIfAbsent(context.Background(), commonPrefix+"99", ulid.MustNew(ulid.Now(), rand.Reader).String())
+	assert.Nil(t, err)
+	assert.True(t, didPut)
+	if err != nil || !didPut {
+		assert.Failf(t, "Couldn't put value", "msg")
+	}
+
+	var continueLoop = true
+	numPacketsReceived := 0
+	for continueLoop { //ever...
+		select {
+		case kvPacket := <-kvCh:
+			log.Infof("Received kv packet with size %d", len(kvPacket))
+			numPacketsReceived++
+			if numPacketsReceived > 0 {
+				continueLoop = false
+			}
+		case <-time.After(3 * time.Second):
+			log.Errorf("Read from watcher channel timed out")
+			assert.Failf(t, "Read from watcher channel timed out", "msg")
+			break
+		}
+	}
+
+	watcherCancel()
+	assert.Equal(t, 1, numPacketsReceived)
 	assert.Nil(t, etcd1.close())
 }
