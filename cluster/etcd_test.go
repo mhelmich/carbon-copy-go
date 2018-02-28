@@ -25,6 +25,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
+	// I could toy around with this one day
+	// "github.com/araddon/qlbridge"
+	// "github.com/couchbase/blance"
+	// "github.com/couchbase/moss"
+	// "github.com/hashicorp/raft"
+	// raftboltdb "github.com/hashicorp/raft-boltdb"
+	// "github.com/hashicorp/serf/serf"
 )
 
 func TestEtcdCreateConsensus(t *testing.T) {
