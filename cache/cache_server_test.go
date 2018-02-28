@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-// +build all unit
-
 package cache
 
 import (
