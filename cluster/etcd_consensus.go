@@ -151,6 +151,14 @@ func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-c
 
 		for { // listen to the channel forever
 			for resp := range watcherCh {
+
+				if len(resp.Events) == 0 && resp.Err() == nil {
+					// channel was closed
+					// we're done
+					close(kvChan)
+					return
+				}
+
 				if resp.Header.GetRevision() > initialRevision {
 					kvPacket := make([]*kv, len(resp.Events))
 					for idx, event := range resp.Events {
