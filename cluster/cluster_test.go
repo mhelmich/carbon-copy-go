@@ -106,7 +106,7 @@ func TestClusterAllocateGlobalIds(t *testing.T) {
 	assert.Equal(t, 14, <-idChan)
 	assert.Equal(t, 15, <-idChan)
 	assert.Equal(t, 16, <-idChan)
-	cluster.close()
+	cluster.Close()
 }
 
 func TestClusterAllocateMyNodeIdBasic(t *testing.T) {

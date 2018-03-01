@@ -21,9 +21,9 @@ import (
 )
 
 type Cluster interface {
-	getMyNodeId() int
-	getIdAllocator() <-chan int
-	close()
+	GetMyNodeId() int
+	GetIdAllocator() <-chan int
+	Close()
 }
 
 func NewCluster() (Cluster, error) {

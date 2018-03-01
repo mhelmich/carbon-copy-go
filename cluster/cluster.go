@@ -189,18 +189,18 @@ func getNextIdBatch(ctx context.Context, cc consensusClient) (int, int, error) {
 	return low, high, nil
 }
 
-func (ci *clusterImpl) getMyNodeId() int {
+func (ci *clusterImpl) GetMyNodeId() int {
 	if ci.myNodeId == -1 {
 		ci.myNodeId = <-ci.myNodeIdCh
 	}
 	return ci.myNodeId
 }
 
-func (ci *clusterImpl) getIdAllocator() <-chan int {
+func (ci *clusterImpl) GetIdAllocator() <-chan int {
 	return ci.newIdsCh
 }
 
-func (ci *clusterImpl) close() {
+func (ci *clusterImpl) Close() {
 	ci.consensus.close()
 	// read one id to close the allocator go routine
 	<-ci.newIdsCh
