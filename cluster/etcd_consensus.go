@@ -125,18 +125,43 @@ func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-c
 	kvChan := make(chan []*kv)
 
 	go func() {
+		// start the watcher first
 		watcherCh := ec.etcdSession.Client().Watch(ctx, prefix, clientv3.WithPrefix())
-		// listen to the channel forever
-		for resp := range watcherCh {
-			kvPacket := make([]*kv, len(resp.Events))
-			for idx, event := range resp.Events {
-				log.Infof("Recevied the following event: %s %s %s", event.Type.String(), string(event.Kv.Key), string(event.Kv.Value))
-				kvPacket[idx] = &kv{
-					key:   string(event.Kv.Key),
-					value: string(event.Kv.Value),
+		// then get the "current" state
+		// worst case we're getting a newer revision in get and in older one in the watcher
+		// but we will be processing everything out of the watcher anyways
+		// meaning we could go from time t3 -> t2 -> t3
+		// we can obviously just look at the revision of every
+		// watcher event and make sure we only move forwards in time
+		resp, err := ec.etcdSession.Client().Get(ctx, prefix, clientv3.WithPrefix())
+		if err != nil {
+			log.Errorf("Can't watch key prefix '%s' because of %s", prefix, err.Error())
+			return
+		}
+
+		initialRevision := resp.Header.GetRevision()
+		kvPacket := make([]*kv, len(resp.Kvs))
+		for idx, ev := range resp.Kvs {
+			kvPacket[idx] = &kv{
+				key:   string(ev.Key),
+				value: string(ev.Value),
+			}
+		}
+		kvChan <- kvPacket
+
+		for { // listen to the channel forever
+			for resp := range watcherCh {
+				if resp.Header.GetRevision() > initialRevision {
+					kvPacket := make([]*kv, len(resp.Events))
+					for idx, event := range resp.Events {
+						kvPacket[idx] = &kv{
+							key:   string(event.Kv.Key),
+							value: string(event.Kv.Value),
+						}
+					}
+					kvChan <- kvPacket
 				}
 			}
-			kvChan <- kvPacket
 		}
 	}()
 

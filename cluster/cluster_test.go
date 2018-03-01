@@ -127,7 +127,7 @@ func TestClusterAllocateMyNodeIdBasic(t *testing.T) {
 	// run test
 	idChan := startMyNodeIdProvider(context.Background(), mockEtcd)
 	nodeId := <-idChan
-	log.Infof("Aqcuired node id %d", nodeId)
+	log.Infof("Acquired node id %d", nodeId)
 }
 
 func TestClusterAllocateMyNodeIdConflict(t *testing.T) {

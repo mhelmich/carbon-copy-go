@@ -119,12 +119,11 @@ func TestEtcdGetSortedRange(t *testing.T) {
 	assert.Nil(t, etcd1.close())
 }
 
-func TestEtcdWatchKeyPrefix(t *testing.T) {
+func TestEtcdWatchKeyPrefixValuesPresentOnly(t *testing.T) {
 	commonPrefix := "prefix___"
 	etcd1, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
 
-	// this value won't appear in the watcher!
 	didPut, err := etcd1.putIfAbsent(context.Background(), commonPrefix+"55", ulid.MustNew(ulid.Now(), rand.Reader).String())
 	assert.Nil(t, err)
 	assert.True(t, didPut)
@@ -134,16 +133,9 @@ func TestEtcdWatchKeyPrefix(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, kvCh)
 
-	didPut, err = etcd1.putIfAbsent(context.Background(), commonPrefix+"99", ulid.MustNew(ulid.Now(), rand.Reader).String())
-	assert.Nil(t, err)
-	assert.True(t, didPut)
-	if err != nil || !didPut {
-		assert.Failf(t, "Couldn't put value", "msg")
-	}
-
 	var continueLoop = true
 	numPacketsReceived := 0
-	for continueLoop { //ever...
+	for continueLoop { // ever...
 		select {
 		case kvPacket := <-kvCh:
 			log.Infof("Received kv packet with size %d", len(kvPacket))
@@ -154,11 +146,63 @@ func TestEtcdWatchKeyPrefix(t *testing.T) {
 		case <-time.After(3 * time.Second):
 			log.Errorf("Read from watcher channel timed out")
 			assert.Failf(t, "Read from watcher channel timed out", "msg")
-			break
+			continueLoop = false
 		}
 	}
 
 	watcherCancel()
 	assert.Equal(t, 1, numPacketsReceived)
+	assert.Nil(t, etcd1.close())
+}
+
+func TestEtcdWatchKeyPrefixValuesPresentAndNewOnesSet(t *testing.T) {
+	commonPrefix := "prefix___"
+	etcd1, err := createNewEtcdConsensus(context.Background())
+	assert.Nil(t, err)
+
+	didPut, err := etcd1.putIfAbsent(context.Background(), commonPrefix+"55", ulid.MustNew(ulid.Now(), rand.Reader).String())
+	assert.Nil(t, err)
+	assert.True(t, didPut)
+
+	watcherContext, watcherCancel := context.WithCancel(context.Background())
+	kvCh, err := etcd1.watchKeyPrefix(watcherContext, commonPrefix)
+	assert.Nil(t, err)
+	assert.NotNil(t, kvCh)
+
+	// yeah yeah yeah, I know
+	// the test relies on the fact that watchers can be attached before
+	// this time ticked away
+	// I should be writing a mock that calls the original code
+	// and only returns after a certain condition is met
+	// (and for the sake of complete testing I should go through all possible situations)
+	// but I'm too lazy to do this now
+	time.Sleep(300 * time.Millisecond)
+
+	didPut, err = etcd1.putIfAbsent(context.Background(), commonPrefix+"99", ulid.MustNew(ulid.Now(), rand.Reader).String())
+	assert.Nil(t, err)
+	assert.True(t, didPut)
+	if err != nil || !didPut {
+		assert.Failf(t, "Couldn't put value", "msg")
+	}
+
+	var continueLoop = true
+	numPacketsReceived := 0
+	for continueLoop { // ever...
+		select {
+		case kvPacket := <-kvCh:
+			log.Infof("Received kv packet with size %d", len(kvPacket))
+			numPacketsReceived++
+			if numPacketsReceived > 1 {
+				continueLoop = false
+			}
+		case <-time.After(3 * time.Second):
+			log.Errorf("Read from watcher channel timed out")
+			assert.Failf(t, "Read from watcher channel timed out", "msg")
+			continueLoop = false
+		}
+	}
+
+	watcherCancel()
+	assert.Equal(t, 2, numPacketsReceived)
 	assert.Nil(t, etcd1.close())
 }
