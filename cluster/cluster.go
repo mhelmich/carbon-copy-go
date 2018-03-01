@@ -196,7 +196,7 @@ func (ci *clusterImpl) getMyNodeId() int {
 	return ci.myNodeId
 }
 
-func (ci *clusterImpl) getIdAllocator() chan int {
+func (ci *clusterImpl) getIdAllocator() <-chan int {
 	return ci.newIdsCh
 }
 

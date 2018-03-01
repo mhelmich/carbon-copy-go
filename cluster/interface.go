@@ -22,7 +22,7 @@ import (
 
 type Cluster interface {
 	getMyNodeId() int
-	getIdAllocator() chan int
+	getIdAllocator() <-chan int
 	close()
 }
 
