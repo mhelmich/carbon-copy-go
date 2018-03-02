@@ -82,31 +82,31 @@ message GetxResponse {
 
 message Get {
     int32 senderId = 1;
-    int64 lineId = 2;
+    LineId lineId = 2;
 }
 
 message Put {
     CacheError error = 1;
     int32 senderId = 2;
-    int64 lineId = 3;
+    LineId lineId = 3;
     int32 version = 4;
     bytes buffer = 5;
 }
 
 message Ack {
     int32 senderId = 1;
-    int64 lineId = 2;
+    LineId lineId = 2;
 }
 
 message Gets {
     int32 senderId = 1;
-    int64 lineId = 2;
+    LineId lineId = 2;
 }
 
 message Puts {
     CacheError error = 1;
     int32 senderId = 2;
-    int64 lineId = 3;
+    LineId lineId = 3;
     int32 version = 4;
     repeated int32 sharers = 5;
     bytes buffer = 6;
@@ -114,13 +114,13 @@ message Puts {
 
 message Getx {
     int32 senderId = 1;
-    int64 lineId = 2;
+    LineId lineId = 2;
 }
 
 message Putx {
     CacheError error = 1;
     int32 senderId = 2;
-    int64 lineId = 3;
+    LineId lineId = 3;
     int32 version = 4;
     repeated int32 sharers = 5;
     bytes buffer = 6;
@@ -128,25 +128,25 @@ message Putx {
 
 message Inv {
     int32 senderId = 1;
-    int64 lineId = 2;
+    LineId lineId = 2;
 }
 
 message InvAck {
     CacheError error = 1;
     int32 senderId = 2;
-    int64 lineId = 3;
+    LineId lineId = 3;
 }
 
 message ChangeOwner {
     int32 senderId = 1;
-    int64 lineId = 2;
+    LineId lineId = 2;
     int32 version = 3;
     bytes buffer = 4;
 }
 
 message OwnerChanged {
     int32 senderId = 1;
-    int64 lineId = 2;
+    LineId lineId = 2;
     int32 newOwnerId = 3;
     OriginalMessageType originalMessageType = 4;
 }

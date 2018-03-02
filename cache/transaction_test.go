@@ -22,9 +22,10 @@ import (
 )
 
 func TestTxnCommit(t *testing.T) {
+	lineId := newRandomCacheLineId()
 	txn := createNewTransaction()
 	buf := "testing_test_test_test"
-	cl := newCacheLine(123456789, 4444, []byte(buf))
+	cl := newCacheLine(lineId, 4444, []byte(buf))
 	newBuf := "new_buffer_bwahahaha"
 	txn.addToTxn(cl, []byte(newBuf))
 	txn.Commit()
@@ -33,9 +34,10 @@ func TestTxnCommit(t *testing.T) {
 }
 
 func TestTxnRollback(t *testing.T) {
+	lineId := newRandomCacheLineId()
 	txn := createNewTransaction()
 	buf := "testing_test_test_test"
-	cl := newCacheLine(123456789, 4444, []byte(buf))
+	cl := newCacheLine(lineId, 4444, []byte(buf))
 	newBuf := "new_buffer_bwahahaha"
 	txn.addToTxn(cl, []byte(newBuf))
 	txn.Rollback()

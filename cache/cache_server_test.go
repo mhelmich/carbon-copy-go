@@ -24,7 +24,7 @@ import (
 )
 
 func TestServerGetLineNotPresent(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -35,7 +35,7 @@ func TestServerGetLineNotPresent(t *testing.T) {
 
 	req := &Get{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Get(context.Background(), req)
 	assert.Nil(t, err)
@@ -44,7 +44,7 @@ func TestServerGetLineNotPresent(t *testing.T) {
 }
 
 func TestServerGetLineNotOwned(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -61,19 +61,19 @@ func TestServerGetLineNotOwned(t *testing.T) {
 
 	req := &Get{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Get(context.Background(), req)
 	assert.Nil(t, err)
 	oc := resp.GetOwnerChanged()
 	assert.NotNil(t, oc)
-	assert.Equal(t, lineId, int(oc.LineId))
+	assert.True(t, lineId.equal(cacheLineIdFromProtoBuf(oc.LineId)))
 	assert.Equal(t, 258, int(oc.NewOwnerId))
 	assert.Equal(t, 111, int(oc.SenderId))
 }
 
 func TestServerGetLineOwned(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -91,19 +91,19 @@ func TestServerGetLineOwned(t *testing.T) {
 
 	req := &Get{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Get(context.Background(), req)
 	assert.Nil(t, err)
 	put := resp.GetPut()
 	assert.NotNil(t, put)
-	assert.Equal(t, lineId, int(put.LineId))
+	assert.True(t, lineId.equal(cacheLineIdFromProtoBuf(put.LineId)))
 	assert.Equal(t, lineBuffer, put.Buffer)
 	assert.Equal(t, 111, int(put.SenderId))
 }
 
 func TestServerGetsLineExclusive(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -121,7 +121,7 @@ func TestServerGetsLineExclusive(t *testing.T) {
 
 	req := &Gets{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Gets(context.Background(), req)
 	assert.Nil(t, err)
@@ -135,7 +135,7 @@ func TestServerGetsLineExclusive(t *testing.T) {
 }
 
 func TestServerGetsLineOwned(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -153,7 +153,7 @@ func TestServerGetsLineOwned(t *testing.T) {
 
 	req := &Gets{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Gets(context.Background(), req)
 	assert.Nil(t, err)
@@ -167,7 +167,7 @@ func TestServerGetsLineOwned(t *testing.T) {
 }
 
 func TestServerGetsLineShared(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -185,7 +185,7 @@ func TestServerGetsLineShared(t *testing.T) {
 
 	req := &Gets{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Gets(context.Background(), req)
 	assert.Nil(t, err)
@@ -195,7 +195,7 @@ func TestServerGetsLineShared(t *testing.T) {
 }
 
 func TestServerGetsLineDoesntExist(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -206,7 +206,7 @@ func TestServerGetsLineDoesntExist(t *testing.T) {
 
 	req := &Gets{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Gets(context.Background(), req)
 	assert.Nil(t, err)
@@ -215,7 +215,7 @@ func TestServerGetsLineDoesntExist(t *testing.T) {
 }
 
 func TestServerGetxLineOwned(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -233,7 +233,7 @@ func TestServerGetxLineOwned(t *testing.T) {
 
 	req := &Getx{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Getx(context.Background(), req)
 	assert.Nil(t, err)
@@ -244,7 +244,7 @@ func TestServerGetxLineOwned(t *testing.T) {
 }
 
 func TestServerGetxLineInvalid(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -262,7 +262,7 @@ func TestServerGetxLineInvalid(t *testing.T) {
 
 	req := &Getx{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Getx(context.Background(), req)
 	assert.Nil(t, err)
@@ -273,7 +273,7 @@ func TestServerGetxLineInvalid(t *testing.T) {
 }
 
 func TestServerGetxLineDoesntExist(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -284,7 +284,7 @@ func TestServerGetxLineDoesntExist(t *testing.T) {
 
 	req := &Getx{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	resp, err := cacheServer.Getx(context.Background(), req)
 	assert.Nil(t, err)
@@ -293,7 +293,7 @@ func TestServerGetxLineDoesntExist(t *testing.T) {
 }
 
 func TestServerInvalidateExists(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -311,19 +311,20 @@ func TestServerInvalidateExists(t *testing.T) {
 
 	req := &Inv{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	invAck, err := cacheServer.Invalidate(context.Background(), req)
 	assert.Nil(t, err)
 	assert.NotNil(t, invAck)
-	assert.Equal(t, int64(lineId), invAck.LineId)
+	assert.True(t, lineId.equal(cacheLineIdFromProtoBuf(invAck.LineId)))
+
 	assert.Equal(t, CacheLineState_Invalid, line.cacheLineState)
 	assert.Nil(t, line.sharers)
 	assert.Nil(t, line.buffer)
 }
 
 func TestServerInvalidateDoesntExist(t *testing.T) {
-	lineId := 654321
+	lineId := newRandomCacheLineId()
 	serverNodeId := 111
 	clStore := createNewCacheLineStore()
 	cacheServer := &cacheServerImpl{
@@ -334,10 +335,10 @@ func TestServerInvalidateDoesntExist(t *testing.T) {
 
 	req := &Inv{
 		SenderId: int32(555),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 	invAck, err := cacheServer.Invalidate(context.Background(), req)
 	assert.Nil(t, err)
 	assert.NotNil(t, invAck)
-	assert.Equal(t, int64(lineId), invAck.LineId)
+	assert.True(t, lineId.equal(cacheLineIdFromProtoBuf(invAck.LineId)))
 }

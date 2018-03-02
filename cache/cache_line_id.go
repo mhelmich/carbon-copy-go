@@ -20,17 +20,17 @@ import (
 	"bytes"
 	"crypto/rand"
 	"github.com/oklog/ulid"
+	log "github.com/sirupsen/logrus"
 )
 
-func cacheLineIdFromProtoBuf(lineId *LineId) (*cacheLineIdImpl, error) {
+func cacheLineIdFromProtoBuf(lineId *LineId) *cacheLineIdImpl {
 	id, err := ulid.New(lineId.Time, bytes.NewReader(lineId.Entropy))
 	if err != nil {
-		return nil, err
+		log.Fatalf("Can't parse cache line id out of []byte: %s", err.Error())
 	}
-
 	return &cacheLineIdImpl{
 		ulid: id,
-	}, nil
+	}
 }
 
 func newRandomCacheLineId() *cacheLineIdImpl {
@@ -44,8 +44,8 @@ type cacheLineIdImpl struct {
 	ulid ulid.ULID
 }
 
-func (cli *cacheLineIdImpl) toProtoBuf() LineId {
-	return LineId{
+func (cli *cacheLineIdImpl) toProtoBuf() *LineId {
+	return &LineId{
 		Time:    cli.ulid.Time(),
 		Entropy: cli.ulid.Entropy(),
 	}
@@ -53,4 +53,8 @@ func (cli *cacheLineIdImpl) toProtoBuf() LineId {
 
 func (cli *cacheLineIdImpl) equal(that *cacheLineIdImpl) bool {
 	return cli.ulid.Compare(that.ulid) == 0
+}
+
+func (cli *cacheLineIdImpl) string() string {
+	return cli.ulid.String()
 }

@@ -53,14 +53,14 @@ type cacheServerImpl struct {
 }
 
 func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, error) {
-	cl, ok := cs.store.getCacheLineById(int(req.LineId))
+	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 
 	if ok {
 		if cl.cacheLineState == CacheLineState_Exclusive || cl.cacheLineState == CacheLineState_Owned {
 			put := &Put{
 				Error:    CacheError_NoError,
 				SenderId: cs.myNodeId,
-				LineId:   int64(cl.id),
+				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
 				Buffer:   cl.buffer,
 			}
@@ -71,7 +71,7 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 				},
 			}
 
-			log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, req.LineId, "put")
+			log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "put")
 			return resp, nil
 		} else {
 			oc := &OwnerChanged{
@@ -87,7 +87,7 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 				},
 			}
 
-			log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, req.LineId, "owner_changed")
+			log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "owner_changed")
 			return resp, nil
 		}
 	} else {
@@ -102,13 +102,13 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 			},
 		}
 
-		log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, req.LineId, "ack")
+		log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "ack")
 		return resp, nil
 	}
 }
 
 func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, error) {
-	cl, ok := cs.store.getCacheLineById(int(req.LineId))
+	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 
 	if ok {
 		switch cl.cacheLineState {
@@ -118,7 +118,7 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 			puts := &Puts{
 				Error:    CacheError_NoError,
 				SenderId: cs.myNodeId,
-				LineId:   int64(cl.id),
+				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
 				Sharers:  convertIntTo32Array(cl.sharers),
 				Buffer:   cl.buffer,
@@ -141,7 +141,7 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 			puts := &Puts{
 				Error:    CacheError_NoError,
 				SenderId: cs.myNodeId,
-				LineId:   int64(cl.id),
+				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
 				Sharers:  convertIntTo32Array(cl.sharers),
 				Buffer:   cl.buffer,
@@ -193,7 +193,7 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 }
 
 func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, error) {
-	cl, ok := cs.store.getCacheLineById(int(req.LineId))
+	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 
 	if ok {
 		if cl.cacheLineState == CacheLineState_Exclusive || cl.cacheLineState == CacheLineState_Owned {
@@ -202,7 +202,7 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, 
 			putx := &Putx{
 				Error:    CacheError_NoError,
 				SenderId: cs.myNodeId,
-				LineId:   int64(cl.id),
+				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
 				Sharers:  convertIntTo32Array(cl.sharers),
 				Buffer:   cl.buffer,
@@ -236,7 +236,7 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, 
 				},
 			}
 
-			log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, req.LineId, "owner_changed")
+			log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "owner_changed")
 			return resp, nil
 		}
 	} else {
@@ -251,14 +251,13 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, 
 			},
 		}
 
-		log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, req.LineId, "ack")
+		log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "ack")
 		return resp, nil
 	}
 }
 
 func (cs *cacheServerImpl) Invalidate(ctx context.Context, req *Inv) (*InvAck, error) {
-	log.Info("Answering invalidate call")
-	cl, ok := cs.store.getCacheLineById(int(req.LineId))
+	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 	if ok {
 		cl.lock()
 		cl.cacheLineState = CacheLineState_Invalid

@@ -29,20 +29,21 @@ func TestServerClient(t *testing.T) {
 	assert.Nil(t, err, "Couldn't start server")
 	client, err := createNewCacheClientFromAddr("localhost:6666")
 	assert.Nil(t, err, "Couldn't create client stub")
+	lineId := newRandomCacheLineId()
 
 	inv := &Inv{
 		SenderId: 555,
-		LineId:   123456789,
+		LineId:   lineId.toProtoBuf(),
 	}
 	invAck, err := client.SendInvalidate(context.Background(), inv)
 	assert.Nil(t, err, "Couldn't send invalidate")
 	assert.NotNil(t, invAck, "invAck is nil")
 	assert.Equal(t, int32(111), invAck.SenderId)
-	assert.Equal(t, int64(123456789), invAck.LineId)
+	assert.True(t, lineId.equal(cacheLineIdFromProtoBuf(invAck.LineId)))
 
 	get := &Get{
 		SenderId: 555,
-		LineId:   123456789,
+		LineId:   lineId.toProtoBuf(),
 	}
 	_, _, err = client.SendGet(context.Background(), get)
 	assert.NotNil(t, err, "Couldn't send get")

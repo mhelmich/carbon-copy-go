@@ -21,7 +21,7 @@ import (
 	"sync"
 )
 
-func newCacheLine(id int, myNodeId int, buffer []byte) *CacheLine {
+func newCacheLine(id CacheLineId, myNodeId int, buffer []byte) *CacheLine {
 	return &CacheLine{
 		id:             id,
 		cacheLineState: CacheLineState_Exclusive,
@@ -34,7 +34,7 @@ func newCacheLine(id int, myNodeId int, buffer []byte) *CacheLine {
 }
 
 type CacheLine struct {
-	id             int
+	id             CacheLineId
 	cacheLineState CacheLineState
 	version        int
 	ownerId        int
@@ -59,5 +59,5 @@ func (cl *CacheLine) isLocked() bool {
 }
 
 func (cl *CacheLine) String() string {
-	return fmt.Sprintf("<id: %d state: %s version: %d owner: %d locked: %t buffer length: %d>", cl.id, cl.cacheLineState.String(), cl.version, cl.ownerId, cl.locked, len(cl.buffer))
+	return fmt.Sprintf("<id: %s state: %s version: %d owner: %d locked: %t buffer length: %d>", cl.id.string(), cl.cacheLineState.String(), cl.version, cl.ownerId, cl.locked, len(cl.buffer))
 }

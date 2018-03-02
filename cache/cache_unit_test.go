@@ -165,7 +165,7 @@ func mockCache(mapping cacheClientMapping) *cacheImpl {
 ////////////////////////////////////////////////////////////////////////
 
 func TestGetUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
 	var p *Put
@@ -173,7 +173,7 @@ func TestGetUnit(t *testing.T) {
 	p = &Put{
 		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
@@ -201,7 +201,7 @@ func TestGetUnit(t *testing.T) {
 }
 
 func TestGetOwnedUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
 	var p *Put
@@ -209,7 +209,7 @@ func TestGetOwnedUnit(t *testing.T) {
 	p = &Put{
 		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
@@ -238,19 +238,19 @@ func TestGetOwnedUnit(t *testing.T) {
 }
 
 func TestGetWithOwnerChangedUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 
 	p := &Put{
 		Error:    CacheError_NoError,
 		SenderId: int32(5678),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
 	oc := &OwnerChanged{
 		SenderId:   int32(1234),
-		LineId:     int64(lineId),
+		LineId:     lineId.toProtoBuf(),
 		NewOwnerId: int32(5678),
 	}
 
@@ -282,7 +282,7 @@ func TestGetWithOwnerChangedUnit(t *testing.T) {
 }
 
 func TestGetxUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
 	var p *Putx
@@ -290,7 +290,7 @@ func TestGetxUnit(t *testing.T) {
 	p = &Putx{
 		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
@@ -318,7 +318,7 @@ func TestGetxUnit(t *testing.T) {
 }
 
 func TestGetxExclusiveUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
 	var p *Putx
@@ -326,7 +326,7 @@ func TestGetxExclusiveUnit(t *testing.T) {
 	p = &Putx{
 		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
@@ -355,13 +355,13 @@ func TestGetxExclusiveUnit(t *testing.T) {
 }
 
 func TestGetxOwnedUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	clientMock := new(mockCacheClient)
 
 	invAck := &InvAck{
 		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 
 	clientMock.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Inv")).Return(invAck, nil)
@@ -389,13 +389,13 @@ func TestGetxOwnedUnit(t *testing.T) {
 }
 
 func TestGetxSharedUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 
 	putx := &Putx{
 		Error:    CacheError_NoError,
 		SenderId: int32(5678),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Sharers:  []int32{int32(1234)},
 		Buffer:   []byte(latestBuffer),
@@ -404,7 +404,7 @@ func TestGetxSharedUnit(t *testing.T) {
 	invAck := &InvAck{
 		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 
 	clientMock1234 := new(mockCacheClient)
@@ -438,13 +438,13 @@ func TestGetxSharedUnit(t *testing.T) {
 }
 
 func TestPutUnit(t *testing.T) {
-	lineId := 12345679
+	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 
 	putx := &Putx{
 		Error:    CacheError_NoError,
 		SenderId: int32(5678),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Sharers:  []int32{int32(1234)},
 		Buffer:   []byte(latestBuffer),
@@ -453,7 +453,7 @@ func TestPutUnit(t *testing.T) {
 	invAck := &InvAck{
 		Error:    CacheError_NoError,
 		SenderId: int32(1234),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 
 	clientMock1234 := new(mockCacheClient)

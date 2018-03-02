@@ -30,8 +30,8 @@ type cacheLineStore struct {
 	cacheLineMap *sync.Map
 }
 
-func (cls *cacheLineStore) getCacheLineById(lineId int) (*CacheLine, bool) {
-	cl, ok := cls.cacheLineMap.Load(lineId)
+func (cls *cacheLineStore) getCacheLineById(lineId CacheLineId) (*CacheLine, bool) {
+	cl, ok := cls.cacheLineMap.Load(lineId.string())
 	if ok {
 		return cl.(*CacheLine), true
 	} else {
@@ -39,13 +39,13 @@ func (cls *cacheLineStore) getCacheLineById(lineId int) (*CacheLine, bool) {
 	}
 }
 
-func (cls *cacheLineStore) putIfAbsent(lineId int, line *CacheLine) (*CacheLine, bool) {
-	val, loaded := cls.cacheLineMap.LoadOrStore(lineId, line)
+func (cls *cacheLineStore) putIfAbsent(lineId CacheLineId, line *CacheLine) (*CacheLine, bool) {
+	val, loaded := cls.cacheLineMap.LoadOrStore(lineId.string(), line)
 	return val.(*CacheLine), loaded
 }
 
 func (cls *cacheLineStore) addCacheLineToLocalCache(line *CacheLine) {
-	cls.cacheLineMap.Store(line.id, line)
+	cls.cacheLineMap.Store(line.id.string(), line)
 }
 
 // gut decision to put this function here
@@ -73,9 +73,9 @@ func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *Putx, myNodeId
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (cls *cacheLineStore) createCacheLineFromPut(lineId int, put *Put) *CacheLine {
+func (cls *cacheLineStore) createCacheLineFromPut(put *Put) *CacheLine {
 	line := &CacheLine{
-		id:             int(put.LineId),
+		id:             cacheLineIdFromProtoBuf(put.LineId),
 		cacheLineState: CacheLineState_Shared,
 		version:        int(put.Version),
 		ownerId:        int(put.SenderId),
@@ -87,9 +87,9 @@ func (cls *cacheLineStore) createCacheLineFromPut(lineId int, put *Put) *CacheLi
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (cls *cacheLineStore) createCacheLineFromPutx(lineId int, p *Putx, myNodeId int) *CacheLine {
+func (cls *cacheLineStore) createCacheLineFromPutx(p *Putx, myNodeId int) *CacheLine {
 	line := &CacheLine{
-		id:             int(p.LineId),
+		id:             cacheLineIdFromProtoBuf(p.LineId),
 		cacheLineState: CacheLineState_Exclusive,
 		version:        int(p.Version),
 		ownerId:        myNodeId,

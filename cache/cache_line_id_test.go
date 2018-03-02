@@ -27,14 +27,14 @@ func TestCacheLineIdBasic(t *testing.T) {
 	id := newRandomCacheLineId()
 	pb := id.toProtoBuf()
 
-	data, err := proto.Marshal(&pb)
+	data, err := proto.Marshal(pb)
 	assert.Nil(t, err)
 	log.Infof("Marshalled data size %d", len(data))
 
 	newPb := &LineId{}
 	err = proto.Unmarshal(data, newPb)
 	assert.Nil(t, err)
-	proto.Equal(&pb, newPb)
-	newId, err := cacheLineIdFromProtoBuf(newPb)
+	proto.Equal(pb, newPb)
+	newId := cacheLineIdFromProtoBuf(newPb)
 	assert.True(t, id.equal(newId))
 }

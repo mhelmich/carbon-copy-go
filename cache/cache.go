@@ -21,14 +21,9 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"math/rand"
 	"sync"
 	"time"
 )
-
-func getNextLineId() int {
-	return rand.Int()
-}
 
 func createNewCache(myNodeId int, serverPort int) (*cacheImpl, error) {
 	clStore := createNewCacheLineStore()
@@ -60,14 +55,14 @@ type cacheImpl struct {
 /////
 ////////////////////////////////////////////////////////////////////////
 
-func (c *cacheImpl) AllocateWithData(buffer []byte, txn Transaction) (int, error) {
-	newLineId := getNextLineId()
+func (c *cacheImpl) AllocateWithData(buffer []byte, txn Transaction) (CacheLineId, error) {
+	newLineId := newRandomCacheLineId()
 	line := newCacheLine(newLineId, c.myNodeId, buffer)
 	c.store.addCacheLineToLocalCache(line)
 	return newLineId, nil
 }
 
-func (c *cacheImpl) Get(lineId int) ([]byte, error) {
+func (c *cacheImpl) Get(lineId CacheLineId) ([]byte, error) {
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -81,7 +76,7 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 			// need to get latest version of the line as I don't have it
 			g := &Get{
 				SenderId: int32(c.myNodeId),
-				LineId:   int64(lineId),
+				LineId:   lineId.toProtoBuf(),
 			}
 
 			put, err := c.unicastGet(context.Background(), line.ownerId, g)
@@ -100,7 +95,7 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 		// multi cast to everybody I know whether anyone knows this line
 		g := &Get{
 			SenderId: int32(c.myNodeId),
-			LineId:   int64(lineId),
+			LineId:   lineId.toProtoBuf(),
 		}
 
 		put, err := c.multicastGet(context.Background(), g)
@@ -109,7 +104,7 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 			return nil, err
 		}
 
-		line = c.store.createCacheLineFromPut(lineId, put)
+		line = c.store.createCacheLineFromPut(put)
 		val, loaded := c.store.putIfAbsent(lineId, line)
 		if loaded {
 			c.store.applyChangesFromPut(val, put)
@@ -119,11 +114,11 @@ func (c *cacheImpl) Get(lineId int) ([]byte, error) {
 	}
 }
 
-func (c *cacheImpl) Gets(lineId int, txn Transaction) ([]byte, error) {
+func (c *cacheImpl) Gets(lineId CacheLineId, txn Transaction) ([]byte, error) {
 	return nil, nil
 }
 
-func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
+func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -172,7 +167,7 @@ func (c *cacheImpl) Getx(lineId int, txn Transaction) ([]byte, error) {
 	return nil, errors.New("Unknown error!")
 }
 
-func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) error {
+func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) error {
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -210,7 +205,7 @@ func (c *cacheImpl) Put(lineId int, buffer []byte, txn Transaction) error {
 	}
 }
 
-func (c *cacheImpl) Putx(lineId int, buffer []byte, txn Transaction) error {
+func (c *cacheImpl) Putx(lineId CacheLineId, buffer []byte, txn Transaction) error {
 	return errors.New("Not implemented yet!")
 }
 
@@ -244,7 +239,7 @@ func (c *cacheImpl) Stop() {
 func (c *cacheImpl) unicastExclusiveGet(ctx context.Context, line *CacheLine) error {
 	getx := &Getx{
 		SenderId: int32(c.myNodeId),
-		LineId:   int64(line.id),
+		LineId:   line.id.toProtoBuf(),
 	}
 
 	putx, err := c.unicastGetx(context.Background(), line.ownerId, getx)
@@ -256,10 +251,10 @@ func (c *cacheImpl) unicastExclusiveGet(ctx context.Context, line *CacheLine) er
 	return nil
 }
 
-func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId int) error {
+func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId CacheLineId) error {
 	g := &Getx{
 		SenderId: int32(c.myNodeId),
-		LineId:   int64(lineId),
+		LineId:   lineId.toProtoBuf(),
 	}
 
 	putx, err := c.multicastGetx(ctx, g)
@@ -267,7 +262,7 @@ func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId int) error
 		return err
 	}
 
-	line := c.store.createCacheLineFromPutx(lineId, putx, c.myNodeId)
+	line := c.store.createCacheLineFromPutx(putx, c.myNodeId)
 	val, loaded := c.store.putIfAbsent(lineId, line)
 	if loaded {
 		c.store.applyChangesFromPutx(val, putx, c.myNodeId)
@@ -278,7 +273,7 @@ func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId int) error
 func (c *cacheImpl) elevateOwnedToExclusive(line *CacheLine) error {
 	inv := &Inv{
 		SenderId: int32(c.myNodeId),
-		LineId:   int64(line.id),
+		LineId:   line.id.toProtoBuf(),
 	}
 
 	log.Infof("sharers %v", line.sharers)

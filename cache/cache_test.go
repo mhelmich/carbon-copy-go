@@ -170,7 +170,7 @@ func TestStartConnectStop(t *testing.T) {
 
 	inv := &Inv{
 		SenderId: int32(clientId),
-		LineId:   123456789,
+		LineId:   newRandomCacheLineId().toProtoBuf(),
 	}
 	invAck, err := client.SendInvalidate(context.Background(), inv)
 	assert.Nil(t, err)

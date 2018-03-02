@@ -36,25 +36,28 @@ type Transaction interface {
 
 type Cache interface {
 	// Allocates a new item and returns its newly created id.
-	AllocateWithData(buffer []byte, txn Transaction) (int, error)
+	AllocateWithData(buffer []byte, txn Transaction) (CacheLineId, error)
 	// Retrieves a particular item (if necessary remotely) and returns its contents.
-	Get(lineId int) ([]byte, error)
+	Get(lineId CacheLineId) ([]byte, error)
 	// Retrieves a particular item and registers to be a sharer of this item with the owner.
-	Gets(lineId int, txn Transaction) ([]byte, error)
+	Gets(lineId CacheLineId, txn Transaction) ([]byte, error)
 	// Retrieves a particular item cluster-exclusively.
 	// All other copies of this item will be invalidated.
-	Getx(lineId int, txn Transaction) ([]byte, error)
+	Getx(lineId CacheLineId, txn Transaction) ([]byte, error)
 	// Not needed...
-	Put(lineId int, buffer []byte, txn Transaction) error
+	Put(lineId CacheLineId, buffer []byte, txn Transaction) error
 	// Acquires exclusive ownership of an item and overrides its contents.
-	Putx(lineId int, buffer []byte, txn Transaction) error
+	Putx(lineId CacheLineId, buffer []byte, txn Transaction) error
 	// Creates a new transaction.
 	NewTransaction() Transaction
 	// Stops the operation of this cache.
 	Stop()
 }
 
-type CacheLineId interface{}
+type CacheLineId interface {
+	toProtoBuf() *LineId
+	string() string
+}
 
 // Constructor-type function creating a cache instance.
 func NewCache(myNodeId int, serverPort int) (Cache, error) {
