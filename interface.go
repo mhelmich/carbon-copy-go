@@ -16,4 +16,14 @@
 
 package cc
 
-type CacheLineId int
+import (
+	"errors"
+)
+
+type CacheLineId int64
+
+type Grid interface{}
+
+func NewGrid() (Grid, error) {
+	return nil, errors.New("Not implemented yet!")
+}
