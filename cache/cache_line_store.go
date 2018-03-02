@@ -27,6 +27,9 @@ func createNewCacheLineStore() *cacheLineStore {
 }
 
 type cacheLineStore struct {
+	// this map stores the cache lines on this node
+	// the map has type map[string]cacheLine
+	// the key into the map is the string id of the cache line
 	cacheLineMap *sync.Map
 }
 
