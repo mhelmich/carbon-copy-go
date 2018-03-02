@@ -54,6 +54,8 @@ type Cache interface {
 	Stop()
 }
 
+type CacheLineId interface{}
+
 // Constructor-type function creating a cache instance.
 func NewCache(myNodeId int, serverPort int) (Cache, error) {
 	return createNewCache(myNodeId, serverPort)

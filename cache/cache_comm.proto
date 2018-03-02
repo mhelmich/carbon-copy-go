@@ -51,6 +51,11 @@ message Uuid {
     bytes data = 1;
 }
 
+message LineId {
+    uint64 time = 1;
+    bytes entropy = 2;
+}
+
 message GetResponse {
     oneof innerMessage {
         Put put = 1;
