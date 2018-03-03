@@ -20,8 +20,6 @@ import (
 	"errors"
 )
 
-type CacheLineId int64
-
 type Grid interface{}
 
 func NewGrid() (Grid, error) {
