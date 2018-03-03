@@ -59,6 +59,11 @@ type CacheLineId interface {
 	string() string
 }
 
+type NodeId interface {
+	toProtoBuf() *ClusterNodeId
+	string() string
+}
+
 // Constructor-type function creating a cache instance.
 func NewCache(myNodeId int, serverPort int) (Cache, error) {
 	return createNewCache(myNodeId, serverPort)
