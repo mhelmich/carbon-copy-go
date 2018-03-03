@@ -44,13 +44,6 @@ enum CacheLineState {
     Owned = 3;
 }
 
-// we could store cache line ids in UUIDs one day
-// if we want to be really cool, we could take these
-// 16 bytes apart and store them in two var-int64s
-message Uuid {
-    bytes data = 1;
-}
-
 message LineId {
     uint64 time = 1;
     bytes entropy = 2;
