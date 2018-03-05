@@ -17,6 +17,7 @@
 package cache
 
 import (
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"golang.org/x/net/context"
 )
 
@@ -55,12 +56,12 @@ type Cache interface {
 }
 
 type CacheLineId interface {
-	toProtoBuf() *LineId
+	toProtoBuf() *pb.LineId
 	string() string
 }
 
 type NodeId interface {
-	toProtoBuf() *ClusterNodeId
+	toProtoBuf() *pb.ClusterNodeId
 	string() string
 }
 
@@ -70,18 +71,18 @@ func NewCache(myNodeId int, serverPort int) (Cache, error) {
 }
 
 type cacheClient interface {
-	SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error)
-	SendGets(ctx context.Context, g *Gets) (*Puts, *OwnerChanged, error)
-	SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error)
-	SendInvalidate(ctx context.Context, i *Inv) (*InvAck, error)
+	SendGet(ctx context.Context, g *pb.Get) (*pb.Put, *pb.OwnerChanged, error)
+	SendGets(ctx context.Context, g *pb.Gets) (*pb.Puts, *pb.OwnerChanged, error)
+	SendGetx(ctx context.Context, g *pb.Getx) (*pb.Putx, *pb.OwnerChanged, error)
+	SendInvalidate(ctx context.Context, i *pb.Inv) (*pb.InvAck, error)
 	Close() error
 }
 
 type cacheServer interface {
-	Get(ctx context.Context, req *Get) (*GetResponse, error)
-	Gets(ctx context.Context, req *Gets) (*GetsResponse, error)
-	Getx(ctx context.Context, req *Getx) (*GetxResponse, error)
-	Invalidate(ctx context.Context, in *Inv) (*InvAck, error)
+	Get(ctx context.Context, req *pb.Get) (*pb.GetResponse, error)
+	Gets(ctx context.Context, req *pb.Gets) (*pb.GetsResponse, error)
+	Getx(ctx context.Context, req *pb.Getx) (*pb.GetxResponse, error)
+	Invalidate(ctx context.Context, in *pb.Inv) (*pb.InvAck, error)
 	Stop()
 }
 

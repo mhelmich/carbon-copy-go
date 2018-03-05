@@ -19,11 +19,12 @@ package cache
 import (
 	"bytes"
 	"crypto/rand"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 )
 
-func cacheLineIdFromProtoBuf(lineId *LineId) *cacheLineIdImpl {
+func cacheLineIdFromProtoBuf(lineId *pb.LineId) *cacheLineIdImpl {
 	id, err := ulid.New(lineId.Time, bytes.NewReader(lineId.Entropy))
 	if err != nil {
 		log.Fatalf("Can't parse cache line id out of []byte: %s", err.Error())
@@ -44,8 +45,8 @@ type cacheLineIdImpl struct {
 	ulid ulid.ULID
 }
 
-func (cli *cacheLineIdImpl) toProtoBuf() *LineId {
-	return &LineId{
+func (cli *cacheLineIdImpl) toProtoBuf() *pb.LineId {
+	return &pb.LineId{
 		Time:    cli.ulid.Time(),
 		Entropy: cli.ulid.Entropy(),
 	}

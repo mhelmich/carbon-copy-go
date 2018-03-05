@@ -18,6 +18,7 @@ package cache
 
 import (
 	"errors"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -27,30 +28,30 @@ import (
 
 func createNewCacheClientFromConn(conn *grpc.ClientConn) (*cacheClientImpl, error) {
 	return &cacheClientImpl{
-		client: NewCacheCommClient(conn),
+		client: pb.NewCacheCommClient(conn),
 	}, nil
 }
 
 type cacheClientImpl struct {
-	client CacheCommClient
+	client pb.CacheCommClient
 }
 
-func (cc *cacheClientImpl) SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error) {
+func (cc *cacheClientImpl) SendGet(ctx context.Context, g *pb.Get) (*pb.Put, *pb.OwnerChanged, error) {
 	getResp, err := cc.client.Get(ctx, g)
 	return cc.handleGetResponse(getResp, err)
 }
 
-func (cc *cacheClientImpl) SendGets(ctx context.Context, g *Gets) (*Puts, *OwnerChanged, error) {
+func (cc *cacheClientImpl) SendGets(ctx context.Context, g *pb.Gets) (*pb.Puts, *pb.OwnerChanged, error) {
 	getsResp, err := cc.client.Gets(ctx, g)
 	return cc.handleGetsResponse(getsResp, err)
 }
 
-func (cc *cacheClientImpl) SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error) {
+func (cc *cacheClientImpl) SendGetx(ctx context.Context, g *pb.Getx) (*pb.Putx, *pb.OwnerChanged, error) {
 	getxResp, err := cc.client.Getx(ctx, g)
 	return cc.handleGetxResponse(getxResp, err)
 }
 
-func (cc *cacheClientImpl) SendInvalidate(ctx context.Context, i *Inv) (*InvAck, error) {
+func (cc *cacheClientImpl) SendInvalidate(ctx context.Context, i *pb.Inv) (*pb.InvAck, error) {
 	invAck, err := cc.client.Invalidate(ctx, i)
 	if err != nil {
 		return nil, err
@@ -63,7 +64,7 @@ func (cc *cacheClientImpl) Close() error {
 	return nil
 }
 
-func (cc *cacheClientImpl) handleGetResponse(getResp *GetResponse, err error) (*Put, *OwnerChanged, error) {
+func (cc *cacheClientImpl) handleGetResponse(getResp *pb.GetResponse, err error) (*pb.Put, *pb.OwnerChanged, error) {
 	switch {
 	case err != nil:
 		log.Errorf("%v", err)
@@ -83,7 +84,7 @@ func (cc *cacheClientImpl) handleGetResponse(getResp *GetResponse, err error) (*
 	return nil, nil, errors.New("Unknown response!")
 }
 
-func (cc *cacheClientImpl) handleGetsResponse(getsResp *GetsResponse, err error) (*Puts, *OwnerChanged, error) {
+func (cc *cacheClientImpl) handleGetsResponse(getsResp *pb.GetsResponse, err error) (*pb.Puts, *pb.OwnerChanged, error) {
 	switch {
 	case err != nil:
 		log.Errorf("%v", err)
@@ -103,7 +104,7 @@ func (cc *cacheClientImpl) handleGetsResponse(getsResp *GetsResponse, err error)
 	return nil, nil, errors.New("Unknown response!")
 }
 
-func (cc *cacheClientImpl) handleGetxResponse(getxResp *GetxResponse, err error) (*Putx, *OwnerChanged, error) {
+func (cc *cacheClientImpl) handleGetxResponse(getxResp *pb.GetxResponse, err error) (*pb.Putx, *pb.OwnerChanged, error) {
 	switch {
 	case err != nil:
 		log.Errorf("%v", err)

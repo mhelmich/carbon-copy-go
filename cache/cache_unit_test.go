@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"github.com/google/uuid"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -38,81 +39,81 @@ type mockCacheClient struct {
 	mock.Mock
 }
 
-func (cc *mockCacheClient) SendGet(ctx context.Context, g *Get) (*Put, *OwnerChanged, error) {
+func (cc *mockCacheClient) SendGet(ctx context.Context, g *pb.Get) (*pb.Put, *pb.OwnerChanged, error) {
 	args := cc.Called(ctx, g)
 	// take care of nil pointers
 	p := args.Get(0)
-	var pr *Put
+	var pr *pb.Put
 	if p == nil {
 		pr = nil
 	} else {
-		pr = p.(*Put)
+		pr = p.(*pb.Put)
 	}
 
 	oc := args.Get(1)
-	var ocr *OwnerChanged
+	var ocr *pb.OwnerChanged
 	if oc == nil {
 		ocr = nil
 	} else {
-		ocr = oc.(*OwnerChanged)
+		ocr = oc.(*pb.OwnerChanged)
 	}
 
 	return pr, ocr, args.Error(2)
 }
 
-func (cc *mockCacheClient) SendGets(ctx context.Context, g *Gets) (*Puts, *OwnerChanged, error) {
+func (cc *mockCacheClient) SendGets(ctx context.Context, g *pb.Gets) (*pb.Puts, *pb.OwnerChanged, error) {
 	args := cc.Called(ctx, g)
 	// take care of nil pointers
 	p := args.Get(0)
-	var pr *Puts
+	var pr *pb.Puts
 	if p == nil {
 		pr = nil
 	} else {
-		pr = p.(*Puts)
+		pr = p.(*pb.Puts)
 	}
 
 	oc := args.Get(1)
-	var ocr *OwnerChanged
+	var ocr *pb.OwnerChanged
 	if oc == nil {
 		ocr = nil
 	} else {
-		ocr = oc.(*OwnerChanged)
+		ocr = oc.(*pb.OwnerChanged)
 	}
 
 	return pr, ocr, args.Error(2)
 }
 
-func (cc *mockCacheClient) SendGetx(ctx context.Context, g *Getx) (*Putx, *OwnerChanged, error) {
+func (cc *mockCacheClient) SendGetx(ctx context.Context, g *pb.Getx) (*pb.Putx, *pb.OwnerChanged, error) {
 	args := cc.Called(ctx, g)
 	// take care of nil pointers
 	p := args.Get(0)
-	var pr *Putx
+	var pr *pb.Putx
 	if p == nil {
 		pr = nil
 	} else {
-		pr = p.(*Putx)
+		pr = p.(*pb.Putx)
 	}
 
 	oc := args.Get(1)
-	var ocr *OwnerChanged
+	var ocr *pb.OwnerChanged
 	if oc == nil {
 		ocr = nil
 	} else {
-		ocr = oc.(*OwnerChanged)
+		ocr = oc.(*pb.OwnerChanged)
 	}
 
 	return pr, ocr, args.Error(2)
 }
 
-func (cc *mockCacheClient) SendInvalidate(ctx context.Context, i *Inv) (*InvAck, error) {
+func (cc *mockCacheClient) SendInvalidate(ctx context.Context, i *pb.Inv) (*pb.InvAck, error) {
 	args := cc.Called(ctx, i)
 	// take care of nil pointers
 	ia := args.Get(0)
-	var invAck *InvAck
+	var invAck *pb.InvAck
 	if ia == nil {
 		invAck = nil
 	} else {
-		invAck = ia.(*InvAck)
+		invAck = ia.(*pb.InvAck)
 	}
 
 	return invAck, args.Error(1)
@@ -168,17 +169,17 @@ func TestGetUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
-	var p *Put
-	var oc *OwnerChanged
-	p = &Put{
-		Error:    CacheError_NoError,
+	var p *pb.Put
+	var oc *pb.OwnerChanged
+	p = &pb.Put{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(1234),
 		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
 	oc = nil
-	clientMock.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Get")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
+	clientMock.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Get")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock, nil)
 	cache := mockCache(m)
@@ -186,7 +187,7 @@ func TestGetUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte("lalalalalala"))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Invalid
+	line.cacheLineState = pb.CacheLineState_Invalid
 	line.ownerId = 1234
 
 	// now run test
@@ -196,7 +197,7 @@ func TestGetUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 2, l.version)
-	assert.Equal(t, CacheLineState_Shared, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Shared, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 1)
 }
 
@@ -204,17 +205,17 @@ func TestGetOwnedUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
-	var p *Put
-	var oc *OwnerChanged
-	p = &Put{
-		Error:    CacheError_NoError,
+	var p *pb.Put
+	var oc *pb.OwnerChanged
+	p = &pb.Put{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(1234),
 		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
 	oc = nil
-	clientMock.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Get")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
+	clientMock.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Get")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock, nil)
 	cache := mockCache(m)
@@ -223,7 +224,7 @@ func TestGetOwnedUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte(initialBuffer))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Owned
+	line.cacheLineState = pb.CacheLineState_Owned
 	line.ownerId = 1234
 
 	// now run test
@@ -233,7 +234,7 @@ func TestGetOwnedUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 1, l.version)
-	assert.Equal(t, CacheLineState_Owned, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Owned, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 0)
 }
 
@@ -241,23 +242,23 @@ func TestGetWithOwnerChangedUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 
-	p := &Put{
-		Error:    CacheError_NoError,
+	p := &pb.Put{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(5678),
 		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
-	oc := &OwnerChanged{
+	oc := &pb.OwnerChanged{
 		SenderId:   int32(1234),
 		LineId:     lineId.toProtoBuf(),
 		NewOwnerId: int32(5678),
 	}
 
 	clientMock1234 := new(mockCacheClient)
-	clientMock1234.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Get")).Return(nil, oc, nil)
+	clientMock1234.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Get")).Return(nil, oc, nil)
 	clientMock5678 := new(mockCacheClient)
-	clientMock5678.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Get")).Return(p, nil, nil)
+	clientMock5678.On("SendGet", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Get")).Return(p, nil, nil)
 
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock1234, nil)
@@ -267,7 +268,7 @@ func TestGetWithOwnerChangedUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte("lalalalalala"))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Shared
+	line.cacheLineState = pb.CacheLineState_Shared
 	line.ownerId = 1234
 
 	// now run test
@@ -277,7 +278,7 @@ func TestGetWithOwnerChangedUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 2, l.version)
-	assert.Equal(t, CacheLineState_Shared, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Shared, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 2)
 }
 
@@ -285,17 +286,17 @@ func TestGetxUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
-	var p *Putx
-	var oc *OwnerChanged
-	p = &Putx{
-		Error:    CacheError_NoError,
+	var p *pb.Putx
+	var oc *pb.OwnerChanged
+	p = &pb.Putx{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(1234),
 		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
 	oc = nil
-	clientMock.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Getx")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
+	clientMock.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Getx")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock, nil)
 	cache := mockCache(m)
@@ -303,7 +304,7 @@ func TestGetxUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte("lalalalalala"))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Invalid
+	line.cacheLineState = pb.CacheLineState_Invalid
 	line.ownerId = 1234
 
 	// now run test
@@ -313,7 +314,7 @@ func TestGetxUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 2, l.version)
-	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 1)
 }
 
@@ -321,17 +322,17 @@ func TestGetxExclusiveUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 	clientMock := new(mockCacheClient)
-	var p *Putx
-	var oc *OwnerChanged
-	p = &Putx{
-		Error:    CacheError_NoError,
+	var p *pb.Putx
+	var oc *pb.OwnerChanged
+	p = &pb.Putx{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(1234),
 		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
 		Buffer:   []byte(latestBuffer),
 	}
 	oc = nil
-	clientMock.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Getx")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
+	clientMock.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Getx")).Return(p, oc, errors.New("this still works because error conditions are checked last!?!?!"))
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock, nil)
 	cache := mockCache(m)
@@ -340,7 +341,7 @@ func TestGetxExclusiveUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte(initialBuffer))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Exclusive
+	line.cacheLineState = pb.CacheLineState_Exclusive
 	line.ownerId = 1234
 
 	// now run test
@@ -350,7 +351,7 @@ func TestGetxExclusiveUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 1, l.version)
-	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 0)
 }
 
@@ -358,13 +359,13 @@ func TestGetxOwnedUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	clientMock := new(mockCacheClient)
 
-	invAck := &InvAck{
-		Error:    CacheError_NoError,
+	invAck := &pb.InvAck{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(1234),
 		LineId:   lineId.toProtoBuf(),
 	}
 
-	clientMock.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Inv")).Return(invAck, nil)
+	clientMock.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Inv")).Return(invAck, nil)
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock, nil)
 	cache := mockCache(m)
@@ -373,7 +374,7 @@ func TestGetxOwnedUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte(initialBuffer))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Owned
+	line.cacheLineState = pb.CacheLineState_Owned
 	line.sharers = []int{1234}
 	line.ownerId = 1111
 
@@ -384,7 +385,7 @@ func TestGetxOwnedUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 1, l.version)
-	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 1)
 }
 
@@ -392,8 +393,8 @@ func TestGetxSharedUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 
-	putx := &Putx{
-		Error:    CacheError_NoError,
+	putx := &pb.Putx{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(5678),
 		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
@@ -401,17 +402,17 @@ func TestGetxSharedUnit(t *testing.T) {
 		Buffer:   []byte(latestBuffer),
 	}
 
-	invAck := &InvAck{
-		Error:    CacheError_NoError,
+	invAck := &pb.InvAck{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(1234),
 		LineId:   lineId.toProtoBuf(),
 	}
 
 	clientMock1234 := new(mockCacheClient)
-	clientMock1234.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Inv")).Return(invAck, nil)
+	clientMock1234.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Inv")).Return(invAck, nil)
 
 	clientMock5678 := new(mockCacheClient)
-	clientMock5678.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Getx")).Return(putx, nil, nil)
+	clientMock5678.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Getx")).Return(putx, nil, nil)
 
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock1234, nil)
@@ -422,7 +423,7 @@ func TestGetxSharedUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte(initialBuffer))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Shared
+	line.cacheLineState = pb.CacheLineState_Shared
 	line.sharers = []int{1234}
 	line.ownerId = 5678
 
@@ -433,7 +434,7 @@ func TestGetxSharedUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 2, l.version)
-	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 2)
 }
 
@@ -441,8 +442,8 @@ func TestPutUnit(t *testing.T) {
 	lineId := newRandomCacheLineId()
 	latestBuffer := "testing_test_test_test"
 
-	putx := &Putx{
-		Error:    CacheError_NoError,
+	putx := &pb.Putx{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(5678),
 		LineId:   lineId.toProtoBuf(),
 		Version:  int32(2),
@@ -450,17 +451,17 @@ func TestPutUnit(t *testing.T) {
 		Buffer:   []byte(latestBuffer),
 	}
 
-	invAck := &InvAck{
-		Error:    CacheError_NoError,
+	invAck := &pb.InvAck{
+		Error:    pb.CacheError_NoError,
 		SenderId: int32(1234),
 		LineId:   lineId.toProtoBuf(),
 	}
 
 	clientMock1234 := new(mockCacheClient)
-	clientMock1234.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Inv")).Return(invAck, nil)
+	clientMock1234.On("SendInvalidate", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Inv")).Return(invAck, nil)
 
 	clientMock5678 := new(mockCacheClient)
-	clientMock5678.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*cache.Getx")).Return(putx, nil, nil)
+	clientMock5678.On("SendGetx", mock.AnythingOfTypeArgument("*context.emptyCtx"), mock.AnythingOfTypeArgument("*pb.Getx")).Return(putx, nil, nil)
 
 	m := new(mockCacheClientMapping)
 	m.On("getClientForNodeId", 1234).Return(clientMock1234, nil)
@@ -471,7 +472,7 @@ func TestPutUnit(t *testing.T) {
 	line := newCacheLine(lineId, 111, []byte(initialBuffer))
 	line, loaded := cache.store.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Invalid
+	line.cacheLineState = pb.CacheLineState_Invalid
 	line.ownerId = 5678
 
 	// now run test
@@ -480,7 +481,7 @@ func TestPutUnit(t *testing.T) {
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, 3, l.version)
-	assert.Equal(t, CacheLineState_Exclusive, l.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, l.cacheLineState)
 	m.AssertNumberOfCalls(t, "getClientForNodeId", 2)
 }
 

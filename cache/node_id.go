@@ -17,6 +17,7 @@
 package cache
 
 import (
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"strconv"
 )
 
@@ -24,8 +25,8 @@ type nodeIdImpl struct {
 	id int
 }
 
-func (ni *nodeIdImpl) toProtoBuf() *ClusterNodeId {
-	return &ClusterNodeId{
+func (ni *nodeIdImpl) toProtoBuf() *pb.ClusterNodeId {
+	return &pb.ClusterNodeId{
 		Id: int32(ni.id),
 	}
 }

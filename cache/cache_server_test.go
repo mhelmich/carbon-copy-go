@@ -18,6 +18,7 @@ package cache
 
 import (
 	"context"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"github.com/stretchr/testify/assert"
 	"sort"
 	"testing"
@@ -33,7 +34,7 @@ func TestServerGetLineNotPresent(t *testing.T) {
 		store:      clStore,
 	}
 
-	req := &Get{
+	req := &pb.Get{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -56,10 +57,10 @@ func TestServerGetLineNotOwned(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, []byte("lalalalalala"))
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Shared
+	line.cacheLineState = pb.CacheLineState_Shared
 	line.ownerId = 258
 
-	req := &Get{
+	req := &pb.Get{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -86,10 +87,10 @@ func TestServerGetLineOwned(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, lineBuffer)
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Owned
+	line.cacheLineState = pb.CacheLineState_Owned
 	line.ownerId = 258
 
-	req := &Get{
+	req := &pb.Get{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -116,10 +117,10 @@ func TestServerGetsLineExclusive(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, lineBuffer)
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Exclusive
+	line.cacheLineState = pb.CacheLineState_Exclusive
 	line.ownerId = serverNodeId
 
-	req := &Gets{
+	req := &pb.Gets{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -131,7 +132,7 @@ func TestServerGetsLineExclusive(t *testing.T) {
 	sort.Ints(line.sharers)
 	idxToInsert := sort.SearchInts(line.sharers, 555)
 	assert.True(t, line.sharers[idxToInsert] == 555)
-	assert.Equal(t, CacheLineState_Owned, line.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Owned, line.cacheLineState)
 }
 
 func TestServerGetsLineOwned(t *testing.T) {
@@ -148,10 +149,10 @@ func TestServerGetsLineOwned(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, lineBuffer)
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Owned
+	line.cacheLineState = pb.CacheLineState_Owned
 	line.ownerId = serverNodeId
 
-	req := &Gets{
+	req := &pb.Gets{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -163,7 +164,7 @@ func TestServerGetsLineOwned(t *testing.T) {
 	sort.Ints(line.sharers)
 	idxToInsert := sort.SearchInts(line.sharers, 555)
 	assert.True(t, line.sharers[idxToInsert] == 555)
-	assert.Equal(t, CacheLineState_Owned, line.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Owned, line.cacheLineState)
 }
 
 func TestServerGetsLineShared(t *testing.T) {
@@ -180,10 +181,10 @@ func TestServerGetsLineShared(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, lineBuffer)
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Shared
+	line.cacheLineState = pb.CacheLineState_Shared
 	line.ownerId = 258
 
-	req := &Gets{
+	req := &pb.Gets{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -204,7 +205,7 @@ func TestServerGetsLineDoesntExist(t *testing.T) {
 		store:      clStore,
 	}
 
-	req := &Gets{
+	req := &pb.Gets{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -228,10 +229,10 @@ func TestServerGetxLineOwned(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, lineBuffer)
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Owned
+	line.cacheLineState = pb.CacheLineState_Owned
 	line.ownerId = serverNodeId
 
-	req := &Getx{
+	req := &pb.Getx{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -240,7 +241,7 @@ func TestServerGetxLineOwned(t *testing.T) {
 	putx := resp.GetPutx()
 	assert.NotNil(t, putx)
 	assert.Equal(t, lineBuffer, putx.Buffer)
-	assert.Equal(t, CacheLineState_Invalid, line.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Invalid, line.cacheLineState)
 }
 
 func TestServerGetxLineInvalid(t *testing.T) {
@@ -257,10 +258,10 @@ func TestServerGetxLineInvalid(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, lineBuffer)
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Invalid
+	line.cacheLineState = pb.CacheLineState_Invalid
 	line.ownerId = 258
 
-	req := &Getx{
+	req := &pb.Getx{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -268,7 +269,7 @@ func TestServerGetxLineInvalid(t *testing.T) {
 	assert.Nil(t, err)
 	oc := resp.GetOwnerChanged()
 	assert.NotNil(t, oc)
-	assert.Equal(t, CacheLineState_Invalid, line.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Invalid, line.cacheLineState)
 	assert.Equal(t, int32(258), oc.NewOwnerId)
 }
 
@@ -282,7 +283,7 @@ func TestServerGetxLineDoesntExist(t *testing.T) {
 		store:      clStore,
 	}
 
-	req := &Getx{
+	req := &pb.Getx{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -306,10 +307,10 @@ func TestServerInvalidateExists(t *testing.T) {
 	line := newCacheLine(lineId, serverNodeId, lineBuffer)
 	line, loaded := clStore.putIfAbsent(lineId, line)
 	assert.False(t, loaded)
-	line.cacheLineState = CacheLineState_Invalid
+	line.cacheLineState = pb.CacheLineState_Invalid
 	line.ownerId = 258
 
-	req := &Inv{
+	req := &pb.Inv{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -318,7 +319,7 @@ func TestServerInvalidateExists(t *testing.T) {
 	assert.NotNil(t, invAck)
 	assert.True(t, lineId.equal(cacheLineIdFromProtoBuf(invAck.LineId)))
 
-	assert.Equal(t, CacheLineState_Invalid, line.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Invalid, line.cacheLineState)
 	assert.Nil(t, line.sharers)
 	assert.Nil(t, line.buffer)
 }
@@ -333,7 +334,7 @@ func TestServerInvalidateDoesntExist(t *testing.T) {
 		store:      clStore,
 	}
 
-	req := &Inv{
+	req := &pb.Inv{
 		SenderId: int32(555),
 		LineId:   lineId.toProtoBuf(),
 	}

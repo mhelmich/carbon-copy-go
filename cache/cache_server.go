@@ -18,6 +18,7 @@ package cache
 
 import (
 	"fmt"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -41,7 +42,7 @@ func createNewServer(myNodeId int, serverPort int, store *cacheLineStore) (*cach
 		store:      store,
 	}
 
-	RegisterCacheCommServer(grpcServer, cacheServer)
+	pb.RegisterCacheCommServer(grpcServer, cacheServer)
 	go grpcServer.Serve(lis)
 	return cacheServer, nil
 }
@@ -52,21 +53,21 @@ type cacheServerImpl struct {
 	store      *cacheLineStore
 }
 
-func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, error) {
+func (cs *cacheServerImpl) Get(ctx context.Context, req *pb.Get) (*pb.GetResponse, error) {
 	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 
 	if ok {
-		if cl.cacheLineState == CacheLineState_Exclusive || cl.cacheLineState == CacheLineState_Owned {
-			put := &Put{
-				Error:    CacheError_NoError,
+		if cl.cacheLineState == pb.CacheLineState_Exclusive || cl.cacheLineState == pb.CacheLineState_Owned {
+			put := &pb.Put{
+				Error:    pb.CacheError_NoError,
 				SenderId: cs.myNodeId,
 				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
 				Buffer:   cl.buffer,
 			}
 
-			resp := &GetResponse{
-				InnerMessage: &GetResponse_Put{
+			resp := &pb.GetResponse{
+				InnerMessage: &pb.GetResponse_Put{
 					Put: put,
 				},
 			}
@@ -74,15 +75,15 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 			log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "put")
 			return resp, nil
 		} else {
-			oc := &OwnerChanged{
+			oc := &pb.OwnerChanged{
 				SenderId:            cs.myNodeId,
 				LineId:              req.LineId,
 				NewOwnerId:          int32(cl.ownerId),
 				OriginalMessageType: 0,
 			}
 
-			resp := &GetResponse{
-				InnerMessage: &GetResponse_OwnerChanged{
+			resp := &pb.GetResponse{
+				InnerMessage: &pb.GetResponse_OwnerChanged{
 					OwnerChanged: oc,
 				},
 			}
@@ -91,13 +92,13 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 			return resp, nil
 		}
 	} else {
-		ack := &Ack{
+		ack := &pb.Ack{
 			SenderId: cs.myNodeId,
 			LineId:   req.LineId,
 		}
 
-		resp := &GetResponse{
-			InnerMessage: &GetResponse_Ack{
+		resp := &pb.GetResponse{
+			InnerMessage: &pb.GetResponse_Ack{
 				Ack: ack,
 			},
 		}
@@ -107,16 +108,16 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *Get) (*GetResponse, err
 	}
 }
 
-func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, error) {
+func (cs *cacheServerImpl) Gets(ctx context.Context, req *pb.Gets) (*pb.GetsResponse, error) {
 	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 
 	if ok {
 		switch cl.cacheLineState {
-		case CacheLineState_Exclusive:
+		case pb.CacheLineState_Exclusive:
 			cl.lock()
 
-			puts := &Puts{
-				Error:    CacheError_NoError,
+			puts := &pb.Puts{
+				Error:    pb.CacheError_NoError,
 				SenderId: cs.myNodeId,
 				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
@@ -124,22 +125,22 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 				Buffer:   cl.buffer,
 			}
 
-			resp := &GetsResponse{
-				InnerMessage: &GetsResponse_Puts{
+			resp := &pb.GetsResponse{
+				InnerMessage: &pb.GetsResponse_Puts{
 					Puts: puts,
 				},
 			}
 
-			cl.cacheLineState = CacheLineState_Owned
+			cl.cacheLineState = pb.CacheLineState_Owned
 			cl.sharers = append(cl.sharers, int(req.SenderId))
 			cl.unlock()
 			return resp, nil
 
-		case CacheLineState_Owned:
+		case pb.CacheLineState_Owned:
 			cl.lock()
 
-			puts := &Puts{
-				Error:    CacheError_NoError,
+			puts := &pb.Puts{
+				Error:    pb.CacheError_NoError,
 				SenderId: cs.myNodeId,
 				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
@@ -147,8 +148,8 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 				Buffer:   cl.buffer,
 			}
 
-			resp := &GetsResponse{
-				InnerMessage: &GetsResponse_Puts{
+			resp := &pb.GetsResponse{
+				InnerMessage: &pb.GetsResponse_Puts{
 					Puts: puts,
 				},
 			}
@@ -157,16 +158,16 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 			cl.unlock()
 			return resp, nil
 
-		case CacheLineState_Shared, CacheLineState_Invalid:
-			oc := &OwnerChanged{
+		case pb.CacheLineState_Shared, pb.CacheLineState_Invalid:
+			oc := &pb.OwnerChanged{
 				SenderId:            cs.myNodeId,
 				LineId:              req.LineId,
 				NewOwnerId:          int32(cl.ownerId),
 				OriginalMessageType: 0,
 			}
 
-			resp := &GetsResponse{
-				InnerMessage: &GetsResponse_OwnerChanged{
+			resp := &pb.GetsResponse{
+				InnerMessage: &pb.GetsResponse_OwnerChanged{
 					OwnerChanged: oc,
 				},
 			}
@@ -177,13 +178,13 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 			return nil, errors.New(fmt.Sprintf("Cacheline %d is in invalid state %v", req.LineId, cl.cacheLineState))
 		}
 	} else {
-		ack := &Ack{
+		ack := &pb.Ack{
 			SenderId: cs.myNodeId,
 			LineId:   req.LineId,
 		}
 
-		resp := &GetsResponse{
-			InnerMessage: &GetsResponse_Ack{
+		resp := &pb.GetsResponse{
+			InnerMessage: &pb.GetsResponse_Ack{
 				Ack: ack,
 			},
 		}
@@ -192,15 +193,15 @@ func (cs *cacheServerImpl) Gets(ctx context.Context, req *Gets) (*GetsResponse, 
 	}
 }
 
-func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, error) {
+func (cs *cacheServerImpl) Getx(ctx context.Context, req *pb.Getx) (*pb.GetxResponse, error) {
 	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 
 	if ok {
-		if cl.cacheLineState == CacheLineState_Exclusive || cl.cacheLineState == CacheLineState_Owned {
+		if cl.cacheLineState == pb.CacheLineState_Exclusive || cl.cacheLineState == pb.CacheLineState_Owned {
 			cl.lock()
 
-			putx := &Putx{
-				Error:    CacheError_NoError,
+			putx := &pb.Putx{
+				Error:    pb.CacheError_NoError,
 				SenderId: cs.myNodeId,
 				LineId:   cl.id.toProtoBuf(),
 				Version:  int32(cl.version),
@@ -208,13 +209,13 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, 
 				Buffer:   cl.buffer,
 			}
 
-			resp := &GetxResponse{
-				InnerMessage: &GetxResponse_Putx{
+			resp := &pb.GetxResponse{
+				InnerMessage: &pb.GetxResponse_Putx{
 					Putx: putx,
 				},
 			}
 
-			cl.cacheLineState = CacheLineState_Invalid
+			cl.cacheLineState = pb.CacheLineState_Invalid
 			cl.sharers = nil
 			cl.buffer = nil
 			cl.ownerId = int(req.SenderId)
@@ -223,15 +224,15 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, 
 			cl.unlock()
 			return resp, nil
 		} else {
-			oc := &OwnerChanged{
+			oc := &pb.OwnerChanged{
 				SenderId:            cs.myNodeId,
 				LineId:              req.LineId,
 				NewOwnerId:          int32(cl.ownerId),
 				OriginalMessageType: 0,
 			}
 
-			resp := &GetxResponse{
-				InnerMessage: &GetxResponse_OwnerChanged{
+			resp := &pb.GetxResponse{
+				InnerMessage: &pb.GetxResponse_OwnerChanged{
 					OwnerChanged: oc,
 				},
 			}
@@ -240,13 +241,13 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, 
 			return resp, nil
 		}
 	} else {
-		ack := &Ack{
+		ack := &pb.Ack{
 			SenderId: cs.myNodeId,
 			LineId:   req.LineId,
 		}
 
-		resp := &GetxResponse{
-			InnerMessage: &GetxResponse_Ack{
+		resp := &pb.GetxResponse{
+			InnerMessage: &pb.GetxResponse_Ack{
 				Ack: ack,
 			},
 		}
@@ -256,16 +257,16 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *Getx) (*GetxResponse, 
 	}
 }
 
-func (cs *cacheServerImpl) Invalidate(ctx context.Context, req *Inv) (*InvAck, error) {
+func (cs *cacheServerImpl) Invalidate(ctx context.Context, req *pb.Inv) (*pb.InvAck, error) {
 	cl, ok := cs.store.getCacheLineById(cacheLineIdFromProtoBuf(req.LineId))
 	if ok {
 		cl.lock()
-		cl.cacheLineState = CacheLineState_Invalid
+		cl.cacheLineState = pb.CacheLineState_Invalid
 		cl.sharers = nil
 		cl.buffer = nil
 		cl.unlock()
 	}
-	return &InvAck{
+	return &pb.InvAck{
 		SenderId: cs.myNodeId,
 		LineId:   req.LineId,
 	}, nil

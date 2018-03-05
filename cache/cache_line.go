@@ -18,13 +18,14 @@ package cache
 
 import (
 	"fmt"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"sync"
 )
 
 func newCacheLine(id CacheLineId, myNodeId int, buffer []byte) *CacheLine {
 	return &CacheLine{
 		id:             id,
-		cacheLineState: CacheLineState_Exclusive,
+		cacheLineState: pb.CacheLineState_Exclusive,
 		version:        1,
 		ownerId:        myNodeId,
 		buffer:         buffer,
@@ -35,7 +36,7 @@ func newCacheLine(id CacheLineId, myNodeId int, buffer []byte) *CacheLine {
 
 type CacheLine struct {
 	id             CacheLineId
-	cacheLineState CacheLineState
+	cacheLineState pb.CacheLineState
 	version        int
 	ownerId        int
 	sharers        []int

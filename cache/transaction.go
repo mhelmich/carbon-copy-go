@@ -19,6 +19,7 @@ package cache
 import (
 	"container/list"
 	"fmt"
+	"github.com/mhelmich/carbon-copy-go/pb"
 )
 
 func createNewTransaction() *transactionImpl {
@@ -62,7 +63,7 @@ func (t *transactionImpl) canCommit(line *CacheLine) error {
 		return CarbonGridError(fmt.Sprintf("Line %d is not locked", line.id))
 	}
 
-	if line.cacheLineState != CacheLineState_Exclusive {
+	if line.cacheLineState != pb.CacheLineState_Exclusive {
 		return CarbonGridError(fmt.Sprintf("Line %d is in state %v instead exclusive", line.id, line.cacheLineState))
 	}
 

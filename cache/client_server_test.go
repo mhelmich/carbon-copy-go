@@ -18,6 +18,7 @@ package cache
 
 import (
 	"context"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
@@ -31,7 +32,7 @@ func TestServerClient(t *testing.T) {
 	assert.Nil(t, err, "Couldn't create client stub")
 	lineId := newRandomCacheLineId()
 
-	inv := &Inv{
+	inv := &pb.Inv{
 		SenderId: 555,
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -41,7 +42,7 @@ func TestServerClient(t *testing.T) {
 	assert.Equal(t, int32(111), invAck.SenderId)
 	assert.True(t, lineId.equal(cacheLineIdFromProtoBuf(invAck.LineId)))
 
-	get := &Get{
+	get := &pb.Get{
 		SenderId: 555,
 		LineId:   lineId.toProtoBuf(),
 	}

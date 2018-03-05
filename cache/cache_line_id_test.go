@@ -18,6 +18,7 @@ package cache
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -25,16 +26,16 @@ import (
 
 func TestCacheLineIdBasic(t *testing.T) {
 	id := newRandomCacheLineId()
-	pb := id.toProtoBuf()
+	protobuf := id.toProtoBuf()
 
-	data, err := proto.Marshal(pb)
+	data, err := proto.Marshal(protobuf)
 	assert.Nil(t, err)
 	log.Infof("Marshalled data size %d", len(data))
 
-	newPb := &LineId{}
+	newPb := &pb.LineId{}
 	err = proto.Unmarshal(data, newPb)
 	assert.Nil(t, err)
-	proto.Equal(pb, newPb)
+	proto.Equal(protobuf, newPb)
 	newId := cacheLineIdFromProtoBuf(newPb)
 	assert.True(t, id.equal(newId))
 }

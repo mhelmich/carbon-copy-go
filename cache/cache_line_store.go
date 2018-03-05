@@ -17,6 +17,7 @@
 package cache
 
 import (
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"sync"
 )
 
@@ -53,10 +54,10 @@ func (cls *cacheLineStore) addCacheLineToLocalCache(line *CacheLine) {
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (c *cacheLineStore) applyChangesFromPut(line *CacheLine, put *Put) {
+func (c *cacheLineStore) applyChangesFromPut(line *CacheLine, put *pb.Put) {
 	line.lock()
 	line.ownerId = int(put.SenderId)
-	line.cacheLineState = CacheLineState_Shared
+	line.cacheLineState = pb.CacheLineState_Shared
 	line.version = int(put.Version)
 	line.buffer = put.Buffer
 	line.unlock()
@@ -64,10 +65,10 @@ func (c *cacheLineStore) applyChangesFromPut(line *CacheLine, put *Put) {
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *Putx, myNodeId int) {
+func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *pb.Putx, myNodeId int) {
 	line.lock()
 	line.ownerId = myNodeId
-	line.cacheLineState = CacheLineState_Owned
+	line.cacheLineState = pb.CacheLineState_Owned
 	line.version = int(p.Version)
 	line.sharers = concertInt32ArrayToIntArray(p.Sharers)
 	line.buffer = p.Buffer
@@ -76,10 +77,10 @@ func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *Putx, myNodeId
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (cls *cacheLineStore) createCacheLineFromPut(put *Put) *CacheLine {
+func (cls *cacheLineStore) createCacheLineFromPut(put *pb.Put) *CacheLine {
 	line := &CacheLine{
 		id:             cacheLineIdFromProtoBuf(put.LineId),
-		cacheLineState: CacheLineState_Shared,
+		cacheLineState: pb.CacheLineState_Shared,
 		version:        int(put.Version),
 		ownerId:        int(put.SenderId),
 		buffer:         put.Buffer,
@@ -90,10 +91,10 @@ func (cls *cacheLineStore) createCacheLineFromPut(put *Put) *CacheLine {
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (cls *cacheLineStore) createCacheLineFromPutx(p *Putx, myNodeId int) *CacheLine {
+func (cls *cacheLineStore) createCacheLineFromPutx(p *pb.Putx, myNodeId int) *CacheLine {
 	line := &CacheLine{
 		id:             cacheLineIdFromProtoBuf(p.LineId),
-		cacheLineState: CacheLineState_Exclusive,
+		cacheLineState: pb.CacheLineState_Exclusive,
 		version:        int(p.Version),
 		ownerId:        myNodeId,
 		buffer:         p.Buffer,

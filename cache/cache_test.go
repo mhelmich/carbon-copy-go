@@ -18,6 +18,7 @@ package cache
 
 import (
 	"context"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -97,7 +98,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
 	}
-	assert.Equal(t, CacheLineState_Exclusive, v.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, v.cacheLineState)
 
 	readBites, err := cache2.Getx(lineId, nil)
 	if !assert.Nil(t, err, "Can't getx remotely") {
@@ -112,7 +113,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
 	}
-	assert.Equal(t, CacheLineState_Invalid, v.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Invalid, v.cacheLineState)
 	// assert on cache line state in cache2
 	// should own the line exclusively
 	v, ok = cache2.store.getCacheLineById(lineId)
@@ -120,7 +121,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
 	}
-	assert.Equal(t, CacheLineState_Exclusive, v.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, v.cacheLineState)
 	stopThreeCaches(cache1, cache2, cache3)
 }
 
@@ -138,10 +139,10 @@ func TestOwnerChanged(t *testing.T) {
 	assert.Nil(t, err)
 	v, ok := cache1.store.getCacheLineById(lineId)
 	assert.True(t, ok)
-	assert.Equal(t, CacheLineState_Invalid, v.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Invalid, v.cacheLineState)
 	v, ok = cache2.store.getCacheLineById(lineId)
 	assert.True(t, ok)
-	assert.Equal(t, CacheLineState_Exclusive, v.cacheLineState)
+	assert.Equal(t, pb.CacheLineState_Exclusive, v.cacheLineState)
 
 	// now I go ahead and let cache3 ask cache1 for that line
 	// cache1 should answer with "owner changed to cache2"
@@ -168,7 +169,7 @@ func TestStartConnectStop(t *testing.T) {
 	client, err := createNewCacheClientFromAddr("localhost:6666")
 	assert.Nil(t, err)
 
-	inv := &Inv{
+	inv := &pb.Inv{
 		SenderId: int32(clientId),
 		LineId:   newRandomCacheLineId().toProtoBuf(),
 	}

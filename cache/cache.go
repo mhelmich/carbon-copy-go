@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -68,13 +69,13 @@ func (c *cacheImpl) Get(lineId CacheLineId) ([]byte, error) {
 	if ok {
 		switch line.cacheLineState {
 
-		case CacheLineState_Exclusive, CacheLineState_Owned:
+		case pb.CacheLineState_Exclusive, pb.CacheLineState_Owned:
 			// I have the most current version that means we're good to go
 			return line.buffer, nil
 
-		case CacheLineState_Shared, CacheLineState_Invalid:
+		case pb.CacheLineState_Shared, pb.CacheLineState_Invalid:
 			// need to get latest version of the line as I don't have it
-			g := &Get{
+			g := &pb.Get{
 				SenderId: int32(c.myNodeId),
 				LineId:   lineId.toProtoBuf(),
 			}
@@ -93,7 +94,7 @@ func (c *cacheImpl) Get(lineId CacheLineId) ([]byte, error) {
 		}
 	} else {
 		// multi cast to everybody I know whether anyone knows this line
-		g := &Get{
+		g := &pb.Get{
 			SenderId: int32(c.myNodeId),
 			LineId:   lineId.toProtoBuf(),
 		}
@@ -123,10 +124,10 @@ func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 
 	if ok {
 		switch line.cacheLineState {
-		case CacheLineState_Exclusive:
+		case pb.CacheLineState_Exclusive:
 			return line.buffer, nil
 
-		case CacheLineState_Shared, CacheLineState_Invalid:
+		case pb.CacheLineState_Shared, pb.CacheLineState_Invalid:
 			err := c.unicastExclusiveGet(context.Background(), line)
 			if err != nil {
 				log.Errorf(err.Error())
@@ -136,7 +137,7 @@ func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 			// fall through this case and invalidate the line
 			fallthrough
 
-		case CacheLineState_Owned:
+		case pb.CacheLineState_Owned:
 			err := c.elevateOwnedToExclusive(line)
 			if err == nil {
 				return line.buffer, nil
@@ -172,7 +173,7 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 
 	if ok {
 		switch line.cacheLineState {
-		case CacheLineState_Shared, CacheLineState_Invalid:
+		case pb.CacheLineState_Shared, pb.CacheLineState_Invalid:
 			err := c.unicastExclusiveGet(context.Background(), line)
 			if err != nil {
 				log.Errorf(err.Error())
@@ -181,7 +182,7 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 			// shabang#!
 			// fall through this case and invalidate the line
 			fallthrough
-		case CacheLineState_Owned:
+		case pb.CacheLineState_Owned:
 			err := c.elevateOwnedToExclusive(line)
 			if err != nil {
 				log.Errorf(err.Error())
@@ -190,7 +191,7 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 			// shabang#!
 			// fall through this case and invalidate the line
 			fallthrough
-		case CacheLineState_Exclusive:
+		case pb.CacheLineState_Exclusive:
 			line.lock()
 			line.version++
 			line.buffer = buffer
@@ -237,7 +238,7 @@ func (c *cacheImpl) Stop() {
 ////////////////////////////////////////////////////////////////////////
 
 func (c *cacheImpl) unicastExclusiveGet(ctx context.Context, line *CacheLine) error {
-	getx := &Getx{
+	getx := &pb.Getx{
 		SenderId: int32(c.myNodeId),
 		LineId:   line.id.toProtoBuf(),
 	}
@@ -252,7 +253,7 @@ func (c *cacheImpl) unicastExclusiveGet(ctx context.Context, line *CacheLine) er
 }
 
 func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId CacheLineId) error {
-	g := &Getx{
+	g := &pb.Getx{
 		SenderId: int32(c.myNodeId),
 		LineId:   lineId.toProtoBuf(),
 	}
@@ -271,7 +272,7 @@ func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId CacheLineI
 }
 
 func (c *cacheImpl) elevateOwnedToExclusive(line *CacheLine) error {
-	inv := &Inv{
+	inv := &pb.Inv{
 		SenderId: int32(c.myNodeId),
 		LineId:   line.id.toProtoBuf(),
 	}
@@ -280,7 +281,7 @@ func (c *cacheImpl) elevateOwnedToExclusive(line *CacheLine) error {
 	err := c.multicastInvalidate(context.Background(), line.sharers, inv)
 	if err == nil {
 		line.lock()
-		line.cacheLineState = CacheLineState_Exclusive
+		line.cacheLineState = pb.CacheLineState_Exclusive
 		line.unlock()
 		return nil
 	} else {
@@ -292,9 +293,9 @@ func (c *cacheImpl) addPeerNode(nodeId int, addr string) {
 	c.clientMapping.addClientWithNodeId(nodeId, addr)
 }
 
-func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put, error) {
-	var p *Put
-	var oc *OwnerChanged
+func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *pb.Get) (*pb.Put, error) {
+	var p *pb.Put
+	var oc *pb.OwnerChanged
 	var err error
 	var client cacheClient
 
@@ -320,8 +321,8 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *Get) (*Put,
 	return nil, errors.New(fmt.Sprintf("Couldn't find cache lines for %v", get))
 }
 
-func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
-	ch := make(chan *Put)
+func (c *cacheImpl) multicastGet(ctx context.Context, get *pb.Get) (*pb.Put, error) {
+	ch := make(chan *pb.Put)
 
 	fctn := func(client cacheClient) {
 		put, _, err := client.SendGet(ctx, get)
@@ -340,9 +341,9 @@ func (c *cacheImpl) multicastGet(ctx context.Context, get *Get) (*Put, error) {
 	}
 }
 
-func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*Putx, error) {
-	var p *Putx
-	var oc *OwnerChanged
+func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *pb.Getx) (*pb.Putx, error) {
+	var p *pb.Putx
+	var oc *pb.OwnerChanged
 	var err error
 	var client cacheClient
 
@@ -367,8 +368,8 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *Getx) (*P
 	return nil, errors.New(fmt.Sprintf("Couldn't find cache lines for %v", getx))
 }
 
-func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error) {
-	ch := make(chan *Putx)
+func (c *cacheImpl) multicastGetx(ctx context.Context, getx *pb.Getx) (*pb.Putx, error) {
+	ch := make(chan *pb.Putx)
 
 	fctn := func(client cacheClient) {
 		putx, _, err := client.SendGetx(ctx, getx)
@@ -386,7 +387,7 @@ func (c *cacheImpl) multicastGetx(ctx context.Context, getx *Getx) (*Putx, error
 	}
 }
 
-func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv *Inv) error {
+func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv *pb.Inv) error {
 	ch := make(chan interface{}, len(sharers))
 
 	for _, sharerId := range sharers {
