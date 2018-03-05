@@ -56,12 +56,12 @@ type Cache interface {
 }
 
 type CacheLineId interface {
-	toProtoBuf() *pb.LineId
+	toProtoBuf() *pb.CacheLineId
 	string() string
 }
 
 type NodeId interface {
-	toProtoBuf() *pb.ClusterNodeId
+	toProtoBuf() *pb.NodeId
 	string() string
 }
 

@@ -24,7 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func cacheLineIdFromProtoBuf(lineId *pb.LineId) *cacheLineIdImpl {
+func cacheLineIdFromProtoBuf(lineId *pb.CacheLineId) *cacheLineIdImpl {
 	id, err := ulid.New(lineId.Time, bytes.NewReader(lineId.Entropy))
 	if err != nil {
 		log.Fatalf("Can't parse cache line id out of []byte: %s", err.Error())
@@ -45,8 +45,8 @@ type cacheLineIdImpl struct {
 	ulid ulid.ULID
 }
 
-func (cli *cacheLineIdImpl) toProtoBuf() *pb.LineId {
-	return &pb.LineId{
+func (cli *cacheLineIdImpl) toProtoBuf() *pb.CacheLineId {
+	return &pb.CacheLineId{
 		Time:    cli.ulid.Time(),
 		Entropy: cli.ulid.Entropy(),
 	}

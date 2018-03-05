@@ -29,13 +29,13 @@ func TestAllocateNewAndGet(t *testing.T) {
 	assert.NotNil(t, c, "There is no client")
 
 	value := "lalalalalala"
-	lineId, err := c.AllocateWithData([]byte(value), nil)
+	CacheLineId, err := c.AllocateWithData([]byte(value), nil)
 	if !assert.Nil(t, err, "Can't create []byte") {
 		c.Stop()
 		return
 	}
 
-	readBites, err := c.Get(lineId)
+	readBites, err := c.Get(CacheLineId)
 	if !assert.Nil(t, err, "Can't get locally") {
 		c.Stop()
 		return
@@ -61,9 +61,9 @@ func TestGetPutInTwoCaches(t *testing.T) {
 	cache2.addPeerNode(111, "localhost:6666")
 
 	value := "lalalalalala"
-	lineId, err := cache1.AllocateWithData([]byte(value), nil)
+	CacheLineId, err := cache1.AllocateWithData([]byte(value), nil)
 	assert.Nil(t, err, "Can't create []byte")
-	readBites, err := cache1.Get(lineId)
+	readBites, err := cache1.Get(CacheLineId)
 	if !assert.Nil(t, err, "Can't get locally") {
 		cache1.Stop()
 		cache2.Stop()
@@ -71,7 +71,7 @@ func TestGetPutInTwoCaches(t *testing.T) {
 	}
 	assert.Equal(t, value, string(readBites), "Bytes aren't the same")
 
-	cache2Bites, err := cache2.Get(lineId)
+	cache2Bites, err := cache2.Get(CacheLineId)
 	if !assert.Nil(t, err, "Can't get remotely") {
 		cache1.Stop()
 		cache2.Stop()
@@ -87,20 +87,20 @@ func TestGetPutInThreeCaches(t *testing.T) {
 	cache1, cache2, cache3, err := threeCaches(t)
 
 	value := "lalalalalala"
-	lineId, err := cache1.AllocateWithData([]byte(value), nil)
+	CacheLineId, err := cache1.AllocateWithData([]byte(value), nil)
 	if !assert.Nil(t, err, "Can't create []byte") {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
 	}
 	// assert that cache1 owns the line exclusively
-	v, ok := cache1.store.getCacheLineById(lineId)
+	v, ok := cache1.store.getCacheLineById(CacheLineId)
 	if !assert.True(t, ok) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
 	}
 	assert.Equal(t, pb.CacheLineState_Exclusive, v.cacheLineState)
 
-	readBites, err := cache2.Getx(lineId, nil)
+	readBites, err := cache2.Getx(CacheLineId, nil)
 	if !assert.Nil(t, err, "Can't getx remotely") {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
@@ -108,7 +108,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 	assert.Equal(t, value, string(readBites), "Bytes aren't the same")
 	// assert on cache line state in cache1
 	// should be invalid
-	v, ok = cache1.store.getCacheLineById(lineId)
+	v, ok = cache1.store.getCacheLineById(CacheLineId)
 	if !assert.True(t, ok) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
@@ -116,7 +116,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 	assert.Equal(t, pb.CacheLineState_Invalid, v.cacheLineState)
 	// assert on cache line state in cache2
 	// should own the line exclusively
-	v, ok = cache2.store.getCacheLineById(lineId)
+	v, ok = cache2.store.getCacheLineById(CacheLineId)
 	if !assert.True(t, ok) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
@@ -131,23 +131,23 @@ func TestOwnerChanged(t *testing.T) {
 
 	value := "lalalalalala"
 	// create line in cache1
-	lineId, err := cache1.AllocateWithData([]byte(value), nil)
+	CacheLineId, err := cache1.AllocateWithData([]byte(value), nil)
 	// let cache3 know that this line exists
-	cache3.Get(lineId)
+	cache3.Get(CacheLineId)
 	// move ownership to cache2
-	readBites, err := cache2.Getx(lineId, nil)
+	readBites, err := cache2.Getx(CacheLineId, nil)
 	assert.Nil(t, err)
-	v, ok := cache1.store.getCacheLineById(lineId)
+	v, ok := cache1.store.getCacheLineById(CacheLineId)
 	assert.True(t, ok)
 	assert.Equal(t, pb.CacheLineState_Invalid, v.cacheLineState)
-	v, ok = cache2.store.getCacheLineById(lineId)
+	v, ok = cache2.store.getCacheLineById(CacheLineId)
 	assert.True(t, ok)
 	assert.Equal(t, pb.CacheLineState_Exclusive, v.cacheLineState)
 
 	// now I go ahead and let cache3 ask cache1 for that line
 	// cache1 should answer with "owner changed to cache2"
 	// and cache3 should send a second get transparently
-	readBites, err = cache3.Get(lineId)
+	readBites, err = cache3.Get(CacheLineId)
 	assert.Nil(t, err)
 	assert.Equal(t, value, string(readBites), "Value is not the same")
 
@@ -170,13 +170,13 @@ func TestStartConnectStop(t *testing.T) {
 	assert.Nil(t, err)
 
 	inv := &pb.Inv{
-		SenderId: int32(clientId),
-		LineId:   newRandomCacheLineId().toProtoBuf(),
+		SenderId:    int32(clientId),
+		CacheLineId: newRandomCacheCacheLineId().toProtoBuf(),
 	}
 	invAck, err := client.SendInvalidate(context.Background(), inv)
 	assert.Nil(t, err)
 	assert.NotNil(t, invAck)
-	assert.Equal(t, inv.LineId, invAck.LineId)
+	assert.Equal(t, inv.CacheLineId, invAck.CacheLineId)
 	assert.Equal(t, int32(serverId), invAck.SenderId)
 
 	err = client.Close()

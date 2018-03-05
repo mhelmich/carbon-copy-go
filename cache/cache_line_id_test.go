@@ -32,7 +32,7 @@ func TestCacheLineIdBasic(t *testing.T) {
 	assert.Nil(t, err)
 	log.Infof("Marshalled data size %d", len(data))
 
-	newPb := &pb.LineId{}
+	newPb := &pb.CacheLineId{}
 	err = proto.Unmarshal(data, newPb)
 	assert.Nil(t, err)
 	proto.Equal(protobuf, newPb)
