@@ -14,6 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#protoc -I cache --go_out=plugins=grpc:cache cache/*.proto
-#protoc -I cluster --go_out=plugins=grpc:cluster cluster/*.proto
 protoc -I pb --go_out=plugins=grpc:pb pb/*.proto
