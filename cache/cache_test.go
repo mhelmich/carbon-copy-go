@@ -170,13 +170,13 @@ func TestStartConnectStop(t *testing.T) {
 	assert.Nil(t, err)
 
 	inv := &pb.Inv{
-		SenderId:    int32(clientId),
-		CacheLineId: newRandomCacheCacheLineId().toProtoBuf(),
+		SenderId: int32(clientId),
+		LineId:   newRandomCacheLineId().toProtoBuf(),
 	}
 	invAck, err := client.SendInvalidate(context.Background(), inv)
 	assert.Nil(t, err)
 	assert.NotNil(t, invAck)
-	assert.Equal(t, inv.CacheLineId, invAck.CacheLineId)
+	assert.Equal(t, inv.LineId, invAck.LineId)
 	assert.Equal(t, int32(serverId), invAck.SenderId)
 
 	err = client.Close()

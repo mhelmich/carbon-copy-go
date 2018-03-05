@@ -25,8 +25,8 @@ type nodeIdImpl struct {
 	id int
 }
 
-func (ni *nodeIdImpl) toProtoBuf() *pb.ClusterNodeId {
-	return &pb.ClusterNodeId{
+func (ni *nodeIdImpl) toProtoBuf() *pb.NodeId {
+	return &pb.NodeId{
 		Id: int32(ni.id),
 	}
 }
