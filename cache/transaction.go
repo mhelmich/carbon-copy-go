@@ -24,14 +24,16 @@ import (
 
 func createNewTransaction(c *cacheImpl) *transactionImpl {
 	return &transactionImpl{
-		undo:  list.New(),
-		cache: c,
+		undo:        list.New(),
+		lockedLines: list.New(),
+		cache:       c,
 	}
 }
 
 type transactionImpl struct {
-	undo  *list.List
-	cache *cacheImpl
+	undo        *list.List
+	lockedLines *list.List
+	cache       *cacheImpl
 }
 
 type undo struct {
@@ -84,13 +86,18 @@ func (t *transactionImpl) addToTxn(cl *CacheLine, newBuffer []byte) {
 		version: cl.version + 1,
 		buf:     newBuffer,
 	}
-	cl.lock()
+	t.addToLockedLines(cl)
 	t.undo.PushBack(u)
 }
 
+func (t *transactionImpl) addToLockedLines(cl *CacheLine) {
+	cl.lock()
+	t.lockedLines.PushBack(cl)
+}
+
 func (t *transactionImpl) releaseAllLocks() {
-	for e := t.undo.Front(); e != nil; e = e.Next() {
-		undo := e.Value.(*undo)
-		undo.line.unlock()
+	for e := t.lockedLines.Front(); e != nil; e = e.Next() {
+		cl := e.Value.(*CacheLine)
+		cl.unlock()
 	}
 }

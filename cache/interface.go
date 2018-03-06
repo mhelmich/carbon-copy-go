@@ -36,6 +36,7 @@ type Transaction interface {
 	Rollback() error
 
 	addToTxn(cl *CacheLine, newBuffer []byte)
+	addToLockedLines(cl *CacheLine)
 }
 
 type Cache interface {

@@ -66,7 +66,10 @@ func TestGetPutInTwoCaches(t *testing.T) {
 	cache2.addPeerNode(111, "localhost:6666")
 
 	value := "lalalalalala"
-	CacheLineId, err := cache1.AllocateWithData([]byte(value), nil)
+	txn := cache1.NewTransaction()
+	CacheLineId, err := cache1.AllocateWithData([]byte(value), txn)
+	err = txn.Commit()
+	assert.Nil(t, err)
 	assert.Nil(t, err, "Can't create []byte")
 	readBites, err := cache1.Get(CacheLineId)
 	if !assert.Nil(t, err, "Can't get locally") {
@@ -92,20 +95,26 @@ func TestGetPutInThreeCaches(t *testing.T) {
 	cache1, cache2, cache3, err := threeCaches(t)
 
 	value := "lalalalalala"
-	CacheLineId, err := cache1.AllocateWithData([]byte(value), nil)
+	txn := cache1.NewTransaction()
+	lineId, err := cache1.AllocateWithData([]byte(value), txn)
+	err = txn.Commit()
+	assert.Nil(t, err)
 	if !assert.Nil(t, err, "Can't create []byte") {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
 	}
 	// assert that cache1 owns the line exclusively
-	v, ok := cache1.store.getCacheLineById(CacheLineId)
+	v, ok := cache1.store.getCacheLineById(lineId)
 	if !assert.True(t, ok) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
 	}
 	assert.Equal(t, pb.CacheLineState_Exclusive, v.cacheLineState)
 
-	readBites, err := cache2.Getx(CacheLineId, nil)
+	txn = cache2.NewTransaction()
+	readBites, err := cache2.Getx(lineId, txn)
+	err = txn.Rollback()
+	assert.Nil(t, err)
 	if !assert.Nil(t, err, "Can't getx remotely") {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
@@ -113,7 +122,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 	assert.Equal(t, value, string(readBites), "Bytes aren't the same")
 	// assert on cache line state in cache1
 	// should be invalid
-	v, ok = cache1.store.getCacheLineById(CacheLineId)
+	v, ok = cache1.store.getCacheLineById(lineId)
 	if !assert.True(t, ok) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
@@ -121,7 +130,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 	assert.Equal(t, pb.CacheLineState_Invalid, v.cacheLineState)
 	// assert on cache line state in cache2
 	// should own the line exclusively
-	v, ok = cache2.store.getCacheLineById(CacheLineId)
+	v, ok = cache2.store.getCacheLineById(lineId)
 	if !assert.True(t, ok) {
 		stopThreeCaches(cache1, cache2, cache3)
 		return
@@ -136,23 +145,30 @@ func TestOwnerChanged(t *testing.T) {
 
 	value := "lalalalalala"
 	// create line in cache1
-	CacheLineId, err := cache1.AllocateWithData([]byte(value), nil)
-	// let cache3 know that this line exists
-	cache3.Get(CacheLineId)
-	// move ownership to cache2
-	readBites, err := cache2.Getx(CacheLineId, nil)
+	txn := cache1.NewTransaction()
+	lineId, err := cache1.AllocateWithData([]byte(value), txn)
 	assert.Nil(t, err)
-	v, ok := cache1.store.getCacheLineById(CacheLineId)
+	err = txn.Commit()
+	assert.Nil(t, err)
+	// let cache3 know that this line exists
+	cache3.Get(lineId)
+	// move ownership to cache2
+	txn = cache2.NewTransaction()
+	readBites, err := cache2.Getx(lineId, txn)
+	assert.Nil(t, err)
+	err = txn.Commit()
+	assert.Nil(t, err)
+	v, ok := cache1.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, pb.CacheLineState_Invalid, v.cacheLineState)
-	v, ok = cache2.store.getCacheLineById(CacheLineId)
+	v, ok = cache2.store.getCacheLineById(lineId)
 	assert.True(t, ok)
 	assert.Equal(t, pb.CacheLineState_Exclusive, v.cacheLineState)
 
 	// now I go ahead and let cache3 ask cache1 for that line
 	// cache1 should answer with "owner changed to cache2"
 	// and cache3 should send a second get transparently
-	readBites, err = cache3.Get(CacheLineId)
+	readBites, err = cache3.Get(lineId)
 	assert.Nil(t, err)
 	assert.Equal(t, value, string(readBites), "Value is not the same")
 

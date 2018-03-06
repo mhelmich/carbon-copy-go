@@ -308,7 +308,10 @@ func TestGetxUnit(t *testing.T) {
 	line.ownerId = 1234
 
 	// now run test
-	readBites, err := cache.Getx(lineId, nil)
+	txn := cache.NewTransaction()
+	readBites, err := cache.Getx(lineId, txn)
+	assert.Nil(t, err)
+	err = txn.Commit()
 	assert.Nil(t, err)
 	assert.Equal(t, latestBuffer, string(readBites))
 	l, ok := cache.store.getCacheLineById(lineId)
@@ -345,7 +348,10 @@ func TestGetxExclusiveUnit(t *testing.T) {
 	line.ownerId = 1234
 
 	// now run test
-	readBites, err := cache.Getx(lineId, nil)
+	txn := cache.NewTransaction()
+	readBites, err := cache.Getx(lineId, txn)
+	assert.Nil(t, err)
+	err = txn.Commit()
 	assert.Nil(t, err)
 	assert.Equal(t, initialBuffer, string(readBites))
 	l, ok := cache.store.getCacheLineById(lineId)
@@ -379,7 +385,10 @@ func TestGetxOwnedUnit(t *testing.T) {
 	line.ownerId = 1111
 
 	// now run test
-	readBites, err := cache.Getx(lineId, nil)
+	txn := cache.NewTransaction()
+	readBites, err := cache.Getx(lineId, txn)
+	assert.Nil(t, err)
+	err = txn.Commit()
 	assert.Nil(t, err)
 	assert.Equal(t, initialBuffer, string(readBites))
 	l, ok := cache.store.getCacheLineById(lineId)
@@ -428,7 +437,10 @@ func TestGetxSharedUnit(t *testing.T) {
 	line.ownerId = 5678
 
 	// now run test
-	readBites, err := cache.Getx(lineId, nil)
+	txn := cache.NewTransaction()
+	readBites, err := cache.Getx(lineId, txn)
+	assert.Nil(t, err)
+	err = txn.Commit()
 	assert.Nil(t, err)
 	assert.Equal(t, latestBuffer, string(readBites))
 	l, ok := cache.store.getCacheLineById(lineId)
@@ -476,7 +488,10 @@ func TestPutUnit(t *testing.T) {
 	line.ownerId = 5678
 
 	// now run test
-	err := cache.Put(lineId, []byte(latestBuffer), nil)
+	txn := cache.NewTransaction()
+	err := cache.Put(lineId, []byte(latestBuffer), txn)
+	assert.Nil(t, err)
+	err = txn.Commit()
 	assert.Nil(t, err)
 	l, ok := cache.store.getCacheLineById(lineId)
 	assert.True(t, ok)

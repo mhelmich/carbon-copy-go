@@ -36,6 +36,7 @@ type cacheLineStore struct {
 
 func (cls *cacheLineStore) getCacheLineById(lineId CacheLineId) (*CacheLine, bool) {
 	cl, ok := cls.cacheLineMap.Load(lineId.String())
+
 	if ok {
 		return cl.(*CacheLine), true
 	} else {
@@ -55,24 +56,20 @@ func (cls *cacheLineStore) addCacheLineToLocalCache(line *CacheLine) {
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
 func (c *cacheLineStore) applyChangesFromPut(line *CacheLine, put *pb.Put) {
-	line.lock()
 	line.ownerId = int(put.SenderId)
 	line.cacheLineState = pb.CacheLineState_Shared
 	line.version = int(put.Version)
 	line.buffer = put.Buffer
-	line.unlock()
 }
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
 func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *pb.Putx, myNodeId int) {
-	line.lock()
 	line.ownerId = myNodeId
 	line.cacheLineState = pb.CacheLineState_Owned
 	line.version = int(p.Version)
 	line.sharers = concertInt32ArrayToIntArray(p.Sharers)
 	line.buffer = p.Buffer
-	line.unlock()
 }
 
 // gut decision to put this function here

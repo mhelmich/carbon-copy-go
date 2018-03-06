@@ -63,7 +63,6 @@ func (c *cacheImpl) AllocateWithData(buffer []byte, txn Transaction) (CacheLineI
 
 	newLineId := newRandomCacheLineId()
 	line := newCacheLine(newLineId, c.myNodeId, buffer)
-	// c.store.addCacheLineToLocalCache(line)
 	txn.addToTxn(line, buffer)
 	return newLineId, nil
 }
@@ -136,7 +135,9 @@ func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
+		txn.addToLockedLines(line)
 		switch line.cacheLineState {
+
 		case pb.CacheLineState_Exclusive:
 			return line.buffer, nil
 
@@ -170,6 +171,7 @@ func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 
 		line, ok := c.store.getCacheLineById(lineId)
 		if ok {
+			txn.addToLockedLines(line)
 			return line.buffer, nil
 		} else {
 			err := errors.New(fmt.Sprintf("Can't find line with id %d even after get.", lineId))
@@ -209,10 +211,8 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 			// fall through this case and invalidate the line
 			fallthrough
 		case pb.CacheLineState_Exclusive:
-			line.lock()
 			line.version++
 			line.buffer = buffer
-			line.unlock()
 		default:
 			log.Infof("No interesting state in put %v", line.cacheLineState)
 		}
@@ -301,9 +301,7 @@ func (c *cacheImpl) elevateOwnedToExclusive(line *CacheLine) error {
 	log.Infof("sharers %v", line.sharers)
 	err := c.multicastInvalidate(context.Background(), line.sharers, inv)
 	if err == nil {
-		line.lock()
 		line.cacheLineState = pb.CacheLineState_Exclusive
-		line.unlock()
 		return nil
 	} else {
 		return err
