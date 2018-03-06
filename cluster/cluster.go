@@ -102,7 +102,7 @@ func startMyNodeIdProvider(ctx context.Context, cc consensusClient) chan int {
 				keySet[kv.key] = true
 			}
 
-			i := 0
+			i := 1
 			for i < 16384 {
 				_, ok := keySet[strconv.Itoa(i)]
 				if !ok {
