@@ -57,9 +57,14 @@ type cacheImpl struct {
 ////////////////////////////////////////////////////////////////////////
 
 func (c *cacheImpl) AllocateWithData(buffer []byte, txn Transaction) (CacheLineId, error) {
+	if txn == nil {
+		return nil, TxnNilError
+	}
+
 	newLineId := newRandomCacheLineId()
 	line := newCacheLine(newLineId, c.myNodeId, buffer)
-	c.store.addCacheLineToLocalCache(line)
+	// c.store.addCacheLineToLocalCache(line)
+	txn.addToTxn(line, buffer)
 	return newLineId, nil
 }
 
@@ -116,10 +121,18 @@ func (c *cacheImpl) Get(lineId CacheLineId) ([]byte, error) {
 }
 
 func (c *cacheImpl) Gets(lineId CacheLineId, txn Transaction) ([]byte, error) {
+	if txn == nil {
+		return nil, TxnNilError
+	}
+
 	return nil, nil
 }
 
 func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
+	if txn == nil {
+		return nil, TxnNilError
+	}
+
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -169,6 +182,10 @@ func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 }
 
 func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) error {
+	if txn == nil {
+		return TxnNilError
+	}
+
 	line, ok := c.store.getCacheLineById(lineId)
 
 	if ok {
@@ -207,11 +224,15 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 }
 
 func (c *cacheImpl) Putx(lineId CacheLineId, buffer []byte, txn Transaction) error {
+	if txn == nil {
+		return TxnNilError
+	}
+
 	return errors.New("Not implemented yet!")
 }
 
 func (c *cacheImpl) NewTransaction() Transaction {
-	return createNewTransaction()
+	return createNewTransaction(c)
 }
 
 func (c *cacheImpl) Stop() {

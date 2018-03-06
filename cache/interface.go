@@ -27,12 +27,15 @@ func (e CarbonGridError) Error() string { return string(e) }
 
 // This error is returned when remote operations time out.
 const TimeoutError = CarbonGridError("Timeout")
+const TxnNilError = CarbonGridError("Txn cannot be nil")
 
 type Transaction interface {
 	// Makes all operations that are part of this transaction durable.
 	Commit() error
 	// Reverts all operations being done as part of this transaction.
 	Rollback() error
+
+	addToTxn(cl *CacheLine, newBuffer []byte)
 }
 
 type Cache interface {

@@ -22,8 +22,10 @@ import (
 )
 
 func TestTxnCommit(t *testing.T) {
+	c, err := createNewCache(975, 9753)
+	assert.Nil(t, err)
 	lineId := newRandomCacheLineId()
-	txn := createNewTransaction()
+	txn := createNewTransaction(c)
 	buf := "testing_test_test_test"
 	cl := newCacheLine(lineId, 4444, []byte(buf))
 	newBuf := "new_buffer_bwahahaha"
@@ -31,11 +33,14 @@ func TestTxnCommit(t *testing.T) {
 	txn.Commit()
 	assert.Equal(t, newBuf, string(cl.buffer))
 	assert.Equal(t, 2, cl.version)
+	c.Stop()
 }
 
 func TestTxnRollback(t *testing.T) {
+	c, err := createNewCache(975, 9753)
+	assert.Nil(t, err)
 	lineId := newRandomCacheLineId()
-	txn := createNewTransaction()
+	txn := createNewTransaction(c)
 	buf := "testing_test_test_test"
 	cl := newCacheLine(lineId, 4444, []byte(buf))
 	newBuf := "new_buffer_bwahahaha"
@@ -43,4 +48,5 @@ func TestTxnRollback(t *testing.T) {
 	txn.Rollback()
 	assert.Equal(t, buf, string(cl.buffer))
 	assert.Equal(t, 1, cl.version)
+	c.Stop()
 }

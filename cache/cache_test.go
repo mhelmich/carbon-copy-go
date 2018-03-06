@@ -29,11 +29,16 @@ func TestAllocateNewAndGet(t *testing.T) {
 	assert.NotNil(t, c, "There is no client")
 
 	value := "lalalalalala"
-	CacheLineId, err := c.AllocateWithData([]byte(value), nil)
+	txn := c.NewTransaction()
+	CacheLineId, err := c.AllocateWithData([]byte(value), txn)
 	if !assert.Nil(t, err, "Can't create []byte") {
+		txn.Rollback()
 		c.Stop()
 		return
 	}
+
+	err = txn.Commit()
+	assert.Nil(t, err)
 
 	readBites, err := c.Get(CacheLineId)
 	if !assert.Nil(t, err, "Can't get locally") {

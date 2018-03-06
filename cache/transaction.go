@@ -22,14 +22,16 @@ import (
 	"github.com/mhelmich/carbon-copy-go/pb"
 )
 
-func createNewTransaction() *transactionImpl {
+func createNewTransaction(c *cacheImpl) *transactionImpl {
 	return &transactionImpl{
-		undo: list.New(),
+		undo:  list.New(),
+		cache: c,
 	}
 }
 
 type transactionImpl struct {
-	undo *list.List
+	undo  *list.List
+	cache *cacheImpl
 }
 
 type undo struct {
@@ -52,6 +54,7 @@ func (t *transactionImpl) Commit() error {
 		undo := e.Value.(*undo)
 		undo.line.version = undo.version
 		undo.line.buffer = undo.buf
+		t.cache.store.addCacheLineToLocalCache(undo.line)
 	}
 
 	t.releaseAllLocks()
