@@ -33,7 +33,7 @@ func createNewGrid() (*carbonGridImpl, error) {
 
 	// blocks until cluster becomes available
 	myNodeId := clustr.GetMyNodeId()
-	if myNodeId == 0 {
+	if myNodeId <= 0 {
 		return nil, errors.New(fmt.Sprintf("My node id can't be %d", myNodeId))
 	}
 
@@ -53,7 +53,11 @@ type carbonGridImpl struct {
 	cluster cluster.Cluster
 }
 
-func (cgi *carbonGridImpl) close() {
+func (cgi *carbonGridImpl) GetCache() cache.Cache {
+	return cgi.cache
+}
+
+func (cgi *carbonGridImpl) Close() {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	log.Infof("Shutting down grid")

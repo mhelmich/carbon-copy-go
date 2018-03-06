@@ -16,10 +16,13 @@
 
 package cc
 
-import ()
+import (
+	"github.com/mhelmich/carbon-copy-go/cache"
+)
 
 type Grid interface {
-	close()
+	GetCache() cache.Cache
+	Close()
 }
 
 func NewGrid() (Grid, error) {

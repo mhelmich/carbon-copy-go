@@ -26,5 +26,7 @@ func TestGridBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, g)
 
-	g.close()
+	c := g.GetCache()
+	assert.NotNil(t, c)
+	g.Close()
 }
