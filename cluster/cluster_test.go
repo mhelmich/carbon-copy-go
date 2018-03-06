@@ -95,7 +95,7 @@ func TestClusterAllocateGlobalIds(t *testing.T) {
 	mockEtcd.On("compareAndPut", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, "13", strconv.Itoa(13+idBufferSize)).Return(true, nil)
 	// mock node id allocation
 	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(make([]kv, 0), nil)
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"0", "").Return(true, nil)
+	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"1", "").Return(true, nil)
 
 	// run test
 	cluster, err := createNewClusterWithConsensus(context.Background(), mockEtcd)
