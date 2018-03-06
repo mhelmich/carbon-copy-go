@@ -16,12 +16,13 @@
 
 package cc
 
-import ()
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
-type Grid interface {
-	close()
-}
-
-func NewGrid() (Grid, error) {
-	return createNewGrid()
+func TestGridBasic(t *testing.T) {
+	g, err := NewGrid()
+	assert.Nil(t, err)
+	g.close()
 }
