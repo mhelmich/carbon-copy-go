@@ -72,7 +72,7 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *pb.Get) (*pb.GetRespons
 				},
 			}
 
-			log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "put")
+			log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).String(), "put")
 			return resp, nil
 		} else {
 			oc := &pb.OwnerChanged{
@@ -88,7 +88,7 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *pb.Get) (*pb.GetRespons
 				},
 			}
 
-			log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "owner_changed")
+			log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).String(), "owner_changed")
 			return resp, nil
 		}
 	} else {
@@ -103,7 +103,7 @@ func (cs *cacheServerImpl) Get(ctx context.Context, req *pb.Get) (*pb.GetRespons
 			},
 		}
 
-		log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "ack")
+		log.Infof("Get request from %d for line %s fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).String(), "ack")
 		return resp, nil
 	}
 }
@@ -237,7 +237,7 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *pb.Getx) (*pb.GetxResp
 				},
 			}
 
-			log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "owner_changed")
+			log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).String(), "owner_changed")
 			return resp, nil
 		}
 	} else {
@@ -252,7 +252,7 @@ func (cs *cacheServerImpl) Getx(ctx context.Context, req *pb.Getx) (*pb.GetxResp
 			},
 		}
 
-		log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).string(), "ack")
+		log.Infof("Get request from %d for line %d fulfilled with %s", req.SenderId, cacheLineIdFromProtoBuf(req.LineId).String(), "ack")
 		return resp, nil
 	}
 }

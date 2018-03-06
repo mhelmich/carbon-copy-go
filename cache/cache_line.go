@@ -60,5 +60,5 @@ func (cl *CacheLine) isLocked() bool {
 }
 
 func (cl *CacheLine) String() string {
-	return fmt.Sprintf("<id: %s state: %s version: %d owner: %d locked: %t buffer length: %d>", cl.id.string(), cl.cacheLineState.String(), cl.version, cl.ownerId, cl.locked, len(cl.buffer))
+	return fmt.Sprintf("<id: %s state: %s version: %d owner: %d locked: %t buffer length: %d>", cl.id.String(), cl.cacheLineState.String(), cl.version, cl.ownerId, cl.locked, len(cl.buffer))
 }

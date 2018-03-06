@@ -56,6 +56,6 @@ func (cli *cacheLineIdImpl) equal(that *cacheLineIdImpl) bool {
 	return cli.ulid.Compare(that.ulid) == 0
 }
 
-func (cli *cacheLineIdImpl) string() string {
+func (cli *cacheLineIdImpl) String() string {
 	return cli.ulid.String()
 }

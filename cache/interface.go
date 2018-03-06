@@ -57,7 +57,7 @@ type Cache interface {
 
 type CacheLineId interface {
 	toProtoBuf() *pb.CacheLineId
-	string() string
+	String() string
 }
 
 type NodeId interface {
