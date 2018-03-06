@@ -24,5 +24,7 @@ import (
 func TestGridBasic(t *testing.T) {
 	g, err := NewGrid()
 	assert.Nil(t, err)
+	assert.NotNil(t, g)
+
 	g.close()
 }

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/mhelmich/carbon-copy-go/cache"
 	"github.com/mhelmich/carbon-copy-go/cluster"
+	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -32,7 +33,7 @@ func createNewGrid() (*carbonGridImpl, error) {
 
 	// blocks until cluster becomes available
 	myNodeId := clustr.GetMyNodeId()
-	if myNodeId != 0 {
+	if myNodeId == 0 {
 		return nil, errors.New(fmt.Sprintf("My node id can't be %d", myNodeId))
 	}
 
@@ -53,15 +54,21 @@ type carbonGridImpl struct {
 }
 
 func (cgi *carbonGridImpl) close() {
-	var wg sync.WaitGroup
+	wg := &sync.WaitGroup{}
 	wg.Add(2)
+	log.Infof("Shutting down grid")
+
 	go func() {
-		cgi.cache.Stop()
+		if cgi != nil && cgi.cache != nil {
+			cgi.cache.Stop()
+		}
 		wg.Done()
 	}()
 
 	go func() {
-		cgi.cluster.Close()
+		if cgi != nil && cgi.cluster != nil {
+			cgi.cluster.Close()
+		}
 		wg.Done()
 	}()
 
