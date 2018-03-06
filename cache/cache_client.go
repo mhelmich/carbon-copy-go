@@ -70,7 +70,6 @@ func (cc *cacheClientImpl) handleGetResponse(getResp *pb.GetResponse, err error)
 		log.Errorf("%v", err)
 		return nil, nil, err
 	case getResp.GetAck() != nil:
-		log.Infof("ack: %s", getResp.GetAck().String())
 		// TODO -- solve this better :/
 		// I don't like the way I'm (mis-)using the error for this non-error case
 		return nil, nil, errors.New("response was ack")
@@ -90,7 +89,6 @@ func (cc *cacheClientImpl) handleGetsResponse(getsResp *pb.GetsResponse, err err
 		log.Errorf("%v", err)
 		return nil, nil, err
 	case getsResp.GetAck() != nil:
-		log.Infof("ack: %s", getsResp.GetAck().String())
 		// TODO -- solve this better :/
 		// I don't like the way I'm (mis-)using the error for this non-error case
 		return nil, nil, errors.New("response was ack")
@@ -110,7 +108,6 @@ func (cc *cacheClientImpl) handleGetxResponse(getxResp *pb.GetxResponse, err err
 		log.Errorf("%v", err)
 		return nil, nil, err
 	case getxResp.GetAck() != nil:
-		log.Infof("ack: %s", getxResp.GetAck().String())
 		// TODO -- solve this better :/
 		// I don't like the way I'm (mis-)using the error for this non-error case
 		return nil, nil, errors.New("response was ack")
