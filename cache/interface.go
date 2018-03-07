@@ -68,6 +68,11 @@ type CacheLineId interface {
 	// This function serializes a cache line id into wire format.
 	// Well...actually into a protobuf that later is serialized into wire format.
 	toProtoBuf() *pb.CacheLineId
+	// This function returns a unique(-enough) string id.
+	// It's used to address a cache line in a map for example
+	// where you want actual objects (as opposed to pointers)
+	// to assert equality.
+	toIdString() string
 }
 
 type NodeId interface {

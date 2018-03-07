@@ -35,7 +35,7 @@ type cacheLineStore struct {
 }
 
 func (cls *cacheLineStore) getCacheLineById(lineId CacheLineId) (*cacheLine, bool) {
-	cl, ok := cls.cacheLineMap.Load(lineId.String())
+	cl, ok := cls.cacheLineMap.Load(lineId.toIdString())
 
 	if ok {
 		return cl.(*cacheLine), true
@@ -45,12 +45,12 @@ func (cls *cacheLineStore) getCacheLineById(lineId CacheLineId) (*cacheLine, boo
 }
 
 func (cls *cacheLineStore) putIfAbsent(lineId CacheLineId, line *cacheLine) (*cacheLine, bool) {
-	val, loaded := cls.cacheLineMap.LoadOrStore(lineId.String(), line)
+	val, loaded := cls.cacheLineMap.LoadOrStore(lineId.toIdString(), line)
 	return val.(*cacheLine), loaded
 }
 
 func (cls *cacheLineStore) addCacheLineToLocalCache(line *cacheLine) {
-	cls.cacheLineMap.Store(line.id.String(), line)
+	cls.cacheLineMap.Store(line.id.toIdString(), line)
 }
 
 // gut decision to put this function here
