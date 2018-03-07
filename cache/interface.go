@@ -27,6 +27,8 @@ func (e CarbonGridError) Error() string { return string(e) }
 
 // This error is returned when remote operations time out.
 const TimeoutError = CarbonGridError("Timeout")
+
+// This error is returned if the passed in transaction object is nil.
 const TxnNilError = CarbonGridError("Txn cannot be nil")
 
 type Transaction interface {
@@ -35,6 +37,8 @@ type Transaction interface {
 	// Reverts all operations being done as part of this transaction.
 	Rollback() error
 
+	// Internal functions that are called by the cache to manage
+	// cache line locking and such.
 	addToTxn(cl *CacheLine, newBuffer []byte)
 	addToLockedLines(cl *CacheLine)
 }
@@ -60,8 +64,10 @@ type Cache interface {
 }
 
 type CacheLineId interface {
-	toProtoBuf() *pb.CacheLineId
 	String() string
+	// This function serializes a cache line id into wire format.
+	// Well...actually into a protobuf that later is serialized into wire format.
+	toProtoBuf() *pb.CacheLineId
 }
 
 type NodeId interface {
@@ -74,6 +80,7 @@ func NewCache(myNodeId int, serverPort int) (Cache, error) {
 	return createNewCache(myNodeId, serverPort)
 }
 
+// This internal interface exists for decomposition (and mocking).
 type cacheClient interface {
 	SendGet(ctx context.Context, g *pb.Get) (*pb.Put, *pb.OwnerChanged, error)
 	SendGets(ctx context.Context, g *pb.Gets) (*pb.Puts, *pb.OwnerChanged, error)
@@ -82,6 +89,7 @@ type cacheClient interface {
 	Close() error
 }
 
+// This internal interface exists for decomposition (and mocking).
 type cacheServer interface {
 	Get(ctx context.Context, req *pb.Get) (*pb.GetResponse, error)
 	Gets(ctx context.Context, req *pb.Gets) (*pb.GetsResponse, error)
@@ -90,6 +98,7 @@ type cacheServer interface {
 	Stop()
 }
 
+// This internal interface exists for decomposition (and mocking).
 type cacheClientMapping interface {
 	getClientForNodeId(nodeId int) (cacheClient, error)
 	addClientWithNodeId(nodeId int, addr string)

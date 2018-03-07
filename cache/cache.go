@@ -94,7 +94,7 @@ func (c *cacheImpl) Get(lineId CacheLineId) ([]byte, error) {
 			return line.buffer, nil
 
 		default:
-			return nil, errors.New(fmt.Sprintf("Not a cache line state I like %v", line.cacheLineState))
+			return nil, CarbonGridError(fmt.Sprintf("Not a cache line state I like %v", line.cacheLineState))
 		}
 	} else {
 		// multi cast to everybody I know whether anyone knows this line
