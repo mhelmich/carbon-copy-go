@@ -19,7 +19,7 @@ package cache
 import (
 	"fmt"
 	"github.com/mhelmich/carbon-copy-go/pb"
-	// "runtime/debug"
+	"runtime/debug"
 	"sync"
 )
 
@@ -47,13 +47,19 @@ type CacheLine struct {
 }
 
 func (cl *CacheLine) lock() {
-	// debug.PrintStack()
+	if cl.locked {
+		debug.PrintStack()
+	}
+
 	cl.mutex.Lock()
 	cl.locked = true
 }
 
 func (cl *CacheLine) unlock() {
-	// debug.PrintStack()
+	if !cl.locked {
+		debug.PrintStack()
+	}
+
 	cl.locked = false
 	cl.mutex.Unlock()
 }
