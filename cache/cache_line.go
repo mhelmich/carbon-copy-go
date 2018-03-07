@@ -23,8 +23,8 @@ import (
 	"sync"
 )
 
-func newCacheLine(id CacheLineId, myNodeId int, buffer []byte) *CacheLine {
-	return &CacheLine{
+func newCacheLine(id CacheLineId, myNodeId int, buffer []byte) *cacheLine {
+	return &cacheLine{
 		id:             id,
 		cacheLineState: pb.CacheLineState_Exclusive,
 		version:        1,
@@ -35,7 +35,7 @@ func newCacheLine(id CacheLineId, myNodeId int, buffer []byte) *CacheLine {
 	}
 }
 
-type CacheLine struct {
+type cacheLine struct {
 	id             CacheLineId
 	cacheLineState pb.CacheLineState
 	version        int
@@ -46,7 +46,7 @@ type CacheLine struct {
 	mutex          *sync.Mutex
 }
 
-func (cl *CacheLine) lock() {
+func (cl *cacheLine) lock() {
 	if cl.locked {
 		debug.PrintStack()
 	}
@@ -55,7 +55,7 @@ func (cl *CacheLine) lock() {
 	cl.locked = true
 }
 
-func (cl *CacheLine) unlock() {
+func (cl *cacheLine) unlock() {
 	if !cl.locked {
 		debug.PrintStack()
 	}
@@ -64,10 +64,10 @@ func (cl *CacheLine) unlock() {
 	cl.mutex.Unlock()
 }
 
-func (cl *CacheLine) isLocked() bool {
+func (cl *cacheLine) isLocked() bool {
 	return cl.locked
 }
 
-func (cl *CacheLine) String() string {
+func (cl *cacheLine) String() string {
 	return fmt.Sprintf("<id: %s state: %s version: %d owner: %d locked: %t buffer length: %d>", cl.id.String(), cl.cacheLineState.String(), cl.version, cl.ownerId, cl.locked, len(cl.buffer))
 }

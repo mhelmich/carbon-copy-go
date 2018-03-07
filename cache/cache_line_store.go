@@ -34,28 +34,28 @@ type cacheLineStore struct {
 	cacheLineMap *sync.Map
 }
 
-func (cls *cacheLineStore) getCacheLineById(lineId CacheLineId) (*CacheLine, bool) {
+func (cls *cacheLineStore) getCacheLineById(lineId CacheLineId) (*cacheLine, bool) {
 	cl, ok := cls.cacheLineMap.Load(lineId.String())
 
 	if ok {
-		return cl.(*CacheLine), true
+		return cl.(*cacheLine), true
 	} else {
 		return nil, false
 	}
 }
 
-func (cls *cacheLineStore) putIfAbsent(lineId CacheLineId, line *CacheLine) (*CacheLine, bool) {
+func (cls *cacheLineStore) putIfAbsent(lineId CacheLineId, line *cacheLine) (*cacheLine, bool) {
 	val, loaded := cls.cacheLineMap.LoadOrStore(lineId.String(), line)
-	return val.(*CacheLine), loaded
+	return val.(*cacheLine), loaded
 }
 
-func (cls *cacheLineStore) addCacheLineToLocalCache(line *CacheLine) {
+func (cls *cacheLineStore) addCacheLineToLocalCache(line *cacheLine) {
 	cls.cacheLineMap.Store(line.id.String(), line)
 }
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (c *cacheLineStore) applyChangesFromPut(line *CacheLine, put *pb.Put) {
+func (c *cacheLineStore) applyChangesFromPut(line *cacheLine, put *pb.Put) {
 	line.ownerId = int(put.SenderId)
 	line.cacheLineState = pb.CacheLineState_Shared
 	line.version = int(put.Version)
@@ -64,7 +64,7 @@ func (c *cacheLineStore) applyChangesFromPut(line *CacheLine, put *pb.Put) {
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *pb.Putx, myNodeId int) {
+func (c *cacheLineStore) applyChangesFromPutx(line *cacheLine, p *pb.Putx, myNodeId int) {
 	line.ownerId = myNodeId
 	line.cacheLineState = pb.CacheLineState_Owned
 	line.version = int(p.Version)
@@ -74,8 +74,8 @@ func (c *cacheLineStore) applyChangesFromPutx(line *CacheLine, p *pb.Putx, myNod
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (cls *cacheLineStore) createCacheLineFromPut(put *pb.Put) *CacheLine {
-	line := &CacheLine{
+func (cls *cacheLineStore) createCacheLineFromPut(put *pb.Put) *cacheLine {
+	line := &cacheLine{
 		id:             cacheLineIdFromProtoBuf(put.LineId),
 		cacheLineState: pb.CacheLineState_Shared,
 		version:        int(put.Version),
@@ -88,8 +88,8 @@ func (cls *cacheLineStore) createCacheLineFromPut(put *pb.Put) *CacheLine {
 
 // gut decision to put this function here
 // I only knew it couldn't stay in cache
-func (cls *cacheLineStore) createCacheLineFromPutx(p *pb.Putx, myNodeId int) *CacheLine {
-	line := &CacheLine{
+func (cls *cacheLineStore) createCacheLineFromPutx(p *pb.Putx, myNodeId int) *cacheLine {
+	line := &cacheLine{
 		id:             cacheLineIdFromProtoBuf(p.LineId),
 		cacheLineState: pb.CacheLineState_Exclusive,
 		version:        int(p.Version),

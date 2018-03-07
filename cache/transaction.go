@@ -39,7 +39,7 @@ type transactionImpl struct {
 }
 
 type undo struct {
-	line    *CacheLine
+	line    *cacheLine
 	version int
 	buf     []byte
 }
@@ -65,7 +65,7 @@ func (t *transactionImpl) Commit() error {
 	return nil
 }
 
-func (t *transactionImpl) canCommit(line *CacheLine) error {
+func (t *transactionImpl) canCommit(line *cacheLine) error {
 	if !line.isLocked() {
 		w := log.StandardLogger().Writer()
 		pprof.Lookup("goroutine").WriteTo(w, 2)
@@ -88,7 +88,7 @@ func (t *transactionImpl) Rollback() error {
 	return nil
 }
 
-func (t *transactionImpl) addToTxn(cl *CacheLine, newBuffer []byte) {
+func (t *transactionImpl) addToTxn(cl *cacheLine, newBuffer []byte) {
 	u := &undo{
 		line:    cl,
 		version: cl.version + 1,
@@ -98,14 +98,14 @@ func (t *transactionImpl) addToTxn(cl *CacheLine, newBuffer []byte) {
 	t.undo.PushBack(u)
 }
 
-func (t *transactionImpl) addToLockedLines(cl *CacheLine) {
+func (t *transactionImpl) addToLockedLines(cl *cacheLine) {
 	cl.lock()
 	t.lockedLines.PushBack(cl)
 }
 
 func (t *transactionImpl) releaseAllLocks() {
 	for e := t.lockedLines.Front(); e != nil; e = e.Next() {
-		cl := e.Value.(*CacheLine)
+		cl := e.Value.(*cacheLine)
 		cl.unlock()
 	}
 }

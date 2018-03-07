@@ -258,7 +258,7 @@ func (c *cacheImpl) Stop() {
 /////
 ////////////////////////////////////////////////////////////////////////
 
-func (c *cacheImpl) unicastExclusiveGet(ctx context.Context, line *CacheLine) error {
+func (c *cacheImpl) unicastExclusiveGet(ctx context.Context, line *cacheLine) error {
 	getx := &pb.Getx{
 		SenderId: int32(c.myNodeId),
 		LineId:   line.id.toProtoBuf(),
@@ -292,7 +292,7 @@ func (c *cacheImpl) multicastExclusiveGet(ctx context.Context, lineId CacheLineI
 	return nil
 }
 
-func (c *cacheImpl) elevateOwnedToExclusive(line *CacheLine) error {
+func (c *cacheImpl) elevateOwnedToExclusive(line *cacheLine) error {
 	inv := &pb.Inv{
 		SenderId: int32(c.myNodeId),
 		LineId:   line.id.toProtoBuf(),

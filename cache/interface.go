@@ -39,8 +39,8 @@ type Transaction interface {
 
 	// Internal functions that are called by the cache to manage
 	// cache line locking and such.
-	addToTxn(cl *CacheLine, newBuffer []byte)
-	addToLockedLines(cl *CacheLine)
+	addToTxn(cl *cacheLine, newBuffer []byte)
+	addToLockedLines(cl *cacheLine)
 }
 
 type Cache interface {
