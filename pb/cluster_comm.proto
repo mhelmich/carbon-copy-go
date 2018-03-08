@@ -19,6 +19,8 @@ syntax = "proto3";
 package pb;
 
 message NodeInfo {
+    // contains hostname and port
     string addr = 1;
+    // the unique id of a node
     int32 nodeId = 2;
 }
