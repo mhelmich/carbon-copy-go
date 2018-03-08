@@ -67,7 +67,7 @@ func (ec *mockConsensusClient) watchKey(ctx context.Context, key string) (<-chan
 	return args.Get(0).(chan *kvStr), args.Error(1)
 }
 
-func (ec *mockConsensusClient) watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvStr, error) {
+func (ec *mockConsensusClient) watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error) {
 	args := ec.Called(ctx, prefix)
 	return args.Get(0).(chan []*kvStr), args.Error(1)
 }

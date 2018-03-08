@@ -129,7 +129,7 @@ func TestEtcdWatchKeyPrefixValuesPresentOnly(t *testing.T) {
 	assert.True(t, didPut)
 
 	watcherContext, watcherCancel := context.WithCancel(context.Background())
-	kvCh, err := etcd1.watchKeyPrefix(watcherContext, commonPrefix)
+	kvCh, err := etcd1.watchKeyPrefixStr(watcherContext, commonPrefix)
 	assert.Nil(t, err)
 	assert.NotNil(t, kvCh)
 
@@ -165,7 +165,7 @@ func TestEtcdWatchKeyPrefixValuesPresentAndNewOnesSet(t *testing.T) {
 	assert.True(t, didPut)
 
 	watcherContext, watcherCancel := context.WithCancel(context.Background())
-	kvCh, err := etcd1.watchKeyPrefix(watcherContext, commonPrefix)
+	kvCh, err := etcd1.watchKeyPrefixStr(watcherContext, commonPrefix)
 	assert.Nil(t, err)
 	assert.NotNil(t, kvCh)
 

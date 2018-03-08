@@ -39,6 +39,11 @@ type kvStr struct {
 	value string
 }
 
+type kvBytes struct {
+	key   []byte
+	value []byte
+}
+
 type clusterImpl struct {
 	consensus consensusClient
 	newIdsCh  chan int
