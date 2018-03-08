@@ -426,7 +426,7 @@ func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv 
 	}
 
 	// TODO: waiting for everyone might be too strict and too slow
-	// what happens if one node isn't reachable
+	// what happens if one node isn't reachable?
 	msgCount := 0
 	for msgCount < len(sharers) {
 		select {
