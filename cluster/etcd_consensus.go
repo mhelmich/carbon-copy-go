@@ -121,8 +121,8 @@ func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (<-chan *kvSt
 	return nil, errors.New("Not implemented yet!")
 }
 
-func (ec *etcdConsensus) watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error) {
-	kvChan := make(chan []*kvStr)
+func (ec *etcdConsensus) watchKeyPrefixBytes(ctx context.Context, prefix string) (<-chan []*kvBytes, error) {
+	kvChan := make(chan []*kvBytes)
 
 	go func() {
 		// start the watcher first
@@ -140,11 +140,11 @@ func (ec *etcdConsensus) watchKeyPrefixStr(ctx context.Context, prefix string) (
 		}
 
 		initialRevision := resp.Header.GetRevision()
-		kvPacket := make([]*kvStr, len(resp.Kvs))
+		kvPacket := make([]*kvBytes, len(resp.Kvs))
 		for idx, ev := range resp.Kvs {
-			kvPacket[idx] = &kvStr{
-				key:   string(ev.Key),
-				value: string(ev.Value),
+			kvPacket[idx] = &kvBytes{
+				key:   ev.Key,
+				value: ev.Value,
 			}
 		}
 		kvChan <- kvPacket
@@ -160,11 +160,11 @@ func (ec *etcdConsensus) watchKeyPrefixStr(ctx context.Context, prefix string) (
 				}
 
 				if resp.Header.GetRevision() > initialRevision {
-					kvPacket := make([]*kvStr, len(resp.Events))
+					kvPacket := make([]*kvBytes, len(resp.Events))
 					for idx, event := range resp.Events {
-						kvPacket[idx] = &kvStr{
-							key:   string(event.Kv.Key),
-							value: string(event.Kv.Value),
+						kvPacket[idx] = &kvBytes{
+							key:   event.Kv.Key,
+							value: event.Kv.Value,
 						}
 					}
 					kvChan <- kvPacket
@@ -175,6 +175,37 @@ func (ec *etcdConsensus) watchKeyPrefixStr(ctx context.Context, prefix string) (
 
 	log.Infof("Watching for key prefix '%s'", prefix)
 	return kvChan, nil
+}
+
+func (ec *etcdConsensus) watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error) {
+	kvBytesChan, err := ec.watchKeyPrefixBytes(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	kvStrChan := make(chan []*kvStr)
+
+	go func() {
+		for { // ever...
+			for kvBatch := range kvBytesChan {
+				if len(kvBatch) == 0 {
+					close(kvStrChan)
+				}
+
+				kvStrBatch := make([]*kvStr, len(kvBatch))
+				for idx, kvBytes := range kvBatch {
+					kvStrBatch[idx] = &kvStr{
+						key:   string(kvBytes.key),
+						value: string(kvBytes.value),
+					}
+				}
+
+				kvStrChan <- kvStrBatch
+			}
+		}
+	}()
+
+	return kvStrChan, nil
 }
 
 func (ec *etcdConsensus) isClosed() bool {

@@ -37,6 +37,7 @@ type consensusClient interface {
 	putIfAbsent(ctx context.Context, key string, value string) (bool, error)
 	compareAndPut(ctx context.Context, key string, oldValue string, newValue string) (bool, error)
 	watchKey(ctx context.Context, key string) (<-chan *kvStr, error)
+	watchKeyPrefixBytes(ctx context.Context, prefix string) (<-chan []*kvBytes, error)
 	watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error)
 	isClosed() bool
 	close() error
