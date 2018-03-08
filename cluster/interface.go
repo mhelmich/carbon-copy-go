@@ -32,12 +32,12 @@ func NewCluster() (Cluster, error) {
 
 type consensusClient interface {
 	get(ctx context.Context, key string) (string, error)
-	getSortedRange(ctx context.Context, keyPrefix string) ([]kv, error)
+	getSortedRange(ctx context.Context, keyPrefix string) ([]kvStr, error)
 	put(ctx context.Context, key string, value string) error
 	putIfAbsent(ctx context.Context, key string, value string) (bool, error)
 	compareAndPut(ctx context.Context, key string, oldValue string, newValue string) (bool, error)
-	watchKey(ctx context.Context, key string) (<-chan *kv, error)
-	watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kv, error)
+	watchKey(ctx context.Context, key string) (<-chan *kvStr, error)
+	watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvStr, error)
 	isClosed() bool
 	close() error
 }

@@ -34,7 +34,7 @@ const (
 	idBufferSize = 7
 )
 
-type kv struct {
+type kvStr struct {
 	key   string
 	value string
 }

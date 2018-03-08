@@ -42,9 +42,9 @@ func (ec *mockConsensusClient) get(ctx context.Context, key string) (string, err
 	return args.String(0), args.Error(1)
 }
 
-func (ec *mockConsensusClient) getSortedRange(ctx context.Context, keyPrefix string) ([]kv, error) {
+func (ec *mockConsensusClient) getSortedRange(ctx context.Context, keyPrefix string) ([]kvStr, error) {
 	args := ec.Called(ctx, keyPrefix)
-	return args.Get(0).([]kv), args.Error(1)
+	return args.Get(0).([]kvStr), args.Error(1)
 }
 
 func (ec *mockConsensusClient) put(ctx context.Context, key string, value string) error {
@@ -62,14 +62,14 @@ func (ec *mockConsensusClient) compareAndPut(ctx context.Context, key string, ol
 	return args.Bool(0), args.Error(1)
 }
 
-func (ec *mockConsensusClient) watchKey(ctx context.Context, key string) (<-chan *kv, error) {
+func (ec *mockConsensusClient) watchKey(ctx context.Context, key string) (<-chan *kvStr, error) {
 	args := ec.Called(ctx, key)
-	return args.Get(0).(chan *kv), args.Error(1)
+	return args.Get(0).(chan *kvStr), args.Error(1)
 }
 
-func (ec *mockConsensusClient) watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kv, error) {
+func (ec *mockConsensusClient) watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvStr, error) {
 	args := ec.Called(ctx, prefix)
-	return args.Get(0).(chan []*kv), args.Error(1)
+	return args.Get(0).(chan []*kvStr), args.Error(1)
 }
 
 func (ec *mockConsensusClient) isClosed() bool {
@@ -94,7 +94,7 @@ func TestClusterAllocateGlobalIds(t *testing.T) {
 	mockEtcd.On("get", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator).Return("13", nil)
 	mockEtcd.On("compareAndPut", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, "13", strconv.Itoa(13+idBufferSize)).Return(true, nil)
 	// mock node id allocation
-	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(make([]kv, 0), nil)
+	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(make([]kvStr, 0), nil)
 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"1", "").Return(true, nil)
 
 	// run test
@@ -114,12 +114,12 @@ func TestClusterAllocateMyNodeIdBasic(t *testing.T) {
 	// mock the id base setting at startup
 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
 	// mock node id allocation
-	kvs := []kv{
-		kv{"0", ""},
-		kv{"1", ""},
-		kv{"2", ""},
-		kv{"4", ""},
-		kv{"7", ""},
+	kvs := []kvStr{
+		kvStr{"0", ""},
+		kvStr{"1", ""},
+		kvStr{"2", ""},
+		kvStr{"4", ""},
+		kvStr{"7", ""},
 	}
 	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"3", "").Return(true, nil)
@@ -135,12 +135,12 @@ func TestClusterAllocateMyNodeIdConflict(t *testing.T) {
 	// mock the id base setting at startup
 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
 	// mock node id allocation
-	kvs := []kv{
-		kv{"0", ""},
-		kv{"1", ""},
-		kv{"2", ""},
-		kv{"4", ""},
-		kv{"7", ""},
+	kvs := []kvStr{
+		kvStr{"0", ""},
+		kvStr{"1", ""},
+		kvStr{"2", ""},
+		kvStr{"4", ""},
+		kvStr{"7", ""},
 	}
 	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"3", "").Return(false, nil)

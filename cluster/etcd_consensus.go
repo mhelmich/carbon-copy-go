@@ -66,15 +66,15 @@ func (ec *etcdConsensus) get(ctx context.Context, key string) (string, error) {
 	}
 }
 
-func (ec *etcdConsensus) getSortedRange(ctx context.Context, keyPrefix string) ([]kv, error) {
+func (ec *etcdConsensus) getSortedRange(ctx context.Context, keyPrefix string) ([]kvStr, error) {
 	resp, err := ec.etcdSession.Client().Get(ctx, keyPrefix, clientv3.WithPrefix(), clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend))
 	if err != nil {
 		return nil, err
 	} else {
 		if resp.Count == int64(0) {
-			return make([]kv, 0), nil
+			return make([]kvStr, 0), nil
 		} else {
-			strs := make([]kv, len(resp.Kvs))
+			strs := make([]kvStr, len(resp.Kvs))
 			for idx, ev := range resp.Kvs {
 				strs[idx].key = string(ev.Key)
 				strs[idx].value = string(ev.Value)
@@ -117,12 +117,12 @@ func (ec *etcdConsensus) compareAndPut(ctx context.Context, key string, oldValue
 	}
 }
 
-func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (<-chan *kv, error) {
+func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (<-chan *kvStr, error) {
 	return nil, errors.New("Not implemented yet!")
 }
 
-func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kv, error) {
-	kvChan := make(chan []*kv)
+func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvStr, error) {
+	kvChan := make(chan []*kvStr)
 
 	go func() {
 		// start the watcher first
@@ -140,9 +140,9 @@ func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-c
 		}
 
 		initialRevision := resp.Header.GetRevision()
-		kvPacket := make([]*kv, len(resp.Kvs))
+		kvPacket := make([]*kvStr, len(resp.Kvs))
 		for idx, ev := range resp.Kvs {
-			kvPacket[idx] = &kv{
+			kvPacket[idx] = &kvStr{
 				key:   string(ev.Key),
 				value: string(ev.Value),
 			}
@@ -160,9 +160,9 @@ func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-c
 				}
 
 				if resp.Header.GetRevision() > initialRevision {
-					kvPacket := make([]*kv, len(resp.Events))
+					kvPacket := make([]*kvStr, len(resp.Events))
 					for idx, event := range resp.Events {
-						kvPacket[idx] = &kv{
+						kvPacket[idx] = &kvStr{
 							key:   string(event.Kv.Key),
 							value: string(event.Kv.Value),
 						}
