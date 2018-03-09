@@ -18,6 +18,8 @@ package cluster
 
 import (
 	"context"
+	"github.com/golang/protobuf/proto"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"math"
 	"strconv"
@@ -203,6 +205,39 @@ func (ci *clusterImpl) GetMyNodeId() int {
 
 func (ci *clusterImpl) GetIdAllocator() <-chan int {
 	return ci.newIdsCh
+}
+
+func (ci *clusterImpl) GetNodeInfoUpdates() (<-chan []*NodeInfo, error) {
+	kvBytesChan, err := ci.consensus.watchKeyPrefix(context.Background(), consensusNodesRootName)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeInfoChan := make(chan []*NodeInfo)
+	go func() {
+		for kvBatchBytes := range kvBytesChan {
+			if len(kvBatchBytes) <= 0 {
+				close(nodeInfoChan)
+				return
+			}
+
+			nodeInfos := make([]*NodeInfo, len(kvBatchBytes))
+			for idx, kvBytes := range kvBatchBytes {
+				nodeInfoProto := &pb.NodeInfo{}
+				err = proto.Unmarshal(kvBytes.value, nodeInfoProto)
+				if err == nil {
+					nodeInfos[idx] = &NodeInfo{
+						nodeId:      int(nodeInfoProto.NodeId),
+						nodeAddress: nodeInfoProto.Addr,
+					}
+				}
+			}
+
+			nodeInfoChan <- nodeInfos
+		}
+	}()
+
+	return nodeInfoChan, nil
 }
 
 func (ci *clusterImpl) Close() {

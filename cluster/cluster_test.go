@@ -18,11 +18,16 @@ package cluster
 
 import (
 	"context"
+	"encoding/binary"
+	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"math"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -155,4 +160,61 @@ func TestClusterAllocateMyNodeIdConflict(t *testing.T) {
 	idChan := startMyNodeIdProvider(context.Background(), mockEtcd)
 	nodeId := <-idChan
 	log.Infof("Acquired node id %d", nodeId)
+}
+
+func TestClusterNodeInfoWatcher(t *testing.T) {
+	mockEtcd := &mockConsensusClient{}
+	// mock the id base setting at startup
+	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
+	// mock node id allocation
+	kvs := []kvStr{}
+	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
+	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
+	mockEtcd.On("compareAndPut", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, "1", strconv.Itoa(1+idBufferSize)).Return(true, nil)
+	mockEtcd.On("get", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator).Return("1", nil)
+	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"1", "").Return(true, nil)
+
+	kvBytesChan := make(chan []*kvBytes)
+	mockEtcd.On("watchKeyPrefix", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvBytesChan, nil)
+
+	cluster, err := createNewClusterWithConsensus(context.Background(), mockEtcd)
+	assert.Nil(t, err)
+	nodeInfoChan, err := cluster.GetNodeInfoUpdates()
+	assert.Nil(t, err)
+	assert.NotNil(t, nodeInfoChan)
+
+	numNodeInfos := 8
+	go func() {
+		allNodeInfos := make([]*kvBytes, numNodeInfos)
+		for i := 0; i < numNodeInfos; i++ {
+			uuid, err := uuid.NewRandom()
+			assert.Nil(t, err)
+			nodeInfoProto := &pb.NodeInfo{
+				NodeId: int32(i),
+				Addr:   uuid.String() + "_" + strconv.Itoa(i),
+			}
+			buf, err := proto.Marshal(nodeInfoProto)
+			assert.Nil(t, err)
+			assert.NotNil(t, buf)
+			bs := make([]byte, 4)
+			binary.LittleEndian.PutUint32(bs, uint32(i))
+			allNodeInfos[i] = &kvBytes{
+				key:   bs,
+				value: buf,
+			}
+		}
+
+		kvBytesChan <- allNodeInfos
+	}()
+
+	nodeInfos := <-nodeInfoChan
+	assert.Equal(t, numNodeInfos, len(nodeInfos))
+	assert.True(t, nodeInfos[0].nodeId == 0)
+	assert.True(t, strings.HasSuffix(nodeInfos[0].nodeAddress, "_0"))
+	assert.True(t, nodeInfos[3].nodeId == 3)
+	assert.True(t, strings.HasSuffix(nodeInfos[3].nodeAddress, "_3"))
+	assert.True(t, nodeInfos[5].nodeId == 5)
+	assert.True(t, strings.HasSuffix(nodeInfos[5].nodeAddress, "_5"))
+	assert.True(t, nodeInfos[7].nodeId == 7)
+	assert.True(t, strings.HasSuffix(nodeInfos[7].nodeAddress, "_7"))
 }
