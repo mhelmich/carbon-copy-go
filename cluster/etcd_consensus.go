@@ -121,7 +121,7 @@ func (ec *etcdConsensus) watchKey(ctx context.Context, key string) (<-chan *kvSt
 	return nil, errors.New("Not implemented yet!")
 }
 
-func (ec *etcdConsensus) watchKeyPrefixBytes(ctx context.Context, prefix string) (<-chan []*kvBytes, error) {
+func (ec *etcdConsensus) watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvBytes, error) {
 	kvChan := make(chan []*kvBytes)
 
 	go func() {
@@ -178,7 +178,7 @@ func (ec *etcdConsensus) watchKeyPrefixBytes(ctx context.Context, prefix string)
 }
 
 func (ec *etcdConsensus) watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error) {
-	kvBytesChan, err := ec.watchKeyPrefixBytes(ctx, prefix)
+	kvBytesChan, err := ec.watchKeyPrefix(ctx, prefix)
 	if err != nil {
 		return nil, err
 	}
