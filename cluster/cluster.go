@@ -111,37 +111,37 @@ func (ci *clusterImpl) GetMyNodeId() int {
 	return ci.myNodeId
 }
 
-func (ci *clusterImpl) GetNodeInfoUpdates() (<-chan []*NodeInfo, error) {
+func (ci *clusterImpl) GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error) {
 	kvBytesChan, err := ci.consensus.watchKeyPrefix(context.Background(), consensusNodesRootName)
 	if err != nil {
 		return nil, err
 	}
 
-	nodeInfoChan := make(chan []*NodeInfo)
+	nodeConnInfoChan := make(chan []*NodeConnectionInfo)
 	go func() {
 		for kvBatchBytes := range kvBytesChan {
 			if len(kvBatchBytes) <= 0 {
-				close(nodeInfoChan)
+				close(nodeConnInfoChan)
 				return
 			}
 
-			nodeInfos := make([]*NodeInfo, len(kvBatchBytes))
+			nodeInfos := make([]*NodeConnectionInfo, len(kvBatchBytes))
 			for idx, kvBytes := range kvBatchBytes {
 				nodeInfoProto := &pb.NodeInfo{}
 				err = proto.Unmarshal(kvBytes.value, nodeInfoProto)
 				if err == nil {
-					nodeInfos[idx] = &NodeInfo{
+					nodeInfos[idx] = &NodeConnectionInfo{
 						nodeId:      int(nodeInfoProto.NodeId),
 						nodeAddress: nodeInfoProto.Addr,
 					}
 				}
 			}
 
-			nodeInfoChan <- nodeInfos
+			nodeConnInfoChan <- nodeInfos
 		}
 	}()
 
-	return nodeInfoChan, nil
+	return nodeConnInfoChan, nil
 }
 
 func (ci *clusterImpl) Close() {

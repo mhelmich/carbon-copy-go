@@ -20,14 +20,14 @@ import (
 	"context"
 )
 
-type NodeInfo struct {
+type NodeConnectionInfo struct {
 	nodeId      int
 	nodeAddress string
 }
 
 type Cluster interface {
 	GetMyNodeId() int
-	GetNodeInfoUpdates() (<-chan []*NodeInfo, error)
+	GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error)
 	Close()
 }
 

@@ -147,7 +147,7 @@ func TestClusterNodeInfoWatcher(t *testing.T) {
 
 	cluster, err := createNewClusterWithConsensus(context.Background(), mockEtcd)
 	assert.Nil(t, err)
-	nodeInfoChan, err := cluster.GetNodeInfoUpdates()
+	nodeInfoChan, err := cluster.GetNodeConnectionInfoUpdates()
 	assert.Nil(t, err)
 	assert.NotNil(t, nodeInfoChan)
 
