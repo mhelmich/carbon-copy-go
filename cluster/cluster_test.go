@@ -25,7 +25,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -97,32 +96,8 @@ func (ec *mockConsensusClient) close() error {
 /////
 ////////////////////////////////////////////////////////////////////////
 
-func TestClusterAllocateGlobalIds(t *testing.T) {
-	mockEtcd := &mockConsensusClient{}
-	// mock the id base setting at startup
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
-	mockEtcd.On("get", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator).Return("13", nil)
-	mockEtcd.On("compareAndPut", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, "13", strconv.Itoa(13+idBufferSize)).Return(true, nil)
-	// mock node id allocation
-	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(make([]kvStr, 0), nil)
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"1", "").Return(true, nil)
-
-	// run test
-	cluster, err := createNewClusterWithConsensus(context.Background(), mockEtcd)
-	assert.Nil(t, err)
-	assert.NotNil(t, cluster)
-	idChan := startGlobalIdProvider(context.Background(), cluster.consensus)
-	assert.Equal(t, 13, <-idChan)
-	assert.Equal(t, 14, <-idChan)
-	assert.Equal(t, 15, <-idChan)
-	assert.Equal(t, 16, <-idChan)
-	cluster.Close()
-}
-
 func TestClusterAllocateMyNodeIdBasic(t *testing.T) {
 	mockEtcd := &mockConsensusClient{}
-	// mock the id base setting at startup
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
 	// mock node id allocation
 	kvs := []kvStr{
 		kvStr{"0", ""},
@@ -142,8 +117,6 @@ func TestClusterAllocateMyNodeIdBasic(t *testing.T) {
 
 func TestClusterAllocateMyNodeIdConflict(t *testing.T) {
 	mockEtcd := &mockConsensusClient{}
-	// mock the id base setting at startup
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
 	// mock node id allocation
 	kvs := []kvStr{
 		kvStr{"0", ""},
@@ -164,14 +137,9 @@ func TestClusterAllocateMyNodeIdConflict(t *testing.T) {
 
 func TestClusterNodeInfoWatcher(t *testing.T) {
 	mockEtcd := &mockConsensusClient{}
-	// mock the id base setting at startup
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
 	// mock node id allocation
 	kvs := []kvStr{}
 	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, strconv.Itoa(math.MinInt64)).Return(true, nil)
-	mockEtcd.On("compareAndPut", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator, "1", strconv.Itoa(1+idBufferSize)).Return(true, nil)
-	mockEtcd.On("get", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusIdAllocator).Return("1", nil)
 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"1", "").Return(true, nil)
 
 	kvBytesChan := make(chan []*kvBytes)

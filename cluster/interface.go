@@ -27,7 +27,6 @@ type NodeInfo struct {
 
 type Cluster interface {
 	GetMyNodeId() int
-	GetIdAllocator() <-chan int
 	GetNodeInfoUpdates() (<-chan []*NodeInfo, error)
 	Close()
 }
