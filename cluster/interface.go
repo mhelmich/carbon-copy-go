@@ -25,6 +25,11 @@ type NodeConnectionInfo struct {
 	nodeAddress string
 }
 
+type ConsensusStoreConfig struct {
+	bindAddr     string
+	raftStoreDir string
+}
+
 type Cluster interface {
 	GetMyNodeId() int
 	GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error)
@@ -45,5 +50,12 @@ type consensusClient interface {
 	watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvBytes, error)
 	watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error)
 	isClosed() bool
+	close() error
+}
+
+type consensusStore interface {
+	get(key string) (string, error)
+	set(key string, value string) error
+	delete(key string) error
 	close() error
 }

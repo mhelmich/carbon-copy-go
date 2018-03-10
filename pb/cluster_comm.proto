@@ -24,3 +24,21 @@ message NodeInfo {
     // the unique id of a node
     int32 nodeId = 2;
 }
+
+// these are the only two raft operations possible
+enum RaftOps {
+    Set = 0;
+    Delete = 1;
+}
+
+// the raft api enforces string as key and value type
+message RaftCommand {
+    RaftOps cmd = 1;
+    string key = 2;
+    string value = 3;
+}
+
+// I decided to cheap this out and make all of this a proto
+message RaftSnapshot {
+    map<string, string> snap = 1;
+}

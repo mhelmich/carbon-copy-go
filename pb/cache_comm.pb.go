@@ -26,6 +26,8 @@ It has these top-level messages:
 	ChangeOwner
 	OwnerChanged
 	NodeInfo
+	RaftCommand
+	RaftSnapshot
 */
 package pb
 
@@ -49,6 +51,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
+// Not used anymore. Need to clean this up.
 type OriginalMessageType int32
 
 const (
@@ -94,10 +97,24 @@ func (CacheError) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []i
 type CacheLineState int32
 
 const (
-	CacheLineState_Invalid   CacheLineState = 0
+	// The cache line has been invalidated
+	// and doesn't carry any buffer anymore.
+	// Only metadata is present with a (potentially outdated)
+	// node id of the onwer.
+	CacheLineState_Invalid CacheLineState = 0
+	// This cache line is held by the current node exclusively.
+	// No other node has a copy of this cache line and the current
+	// node is free to do whatever it pleases with the cache line.
 	CacheLineState_Exclusive CacheLineState = 1
-	CacheLineState_Shared    CacheLineState = 2
-	CacheLineState_Owned     CacheLineState = 3
+	// This cache line is held by the current node but a different
+	// node is owning the cache line. This cache line holds a
+	// (potentially outdated) buffer.
+	CacheLineState_Shared CacheLineState = 2
+	// This cache line is held by the current node but not exclusively.
+	// That means there are sharers of this cache line (nodes that have a copy)
+	// of this cache line. In order to make changes to this cache line
+	// all sharers need to be notified to invalidate their copies first.
+	CacheLineState_Owned CacheLineState = 3
 )
 
 var CacheLineState_name = map[int32]string{
@@ -118,6 +135,10 @@ func (x CacheLineState) String() string {
 }
 func (CacheLineState) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
+// A cache line is practically a ulid. See the following repo for more info:
+// https://github.com/oklog/ulid
+// This serializes to be pretty big (19bytes). I might end up trading this for
+// something more compact in the end.
 type CacheLineId struct {
 	Time    uint64 `protobuf:"varint,1,opt,name=time" json:"time,omitempty"`
 	Entropy []byte `protobuf:"bytes,2,opt,name=entropy,proto3" json:"entropy,omitempty"`

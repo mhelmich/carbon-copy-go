@@ -22,6 +22,9 @@ import (
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"strconv"
+	// "github.com/hashicorp/raft"
+	// raftboltdb "github.com/hashicorp/raft-boltdb"
+	// "github.com/hashicorp/serf/serf"
 )
 
 const (
