@@ -26,8 +26,10 @@ type NodeConnectionInfo struct {
 }
 
 type ConsensusStoreConfig struct {
-	bindAddr     string
-	raftStoreDir string
+	RaftPort     int
+	RaftStoreDir string
+	Peers        []string
+	ServicePort  int
 }
 
 type Cluster interface {

@@ -19,11 +19,10 @@ package cluster
 import (
 	"context"
 	"github.com/golang/protobuf/proto"
-	"github.com/mhelmich/carbon-copy-go/pb"
+	// "github.com/mhelmich/carbon-copy-go/pb"
+	"carbon-grid-go/pb"
 	log "github.com/sirupsen/logrus"
 	"strconv"
-	// "github.com/hashicorp/raft"
-	// raftboltdb "github.com/hashicorp/raft-boltdb"
 	// "github.com/hashicorp/serf/serf"
 )
 
@@ -135,7 +134,7 @@ func (ci *clusterImpl) GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionI
 				if err == nil {
 					nodeInfos[idx] = &NodeConnectionInfo{
 						nodeId:      int(nodeInfoProto.NodeId),
-						nodeAddress: nodeInfoProto.Addr,
+						nodeAddress: nodeInfoProto.Host,
 					}
 				}
 			}
