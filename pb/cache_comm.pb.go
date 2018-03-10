@@ -28,6 +28,14 @@ It has these top-level messages:
 	NodeInfo
 	RaftCommand
 	RaftSnapshot
+	RaftJoinRequest
+	RaftJoinResponse
+	GetReq
+	GetResp
+	SetReq
+	SetResp
+	DeleteReq
+	DeleteResp
 */
 package pb
 

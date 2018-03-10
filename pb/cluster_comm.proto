@@ -19,10 +19,16 @@ syntax = "proto3";
 package pb;
 
 message NodeInfo {
-    // contains hostname and port
-    string addr = 1;
+    // contains hostname
+    string host = 1;
     // the unique id of a node
     int32 nodeId = 2;
+    // the port on which the raft library operates
+    int32 raftPort = 3;
+    // the port on which the grpc consensus protocol operates
+    int32 consensusPort = 4;
+    // the port on which the grid protocol operates
+    int32 gridPort = 5;
 }
 
 // these are the only two raft operations possible
@@ -41,4 +47,46 @@ message RaftCommand {
 // I decided to cheap this out and make all of this a proto
 message RaftSnapshot {
     map<string, string> snap = 1;
+}
+
+service RaftCluster {
+    rpc joinRaftCluster(RaftJoinRequest) returns (RaftJoinResponse) {}
+    rpc get(GetReq) returns (GetResp) {}
+    rpc set(SetReq) returns (SetResp) {}
+    rpc delete(DeleteReq) returns (DeleteResp) {}
+}
+
+message RaftJoinRequest {
+    string host = 1;
+    int32 port = 2;
+    string id = 3;
+}
+
+message RaftJoinResponse {
+    bool ok = 1;
+}
+
+message GetReq {
+    string key = 1;
+}
+
+message GetResp {
+    string value = 1;
+}
+
+message SetReq {
+    string key = 1;
+    string value = 2;
+}
+
+message SetResp {
+    bool created = 1;
+}
+
+message DeleteReq {
+    string key = 1;
+}
+
+message DeleteResp {
+    bool deleted = 1;
 }
