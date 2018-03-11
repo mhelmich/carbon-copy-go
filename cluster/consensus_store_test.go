@@ -17,7 +17,9 @@
 package cluster
 
 import (
+	"crypto/rand"
 	"fmt"
+	"github.com/oklog/ulid"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -38,7 +40,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	// this is just to give the node some time to settle
 	// things are happening pretty much immediately
 	// I'm not waiting for anything
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
@@ -57,7 +59,18 @@ func TestConsensusStoreBasic(t *testing.T) {
 	// this is just to give the node some time to settle
 	// things are happening pretty much immediately
 	// I'm not waiting for anything
-	time.Sleep(3 * time.Second)
+	time.Sleep(1 * time.Second)
+
+	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	value := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	err = store1.Set(key, value)
+	assert.Nil(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	val, err := store2.Get(key)
+	assert.Nil(t, err)
+	assert.Equal(t, value, val)
 
 	err = store1.Close()
 	assert.Nil(t, err)

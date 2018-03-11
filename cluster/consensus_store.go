@@ -230,6 +230,7 @@ func createValueService(config ConsensusStoreConfig, r *raft.Raft, raftNodeId st
 func (cs *consensusStoreImpl) Get(key string) (string, error) {
 	cs.raftFsm.mutex.Lock()
 	defer cs.raftFsm.mutex.Unlock()
+	// this might be a stale read :/
 	return cs.raftFsm.state[key], nil
 }
 
