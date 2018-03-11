@@ -83,13 +83,13 @@ type consensusStoreImpl struct {
 }
 
 func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fsm, error) {
+	var err error
+
 	// Setup Raft configuration.
 	raftConfig := raft.DefaultConfig()
 	raftConfig.LocalID = raft.ServerID(raftNodeId)
 	raftConfig.Logger = golanglog.New(config.logger.Writer(), "", 0)
 	localhost := fmt.Sprintf(":%d", config.RaftPort)
-
-	var err error
 
 	// Setup Raft communication.
 	addr, err := net.ResolveTCPAddr("tcp", localhost)
@@ -121,13 +121,16 @@ func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 		if err := os.MkdirAll(config.RaftStoreDir, 0755); err != nil {
 			return nil, nil, fmt.Errorf("couldn't create dirs: %s", err)
 		}
+		// create a durable bolt store
 		var boltStore *raftboltdb.BoltStore
 		boltStore, err := raftboltdb.NewBoltStore(filepath.Join(config.RaftStoreDir, raftDbFileName))
 		if err != nil {
 			return nil, nil, fmt.Errorf("new bolt store: %s", err)
 		}
-		stableStore = boltStore
 
+		// boltstore implements all sorts of raft interfaces
+		// we use it as a stable store and as backing for the log cache
+		stableStore = boltStore
 		logStore, err = raft.NewLogCache(raftLogCacheSize, boltStore)
 		if err != nil {
 			return nil, nil, fmt.Errorf("new log cache: %s", err)
