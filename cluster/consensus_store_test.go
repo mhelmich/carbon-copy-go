@@ -19,7 +19,6 @@ package cluster
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	// "os"
 	"testing"
 	"time"
 )
@@ -36,7 +35,10 @@ func TestConsensusStoreBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, store1)
 
-	time.Sleep(3 * time.Second)
+	// this is just to give the node some time to settle
+	// things are happening pretty much immediately
+	// I'm not waiting for anything
+	time.Sleep(1 * time.Second)
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
@@ -52,12 +54,13 @@ func TestConsensusStoreBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, store2)
 
-	time.Sleep(5 * time.Second)
+	// this is just to give the node some time to settle
+	// things are happening pretty much immediately
+	// I'm not waiting for anything
+	time.Sleep(3 * time.Second)
 
 	err = store1.Close()
 	assert.Nil(t, err)
 	err = store2.Close()
 	assert.Nil(t, err)
-	// assert.Nil(t, os.RemoveAll(raftDbPath1))
-	// assert.Nil(t, os.RemoveAll(raftDbPath2))
 }
