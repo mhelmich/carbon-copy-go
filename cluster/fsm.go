@@ -28,8 +28,9 @@ import (
 )
 
 type fsm struct {
-	state map[string]string
-	mutex sync.Mutex
+	state  map[string]string
+	mutex  sync.Mutex
+	logger *log.Entry
 }
 
 // Apply applies a Raft log entry to the key-value store.

@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	log "github.com/sirupsen/logrus"
 )
 
 type NodeConnectionInfo struct {
@@ -30,6 +31,7 @@ type ConsensusStoreConfig struct {
 	RaftStoreDir string
 	Peers        []string
 	ServicePort  int
+	logger       *log.Entry
 }
 
 type Cluster interface {

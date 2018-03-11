@@ -23,30 +23,36 @@ import (
 	"fmt"
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
+	"os"
 	"strings"
 )
 
 type raftClusterServerImpl struct {
-	r *raft.Raft
+	r          *raft.Raft
+	raftNodeId string
 }
 
 func (rcs *raftClusterServerImpl) JoinRaftCluster(ctx context.Context, req *pb.RaftJoinRequest) (*pb.RaftJoinResponse, error) {
+	logger := rcs.setupLogger()
 	if rcs.r.State() == raft.Leader {
-		f := rcs.r.AddVoter(raft.ServerID(req.Id), raft.ServerAddress(fmt.Sprint("%s:%d", req.Host, req.Port)), 0, 0)
+		addr := fmt.Sprintf("%s:%d", req.Host, req.Port)
+		logger.Infof("Adding new peer with id: %s addr: %s", req.Id, addr)
+		f := rcs.r.AddVoter(raft.ServerID(req.Id), raft.ServerAddress(addr), 0, raftTimeout)
 		err := f.Error()
+		logger.Infof("Error : %s", err)
 
 		return &pb.RaftJoinResponse{
 			Ok: err == nil,
 		}, nil
 	} else {
 		leaderAddr := rcs.r.Leader()
-		log.Infof("Leader address: %s", leaderAddr)
+		logger.Infof("Leader address: %s", leaderAddr)
 		tokens := strings.Split(string(leaderAddr), ":")
 		if len(tokens) >= 1 {
 			host := tokens[0]
-			log.Infof("Hostname: %s", host)
+			logger.Infof("Hostname: %s", host)
 		} else {
-			log.Warnf("Leader address looks weird: %s", leaderAddr)
+			logger.Warnf("Leader address looks weird: %s", leaderAddr)
 		}
 	}
 	return nil, nil
@@ -62,4 +68,14 @@ func (rcs *raftClusterServerImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.
 
 func (rcs *raftClusterServerImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.DeleteResp, error) {
 	return nil, nil
+}
+
+func (rcs *raftClusterServerImpl) setupLogger() *log.Entry {
+	hn, _ := os.Hostname()
+	return log.WithFields(log.Fields{
+		"hostname":   hn,
+		"raftState":  rcs.r.State().String(),
+		"raft":       rcs.r.String(),
+		"raftNodeId": rcs.raftNodeId,
+	})
 }

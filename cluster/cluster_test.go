@@ -160,7 +160,7 @@ func TestClusterNodeInfoWatcher(t *testing.T) {
 			assert.Nil(t, err)
 			nodeInfoProto := &pb.NodeInfo{
 				NodeId: int32(i),
-				Addr:   uuid.String() + "_" + strconv.Itoa(i),
+				Host:   uuid.String() + "_" + strconv.Itoa(i),
 			}
 			buf, err := proto.Marshal(nodeInfoProto)
 			assert.Nil(t, err)

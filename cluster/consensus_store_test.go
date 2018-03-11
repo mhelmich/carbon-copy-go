@@ -19,33 +19,43 @@ package cluster
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
+	"time"
 )
 
 func TestConsensusStoreBasic(t *testing.T) {
+	raftDbPath1 := "./db.raft1.db"
 	cfg1 := ConsensusStoreConfig{
 		RaftPort:     9876,
 		ServicePort:  9877,
-		RaftStoreDir: "./raft1.db",
+		RaftStoreDir: raftDbPath1,
 	}
 	store1, err := createNewConsensusStore(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, store1)
 
+	time.Sleep(3 * time.Second)
+
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
+	raftDbPath2 := "./db.raft2.db"
 	cfg2 := ConsensusStoreConfig{
 		RaftPort:     6789,
 		ServicePort:  6780,
-		RaftStoreDir: "./raft2.db",
+		RaftStoreDir: raftDbPath2,
 		Peers:        peers,
 	}
 	store2, err := createNewConsensusStore(cfg2)
 	assert.Nil(t, err)
 	assert.NotNil(t, store2)
 
+	time.Sleep(5 * time.Second)
+
 	err = store1.Close()
 	assert.Nil(t, err)
 	err = store2.Close()
 	assert.Nil(t, err)
+	assert.Nil(t, os.RemoveAll(raftDbPath1))
+	assert.Nil(t, os.RemoveAll(raftDbPath2))
 }

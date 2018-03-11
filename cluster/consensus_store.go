@@ -28,9 +28,11 @@ import (
 	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	golanglog "log"
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -41,15 +43,22 @@ const (
 )
 
 func createNewConsensusStore(config ConsensusStoreConfig) (*consensusStoreImpl, error) {
-	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader)
+	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	hn, _ := os.Hostname()
+	config.logger = log.WithFields(log.Fields{
+		"raftNodeId": raftNodeId,
+		"hostname":   hn,
+		"raftPort":   config.RaftPort,
+	})
+
 	// creating the actual raft instance
-	r, raftFsm, err := createRaft(config, raftNodeId.String())
+	r, raftFsm, err := createRaft(config, raftNodeId)
 	if err != nil {
 		return nil, err
 	}
 
 	// create the service providing non-consensus nodes with values
-	grpcServer, err := createValueService(config, r)
+	grpcServer, err := createValueService(config, r, raftNodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +67,7 @@ func createNewConsensusStore(config ConsensusStoreConfig) (*consensusStoreImpl, 
 		raft:            r,
 		raftFsm:         raftFsm,
 		raftValueServer: grpcServer,
+		logger:          config.logger,
 	}, nil
 }
 
@@ -65,7 +75,7 @@ func createNewConsensusStore(config ConsensusStoreConfig) (*consensusStoreImpl, 
 // https://github.com/otoolep/hraftd/blob/master/store/store.go
 
 type consensusStoreImpl struct {
-	logger          log.Logger
+	logger          *log.Entry
 	raft            *raft.Raft
 	raftFsm         *fsm
 	raftValueServer *grpc.Server
@@ -75,21 +85,23 @@ func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 	// Setup Raft configuration.
 	raftConfig := raft.DefaultConfig()
 	raftConfig.LocalID = raft.ServerID(raftNodeId)
-	raftConfig.StartAsLeader = config.Peers == nil || len(config.Peers) == 0
+	raftConfig.Logger = golanglog.New(config.logger.Writer(), "", 0)
+	// raftConfig.StartAsLeader = config.Peers == nil || len(config.Peers) == 0
+	localhost := fmt.Sprintf(":%d", config.RaftPort)
 
 	// Setup Raft communication.
-	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", config.RaftPort))
+	addr, err := net.ResolveTCPAddr("tcp", localhost)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	transport, err := raft.NewTCPTransport(fmt.Sprintf(":%d", config.RaftPort), addr, 3, raftTimeout, os.Stderr)
+	transport, err := raft.NewTCPTransport(localhost, addr, 3, raftTimeout, config.logger.Writer())
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Create the snapshot store. This allows the Raft to truncate the log.
-	snapshots, err := raft.NewFileSnapshotStore(config.RaftStoreDir, retainSnapshotCount, os.Stderr)
+	snapshots, err := raft.NewFileSnapshotStore(config.RaftStoreDir, retainSnapshotCount, config.logger.Writer())
 	if err != nil {
 		return nil, nil, fmt.Errorf("file snapshot store: %s", err)
 	}
@@ -103,36 +115,90 @@ func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 		return nil, nil, fmt.Errorf("new bolt store: %s", err)
 	}
 
-	fsm := &fsm{}
+	fsm := &fsm{
+		logger: config.logger,
+		state:  make(map[string]string),
+		mutex:  sync.Mutex{},
+	}
 
 	// Instantiate the Raft systems.
-	r, err := raft.NewRaft(raftConfig, fsm, logStore, logStore, snapshots, transport)
-	return r, fsm, err
+	newRaft, err := raft.NewRaft(raftConfig, fsm, logStore, logStore, snapshots, transport)
+
+	// we all assume this is a brandnew cluster if no peers are being
+	// supplied in the config
+	if config.Peers == nil || len(config.Peers) == 0 {
+		config.logger.Infof("Bootstrapping cluster with %v and %v", transport.LocalAddr(), raftConfig.LocalID)
+		configuration := raft.Configuration{
+			Servers: []raft.Server{
+				{
+					ID:      raftConfig.LocalID,
+					Address: transport.LocalAddr(),
+				},
+			},
+		}
+
+		f := newRaft.BootstrapCluster(configuration)
+		err := f.Error()
+		config.logger.Infof("Result of bootstrap %v", err)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return newRaft, fsm, err
 }
 
-func createValueService(config ConsensusStoreConfig, r *raft.Raft) (*grpc.Server, error) {
+func createValueService(config ConsensusStoreConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
+	if config.Peers != nil && len(config.Peers) > 0 {
+		// hostname, err := os.Hostname()
+		// if err != nil {
+		// 	config.logger.Panicf("Hostname error: %s", err)
+		// }
+		hostname := "localhost"
+
+		joinReq := &pb.RaftJoinRequest{
+			Host: hostname,
+			Port: int32(config.RaftPort),
+			Id:   raftNodeId,
+		}
+
+		joinedRaft := false
+
+		for _, peer := range config.Peers {
+			config.logger.Infof("Connecting to peer %s", peer)
+			conn, err := grpc.Dial(peer, grpc.WithInsecure())
+			defer conn.Close()
+
+			if err == nil {
+				client := pb.NewRaftClusterClient(conn)
+				joinResp, err := client.JoinRaftCluster(context.Background(), joinReq)
+				if err == nil && joinResp.Ok {
+					config.logger.Infof("Asked %s to join raft answer: %t", peer, joinResp.Ok)
+					joinedRaft = true
+					break
+				} else {
+					config.logger.Warnf("Asked %s to join raft answer: %v", peer, joinResp)
+				}
+			} else {
+				config.logger.Warnf("Couldn't connect to %s: %s", peer, err)
+			}
+		}
+
+		if !joinedRaft {
+			return nil, fmt.Errorf("Wasn't able to talk to any of the peers %v", config.Peers)
+		}
+	}
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.ServicePort))
 	if err != nil {
 		return nil, err
 	}
 
-	for _, peer := range config.Peers {
-		conn, err := grpc.Dial(peer, grpc.WithInsecure())
-		if err != nil {
-			log.Warnf("Couldnt' connect to %s: %s", peer, err)
-			continue
-		}
-
-		client := pb.NewRaftClusterClient(conn)
-		joinReq := &pb.RaftJoinRequest{}
-		joinResp, err := client.JoinRaftCluster(context.Background(), joinReq)
-		if err == nil && joinResp.Ok {
-			break
-		}
-	}
-
 	grpcServer := grpc.NewServer()
-	raftServer := &raftClusterServerImpl{}
+	raftServer := &raftClusterServerImpl{
+		r:          r,
+		raftNodeId: raftNodeId,
+	}
 
 	pb.RegisterRaftClusterServer(grpcServer, raftServer)
 	go grpcServer.Serve(lis)
@@ -180,5 +246,6 @@ func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) error {
 
 func (cs *consensusStoreImpl) Close() error {
 	f := cs.raft.Shutdown()
+	cs.raftValueServer.Stop()
 	return f.Error()
 }
