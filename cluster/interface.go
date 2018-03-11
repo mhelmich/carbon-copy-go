@@ -32,6 +32,7 @@ type ConsensusStoreConfig struct {
 	Peers        []string
 	ServicePort  int
 	logger       *log.Entry
+	isDevMode    bool
 }
 
 type Cluster interface {

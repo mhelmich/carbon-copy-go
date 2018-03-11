@@ -40,6 +40,7 @@ const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
 	raftDbFileName      = "raft.db"
+	raftLogCacheSize    = 512
 )
 
 func createNewConsensusStore(config ConsensusStoreConfig) (*consensusStoreImpl, error) {
@@ -86,8 +87,9 @@ func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 	raftConfig := raft.DefaultConfig()
 	raftConfig.LocalID = raft.ServerID(raftNodeId)
 	raftConfig.Logger = golanglog.New(config.logger.Writer(), "", 0)
-	// raftConfig.StartAsLeader = config.Peers == nil || len(config.Peers) == 0
 	localhost := fmt.Sprintf(":%d", config.RaftPort)
+
+	var err error
 
 	// Setup Raft communication.
 	addr, err := net.ResolveTCPAddr("tcp", localhost)
@@ -100,19 +102,36 @@ func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 		return nil, nil, err
 	}
 
-	// Create the snapshot store. This allows the Raft to truncate the log.
-	snapshots, err := raft.NewFileSnapshotStore(config.RaftStoreDir, retainSnapshotCount, config.logger.Writer())
-	if err != nil {
-		return nil, nil, fmt.Errorf("file snapshot store: %s", err)
-	}
+	var snapshots raft.SnapshotStore
+	var logStore raft.LogStore
+	var stableStore raft.StableStore
 
-	// Create the log store and stable store.
-	if err := os.MkdirAll(config.RaftStoreDir, 0755); err != nil {
-		return nil, nil, fmt.Errorf("couldn't create dirs: %s", err)
-	}
-	logStore, err := raftboltdb.NewBoltStore(filepath.Join(config.RaftStoreDir, raftDbFileName))
-	if err != nil {
-		return nil, nil, fmt.Errorf("new bolt store: %s", err)
+	if config.isDevMode {
+		logStore = raft.NewInmemStore()
+		stableStore = raft.NewInmemStore()
+		snapshots = raft.NewInmemSnapshotStore()
+	} else {
+		// Create the snapshot store. This allows the Raft to truncate the log.
+		snapshots, err = raft.NewFileSnapshotStore(config.RaftStoreDir, retainSnapshotCount, config.logger.Writer())
+		if err != nil {
+			return nil, nil, fmt.Errorf("file snapshot store: %s", err)
+		}
+
+		// Create the log store and stable store.
+		if err := os.MkdirAll(config.RaftStoreDir, 0755); err != nil {
+			return nil, nil, fmt.Errorf("couldn't create dirs: %s", err)
+		}
+		var boltStore *raftboltdb.BoltStore
+		boltStore, err := raftboltdb.NewBoltStore(filepath.Join(config.RaftStoreDir, raftDbFileName))
+		if err != nil {
+			return nil, nil, fmt.Errorf("new bolt store: %s", err)
+		}
+		stableStore = boltStore
+
+		logStore, err = raft.NewLogCache(raftLogCacheSize, boltStore)
+		if err != nil {
+			return nil, nil, fmt.Errorf("new log cache: %s", err)
+		}
 	}
 
 	fsm := &fsm{
@@ -122,7 +141,7 @@ func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 	}
 
 	// Instantiate the Raft systems.
-	newRaft, err := raft.NewRaft(raftConfig, fsm, logStore, logStore, snapshots, transport)
+	newRaft, err := raft.NewRaft(raftConfig, fsm, logStore, stableStore, snapshots, transport)
 
 	// we all assume this is a brandnew cluster if no peers are being
 	// supplied in the config

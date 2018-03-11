@@ -19,7 +19,7 @@ package cluster
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"os"
+	// "os"
 	"testing"
 	"time"
 )
@@ -30,6 +30,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 		RaftPort:     9876,
 		ServicePort:  9877,
 		RaftStoreDir: raftDbPath1,
+		isDevMode:    true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
 	assert.Nil(t, err)
@@ -45,6 +46,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 		ServicePort:  6780,
 		RaftStoreDir: raftDbPath2,
 		Peers:        peers,
+		isDevMode:    true,
 	}
 	store2, err := createNewConsensusStore(cfg2)
 	assert.Nil(t, err)
@@ -56,6 +58,6 @@ func TestConsensusStoreBasic(t *testing.T) {
 	assert.Nil(t, err)
 	err = store2.Close()
 	assert.Nil(t, err)
-	assert.Nil(t, os.RemoveAll(raftDbPath1))
-	assert.Nil(t, os.RemoveAll(raftDbPath2))
+	// assert.Nil(t, os.RemoveAll(raftDbPath1))
+	// assert.Nil(t, os.RemoveAll(raftDbPath2))
 }
