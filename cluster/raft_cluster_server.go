@@ -19,7 +19,7 @@ package cluster
 import (
 	"context"
 	// "github.com/mhelmich/carbon-copy-go/pb"
-	"carbon-grid-go/pb"
+	"carbon-copy-go/pb"
 	"fmt"
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
@@ -39,7 +39,10 @@ func (rcs *raftClusterServerImpl) JoinRaftCluster(ctx context.Context, req *pb.R
 		logger.Infof("Adding new peer with id: %s addr: %s", req.Id, addr)
 		f := rcs.r.AddVoter(raft.ServerID(req.Id), raft.ServerAddress(addr), 0, raftTimeout)
 		err := f.Error()
-		logger.Infof("Error : %s", err)
+
+		if err != nil {
+			logger.Infof("Couldn't add peer %s: %s", addr, err)
+		}
 
 		return &pb.RaftJoinResponse{
 			Ok: err == nil,
@@ -55,7 +58,11 @@ func (rcs *raftClusterServerImpl) JoinRaftCluster(ctx context.Context, req *pb.R
 			logger.Warnf("Leader address looks weird: %s", leaderAddr)
 		}
 	}
-	return nil, nil
+
+	// by default we report unsuccessful processing of a join request
+	return &pb.RaftJoinResponse{
+		Ok: false,
+	}, nil
 }
 
 func (rcs *raftClusterServerImpl) Get(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {

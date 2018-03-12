@@ -20,7 +20,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	// "github.com/mhelmich/carbon-copy-go/pb"
-	"carbon-grid-go/pb"
+	"carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"

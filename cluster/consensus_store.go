@@ -18,7 +18,7 @@ package cluster
 
 import (
 	// "github.com/mhelmich/carbon-copy-go/pb"
-	"carbon-grid-go/pb"
+	"carbon-copy-go/pb"
 	"context"
 	"crypto/rand"
 	"fmt"
@@ -43,7 +43,7 @@ const (
 	raftLogCacheSize    = 512
 )
 
-func createNewConsensusStore(config ConsensusStoreConfig) (*consensusStoreImpl, error) {
+func createNewConsensusStore(config consensusStoreConfig) (*consensusStoreImpl, error) {
 	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	hn, _ := os.Hostname()
 	config.logger = log.WithFields(log.Fields{
@@ -82,15 +82,19 @@ type consensusStoreImpl struct {
 	raftValueServer *grpc.Server
 }
 
-func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fsm, error) {
+func createRaft(config consensusStoreConfig, raftNodeId string) (*raft.Raft, *fsm, error) {
 	var err error
 
 	// Setup Raft configuration.
 	raftConfig := raft.DefaultConfig()
 	raftConfig.LocalID = raft.ServerID(raftNodeId)
 	raftConfig.Logger = golanglog.New(config.logger.Writer(), "", 0)
-	localhost := fmt.Sprintf(":%d", config.RaftPort)
+	hostname, err := os.Hostname()
+	if err != nil {
+		config.logger.Panicf("Hostname error: %s", err)
+	}
 
+	localhost := fmt.Sprintf("%s:%d", hostname, config.RaftPort)
 	// Setup Raft communication.
 	addr, err := net.ResolveTCPAddr("tcp", localhost)
 	if err != nil {
@@ -170,13 +174,12 @@ func createRaft(config ConsensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 	return newRaft, fsm, err
 }
 
-func createValueService(config ConsensusStoreConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
+func createValueService(config consensusStoreConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
 	if config.Peers != nil && len(config.Peers) > 0 {
-		// hostname, err := os.Hostname()
-		// if err != nil {
-		// 	config.logger.Panicf("Hostname error: %s", err)
-		// }
-		hostname := "localhost"
+		hostname, err := os.Hostname()
+		if err != nil {
+			config.logger.Panicf("Hostname error: %s", err)
+		}
 
 		joinReq := &pb.RaftJoinRequest{
 			Host: hostname,
@@ -199,13 +202,15 @@ func createValueService(config ConsensusStoreConfig, r *raft.Raft, raftNodeId st
 					joinedRaft = true
 					break
 				} else {
-					config.logger.Warnf("Asked %s to join raft answer: %v", peer, joinResp)
+					config.logger.Warnf("Asked %s to join raft answer: %v", peer, joinResp.Ok)
 				}
 			} else {
 				config.logger.Warnf("Couldn't connect to %s: %s", peer, err)
 			}
 		}
 
+		// After we looped through all peers and we're not able to connect to the master,
+		// then we're dead in water.
 		if !joinedRaft {
 			return nil, fmt.Errorf("Wasn't able to talk to any of the peers %v", config.Peers)
 		}

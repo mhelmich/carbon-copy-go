@@ -34,14 +34,14 @@ import (
 	// "github.com/hashicorp/serf/serf"
 )
 
-func TestEtcdCreateConsensus(t *testing.T) {
+func _TestEtcdCreateConsensus(t *testing.T) {
 	etcd, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
 	assert.NotNil(t, etcd.etcdSession.Lease())
 	assert.Nil(t, etcd.close())
 }
 
-func TestEtcdPutGet(t *testing.T) {
+func _TestEtcdPutGet(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
@@ -54,7 +54,7 @@ func TestEtcdPutGet(t *testing.T) {
 	assert.Nil(t, etcd.close())
 }
 
-func TestEtcdPutGetExpireGet(t *testing.T) {
+func _TestEtcdPutGetExpireGet(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
@@ -74,7 +74,7 @@ func TestEtcdPutGetExpireGet(t *testing.T) {
 	assert.Nil(t, etcd2.close())
 }
 
-func TestEtcdPutIfAbsent(t *testing.T) {
+func _TestEtcdPutIfAbsent(t *testing.T) {
 	key := "key_key_key"
 	val := "val_val_val"
 
@@ -99,7 +99,7 @@ func TestEtcdPutIfAbsent(t *testing.T) {
 	assert.Nil(t, etcd1.close())
 }
 
-func TestEtcdGetSortedRange(t *testing.T) {
+func _TestEtcdGetSortedRange(t *testing.T) {
 	count := 17
 	key := "key_key_key_"
 	etcd1, err := createNewEtcdConsensus(context.Background())
@@ -119,7 +119,7 @@ func TestEtcdGetSortedRange(t *testing.T) {
 	assert.Nil(t, etcd1.close())
 }
 
-func TestEtcdWatchKeyPrefixValuesPresentOnly(t *testing.T) {
+func _TestEtcdWatchKeyPrefixValuesPresentOnly(t *testing.T) {
 	commonPrefix := "prefix___"
 	etcd1, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)
@@ -155,7 +155,7 @@ func TestEtcdWatchKeyPrefixValuesPresentOnly(t *testing.T) {
 	assert.Nil(t, etcd1.close())
 }
 
-func TestEtcdWatchKeyPrefixValuesPresentAndNewOnesSet(t *testing.T) {
+func _TestEtcdWatchKeyPrefixValuesPresentAndNewOnesSet(t *testing.T) {
 	commonPrefix := "prefix___"
 	etcd1, err := createNewEtcdConsensus(context.Background())
 	assert.Nil(t, err)

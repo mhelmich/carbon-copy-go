@@ -22,7 +22,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	// "github.com/mhelmich/carbon-copy-go/pb"
-	"carbon-grid-go/pb"
+	"carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

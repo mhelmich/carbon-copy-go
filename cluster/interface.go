@@ -26,7 +26,7 @@ type NodeConnectionInfo struct {
 	nodeAddress string
 }
 
-type ConsensusStoreConfig struct {
+type consensusStoreConfig struct {
 	RaftPort     int
 	RaftStoreDir string
 	Peers        []string
