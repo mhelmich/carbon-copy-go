@@ -26,7 +26,7 @@ message NodeInfo {
     // the port on which the raft library operates
     int32 raftPort = 3;
     // the port on which the grpc consensus protocol operates
-    int32 consensusPort = 4;
+    int32 valueServerPort = 4;
     // the port on which the grid protocol operates
     int32 gridPort = 5;
 }
@@ -41,12 +41,12 @@ enum RaftOps {
 message RaftCommand {
     RaftOps cmd = 1;
     string key = 2;
-    string value = 3;
+    bytes value = 3;
 }
 
 // I decided to cheap this out and make all of this a proto
 message RaftSnapshot {
-    map<string, string> snap = 1;
+    map<string, bytes> snap = 1;
 }
 
 // This service definition fulfills two different purposes:
@@ -69,7 +69,6 @@ message RaftJoinRequest {
     string host = 1;
     int32 port = 2;
     string id = 3;
-    string serverAddress = 4;
 }
 
 message RaftJoinResponse {
@@ -82,12 +81,12 @@ message GetReq {
 }
 
 message GetResp {
-    string value = 1;
+    bytes value = 1;
 }
 
 message SetReq {
     string key = 1;
-    string value = 2;
+    bytes value = 2;
 }
 
 message SetResp {

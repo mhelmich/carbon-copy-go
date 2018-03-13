@@ -143,7 +143,7 @@ func createRaft(config consensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 
 	fsm := &fsm{
 		logger: config.logger,
-		state:  make(map[string]string),
+		state:  make(map[string][]byte),
 		mutex:  sync.Mutex{},
 	}
 
@@ -232,14 +232,14 @@ func createValueService(config consensusStoreConfig, r *raft.Raft, raftNodeId st
 	return grpcServer, nil
 }
 
-func (cs *consensusStoreImpl) Get(key string) (string, error) {
+func (cs *consensusStoreImpl) Get(key string) ([]byte, error) {
 	cs.raftFsm.mutex.Lock()
 	defer cs.raftFsm.mutex.Unlock()
 	// this might be a stale read :/
 	return cs.raftFsm.state[key], nil
 }
 
-func (cs *consensusStoreImpl) Set(key string, value string) error {
+func (cs *consensusStoreImpl) Set(key string, value []byte) error {
 	cmd := &pb.RaftCommand{
 		Cmd:   pb.RaftOps_Set,
 		Key:   key,

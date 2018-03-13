@@ -28,7 +28,7 @@ import (
 )
 
 type fsm struct {
-	state  map[string]string
+	state  map[string][]byte
 	mutex  sync.Mutex
 	logger *log.Entry
 }
@@ -37,7 +37,7 @@ type fsm struct {
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	cmdProto := &pb.RaftCommand{}
 	if err := proto.Unmarshal(l.Data, cmdProto); err != nil {
-		log.Panicf("Shutting down as I can't apply a raft change: %s", err)
+		f.logger.Panicf("Shutting down as I can't apply a raft change: %s", err)
 	}
 
 	switch cmdProto.Cmd {
@@ -57,7 +57,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	// copy the entire map
-	o := make(map[string]string)
+	o := make(map[string][]byte)
 	for k, v := range f.state {
 		o[k] = v
 	}
@@ -83,7 +83,7 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	return nil
 }
 
-func (f *fsm) applySet(key, value string) interface{} {
+func (f *fsm) applySet(key string, value []byte) interface{} {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	f.state[key] = value
@@ -98,7 +98,7 @@ func (f *fsm) applyDelete(key string) interface{} {
 }
 
 type fsmSnapshot struct {
-	store map[string]string
+	store map[string][]byte
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {

@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/oklog/ulid"
+	// log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
-	value := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
 	err = store1.Set(key, value)
 	assert.Nil(t, err)
 
