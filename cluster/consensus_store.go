@@ -43,9 +43,13 @@ const (
 	raftLogCacheSize    = 512
 )
 
-func createNewConsensusStore(config consensusStoreConfig) (*consensusStoreImpl, error) {
+func createNewConsensusStore(config clusterConfig) (*consensusStoreImpl, error) {
 	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	config.nodeId = raftNodeId
+	config.raftNotifyCh = make(chan bool, 1)
+
 	hn, _ := os.Hostname()
+	config.AdvertizedHostname = hn
 	config.logger = log.WithFields(log.Fields{
 		"raftNodeId": raftNodeId,
 		"hostname":   hn,
@@ -69,6 +73,7 @@ func createNewConsensusStore(config consensusStoreConfig) (*consensusStoreImpl, 
 		raftFsm:         raftFsm,
 		raftValueServer: grpcServer,
 		logger:          config.logger,
+		raftNotifyCh:    config.raftNotifyCh,
 	}, nil
 }
 
@@ -80,15 +85,17 @@ type consensusStoreImpl struct {
 	raft            *raft.Raft
 	raftFsm         *fsm
 	raftValueServer *grpc.Server
+	raftNotifyCh    chan bool
 }
 
-func createRaft(config consensusStoreConfig, raftNodeId string) (*raft.Raft, *fsm, error) {
+func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, error) {
 	var err error
 
 	// Setup Raft configuration.
 	raftConfig := raft.DefaultConfig()
 	raftConfig.LocalID = raft.ServerID(raftNodeId)
-	raftConfig.Logger = golanglog.New(config.logger.Writer(), "", 0)
+	raftConfig.Logger = golanglog.New(config.logger.Writer(), "raft", 0)
+	raftConfig.NotifyCh = config.raftNotifyCh
 	hostname, err := os.Hostname()
 	if err != nil {
 		config.logger.Panicf("Hostname error: %s", err)
@@ -106,17 +113,17 @@ func createRaft(config consensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 		return nil, nil, err
 	}
 
-	var snapshots raft.SnapshotStore
+	var snapshotStore raft.SnapshotStore
 	var logStore raft.LogStore
 	var stableStore raft.StableStore
 
 	if config.isDevMode {
 		logStore = raft.NewInmemStore()
 		stableStore = raft.NewInmemStore()
-		snapshots = raft.NewInmemSnapshotStore()
+		snapshotStore = raft.NewInmemSnapshotStore()
 	} else {
 		// Create the snapshot store. This allows the Raft to truncate the log.
-		snapshots, err = raft.NewFileSnapshotStore(config.RaftStoreDir, retainSnapshotCount, config.logger.Writer())
+		snapshotStore, err = raft.NewFileSnapshotStore(config.RaftStoreDir, retainSnapshotCount, config.logger.Writer())
 		if err != nil {
 			return nil, nil, fmt.Errorf("file snapshot store: %s", err)
 		}
@@ -148,33 +155,38 @@ func createRaft(config consensusStoreConfig, raftNodeId string) (*raft.Raft, *fs
 	}
 
 	// Instantiate the Raft systems.
-	newRaft, err := raft.NewRaft(raftConfig, fsm, logStore, stableStore, snapshots, transport)
+	newRaft, err := raft.NewRaft(raftConfig, fsm, logStore, stableStore, snapshotStore, transport)
 
 	// we all assume this is a brandnew cluster if no peers are being
 	// supplied in the config
 	if config.Peers == nil || len(config.Peers) == 0 {
-		config.logger.Infof("Bootstrapping cluster with %v and %v", transport.LocalAddr(), raftConfig.LocalID)
-		configuration := raft.Configuration{
-			Servers: []raft.Server{
-				{
-					ID:      raftConfig.LocalID,
-					Address: transport.LocalAddr(),
+		hasExistingState, _ := raft.HasExistingState(logStore, stableStore, snapshotStore)
+		if !hasExistingState {
+			config.logger.Infof("Bootstrapping cluster with %v and %v", transport.LocalAddr(), raftConfig.LocalID)
+			configuration := raft.Configuration{
+				Servers: []raft.Server{
+					{
+						ID:      raftConfig.LocalID,
+						Address: transport.LocalAddr(),
+					},
 				},
-			},
-		}
+			}
 
-		f := newRaft.BootstrapCluster(configuration)
-		err := f.Error()
-		config.logger.Infof("Result of bootstrap %v", err)
-		if err != nil {
-			return nil, nil, err
+			f := newRaft.BootstrapCluster(configuration)
+			err := f.Error()
+			config.logger.Infof("Result of bootstrap %v", err)
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			config.logger.Info("Raft has existing state. Bootstrapping new cluster interrupted.")
 		}
 	}
 
 	return newRaft, fsm, err
 }
 
-func createValueService(config consensusStoreConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
+func createValueService(config clusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
 	if config.Peers != nil && len(config.Peers) > 0 {
 		hostname, err := os.Hostname()
 		if err != nil {

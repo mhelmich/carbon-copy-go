@@ -29,6 +29,8 @@ message NodeInfo {
     int32 valueServerPort = 4;
     // the port on which the grid protocol operates
     int32 gridPort = 5;
+    // the port on which serf operates
+    int32 serfPort = 6;
 }
 
 // these are the only two raft operations possible

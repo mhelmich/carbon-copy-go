@@ -28,7 +28,7 @@ import (
 
 func TestConsensusStoreBasic(t *testing.T) {
 	raftDbPath1 := "./db.raft1.db"
-	cfg1 := consensusStoreConfig{
+	cfg1 := clusterConfig{
 		RaftPort:     9876,
 		ServicePort:  9877,
 		RaftStoreDir: raftDbPath1,
@@ -46,7 +46,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
 	raftDbPath2 := "./db.raft2.db"
-	cfg2 := consensusStoreConfig{
+	cfg2 := clusterConfig{
 		RaftPort:     6789,
 		ServicePort:  6780,
 		RaftStoreDir: raftDbPath2,
@@ -81,7 +81,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 
 func TestConsensusStoreHopscotch(t *testing.T) {
 	raftDbPath1 := "./db.raft1.db"
-	cfg1 := consensusStoreConfig{
+	cfg1 := clusterConfig{
 		RaftPort:     9876,
 		ServicePort:  9877,
 		RaftStoreDir: raftDbPath1,
@@ -99,7 +99,7 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
 	raftDbPath2 := "./db.raft2.db"
-	cfg2 := consensusStoreConfig{
+	cfg2 := clusterConfig{
 		RaftPort:     6789,
 		ServicePort:  6780,
 		RaftStoreDir: raftDbPath2,
@@ -118,7 +118,7 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 	peers2 := make([]string, 1)
 	peers2[0] = fmt.Sprintf("localhost:%d", cfg2.ServicePort)
 	raftDbPath3 := "./db.raft3.db"
-	cfg3 := consensusStoreConfig{
+	cfg3 := clusterConfig{
 		RaftPort:     4567,
 		ServicePort:  7654,
 		RaftStoreDir: raftDbPath3,

@@ -26,13 +26,17 @@ type NodeConnectionInfo struct {
 	nodeAddress string
 }
 
-type consensusStoreConfig struct {
-	RaftPort     int
-	RaftStoreDir string
-	Peers        []string
-	ServicePort  int
-	logger       *log.Entry
-	isDevMode    bool
+type clusterConfig struct {
+	RaftPort           int
+	RaftStoreDir       string
+	Peers              []string
+	AdvertizedHostname string
+	ServicePort        int
+	SerfPort           int
+	nodeId             string
+	raftNotifyCh       chan bool
+	logger             *log.Entry
+	isDevMode          bool
 }
 
 type Cluster interface {

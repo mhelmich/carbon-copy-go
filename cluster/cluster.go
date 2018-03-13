@@ -23,7 +23,6 @@ import (
 	"carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"strconv"
-	// "github.com/hashicorp/serf/serf"
 )
 
 const (
