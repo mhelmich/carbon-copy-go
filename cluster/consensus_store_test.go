@@ -128,3 +128,54 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, store3)
 }
+
+func TestConsensusStoreConsistentGet(t *testing.T) {
+	raftDbPath1 := "./db.raft1.db"
+	cfg1 := clusterConfig{
+		RaftPort:     9876,
+		ServicePort:  9877,
+		RaftStoreDir: raftDbPath1,
+		isDevMode:    true,
+	}
+	store1, err := createNewConsensusStore(cfg1)
+	assert.Nil(t, err)
+	assert.NotNil(t, store1)
+
+	// this is just to give the node some time to settle
+	// things are happening pretty much immediately
+	// I'm not waiting for anything
+	time.Sleep(2 * time.Second)
+
+	peers := make([]string, 1)
+	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
+	raftDbPath2 := "./db.raft2.db"
+	cfg2 := clusterConfig{
+		RaftPort:     6789,
+		ServicePort:  6780,
+		RaftStoreDir: raftDbPath2,
+		Peers:        peers,
+		isDevMode:    true,
+	}
+	store2, err := createNewConsensusStore(cfg2)
+	assert.Nil(t, err)
+	assert.NotNil(t, store2)
+
+	// this is just to give the node some time to settle
+	// things are happening pretty much immediately
+	// I'm not waiting for anything
+	time.Sleep(1 * time.Second)
+
+	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
+	err = store1.Set(key, value)
+	assert.Nil(t, err)
+
+	val, err := store2.ConsistentGet(key)
+	assert.Nil(t, err)
+	assert.Equal(t, value, val)
+
+	err = store1.Close()
+	assert.Nil(t, err)
+	err = store2.Close()
+	assert.Nil(t, err)
+}

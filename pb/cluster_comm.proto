@@ -37,6 +37,7 @@ message NodeInfo {
 enum RaftOps {
     Set = 0;
     Delete = 1;
+    ConsistentGet = 2;
 }
 
 // the raft api enforces string as key and value type

@@ -232,6 +232,21 @@ func createValueService(config clusterConfig, r *raft.Raft, raftNodeId string) (
 	return grpcServer, nil
 }
 
+func (cs *consensusStoreImpl) ConsistentGet(key string) ([]byte, error) {
+	cmd := &pb.RaftCommand{
+		Cmd: pb.RaftOps_ConsistentGet,
+		Key: key,
+	}
+
+	f := cs.raftApply(cmd)
+	if f.Error() != nil {
+		return nil, f.Error()
+	} else {
+		resp := f.Response().(raftApplyResponse)
+		return resp.value, resp.err
+	}
+}
+
 func (cs *consensusStoreImpl) Get(key string) ([]byte, error) {
 	cs.raftFsm.mutex.Lock()
 	defer cs.raftFsm.mutex.Unlock()
@@ -246,7 +261,7 @@ func (cs *consensusStoreImpl) Set(key string, value []byte) error {
 		Value: value,
 	}
 
-	return cs.raftApply(cmd)
+	return cs.raftApply(cmd).Error()
 }
 
 func (cs *consensusStoreImpl) Delete(key string) error {
@@ -255,25 +270,48 @@ func (cs *consensusStoreImpl) Delete(key string) error {
 		Key: key,
 	}
 
-	return cs.raftApply(cmd)
+	return cs.raftApply(cmd).Error()
 }
 
-func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) error {
+func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) raft.ApplyFuture {
 	if cs.raft.State() != raft.Leader {
-		return fmt.Errorf("I'm not the leader")
+		return localApplyFuture{fmt.Errorf("I'm not the leader")}
 	}
 
 	buf, err := proto.Marshal(cmd)
 	if err != nil {
-		return fmt.Errorf("Can't marshall proto: %s", err)
+		return localApplyFuture{fmt.Errorf("Can't marshall proto: %s", err)}
 	}
 
 	f := cs.raft.Apply(buf, raftTimeout)
-	return f.Error()
+
+	switch v := f.(type) {
+	case raft.ApplyFuture:
+		cs.logger.Infof("apply future: %v", v)
+		return v
+	default:
+		return localApplyFuture{}
+	}
 }
 
 func (cs *consensusStoreImpl) Close() error {
 	f := cs.raft.Shutdown()
 	cs.raftValueServer.Stop()
 	return f.Error()
+}
+
+type localApplyFuture struct {
+	err error
+}
+
+func (f localApplyFuture) Error() error {
+	return f.err
+}
+
+func (f localApplyFuture) Response() interface{} {
+	return nil
+}
+
+func (f localApplyFuture) Index() uint64 {
+	return 0
 }

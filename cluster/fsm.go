@@ -17,6 +17,7 @@
 package cluster
 
 import (
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	"github.com/mhelmich/carbon-copy-go/pb"
@@ -25,6 +26,12 @@ import (
 	"io/ioutil"
 	"sync"
 )
+
+// I'm sneaking this struct in here as response for a consistent read
+type raftApplyResponse struct {
+	err   error
+	value []byte
+}
 
 type fsm struct {
 	state  map[string][]byte
@@ -44,11 +51,14 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		return f.applySet(cmdProto.GetKey(), cmdProto.GetValue())
 	case pb.RaftOps_Delete:
 		return f.applyDelete(cmdProto.GetKey())
+	case pb.RaftOps_ConsistentGet:
+		f.logger.Info("Doing consistent get")
+		return f.applyConsistentGet(cmdProto.GetKey())
 	default:
-
+		return &raftApplyResponse{
+			err: fmt.Errorf("Unknown command: %v", cmdProto.Cmd),
+		}
 	}
-
-	return nil
 }
 
 // Snapshot returns a snapshot of the key-value store.
@@ -80,6 +90,17 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	// because the docs seem to allow it
 	f.state = snapProto.Snap
 	return nil
+}
+
+func (f *fsm) applyConsistentGet(key string) interface{} {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	buf, ok := f.state[key]
+	f.logger.Infof("applyConsistentGet -- key: %s - ok: %t - buf: %v", key, ok, buf)
+	return &raftApplyResponse{
+		err:   nil,
+		value: buf,
+	}
 }
 
 func (f *fsm) applySet(key string, value []byte) interface{} {
