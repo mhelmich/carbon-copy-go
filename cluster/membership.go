@@ -22,40 +22,59 @@ import (
 	golanglog "log"
 )
 
-func createSerf(config clusterConfig) (*serf.Serf, error) {
-	serfEventCh := make(chan serf.Event, 256)
+const (
+	serfEventChannelBufferSize = 256
+)
 
+func createSerf(config clusterConfig) (*membership, error) {
 	serfConfig := serf.DefaultConfig()
 	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf", 0)
-	serfConfig.EventCh = serfEventCh
-	serfConfig.MemberlistConfig.BindAddr = config.AdvertizedHostname
+	// it's important that this guy never blocks
+	serfConfig.EventCh = make(chan serf.Event, serfEventChannelBufferSize)
+	serfConfig.MemberlistConfig.BindAddr = config.hostname
 	serfConfig.MemberlistConfig.BindPort = config.SerfPort
 
-	go handleSerfEvents(serfEventCh)
+	s, err := serf.Create(serfConfig)
+	if err != nil {
+		return nil, err
+	}
 
-	return serf.Create(serfConfig)
+	m := &membership{
+		serf:   s,
+		logger: config.logger,
+	}
+
+	go m.handleSerfEvents(serfConfig.EventCh)
+	return m, nil
 }
 
 type membership struct {
-	s *serf.Serf
+	serf   *serf.Serf
+	logger *log.Entry
 }
 
-func handleSerfEvents(ch chan serf.Event) {
+func (m *membership) handleSerfEvents(ch chan serf.Event) {
 	for {
 		e := <-ch
 		switch e.EventType() {
 		case serf.EventMemberJoin:
-			handleMemberJoined(e.(serf.MemberEvent))
+			m.handleMemberJoined(e.(serf.MemberEvent))
 		case serf.EventMemberLeave:
-			handleMemberLeave(e.(serf.MemberEvent))
+			m.handleMemberLeave(e.(serf.MemberEvent))
 		case serf.EventMemberFailed:
-			handleMemberFailed(e.(serf.MemberEvent))
+			m.handleMemberFailed(e.(serf.MemberEvent))
 		}
 	}
 }
 
-func handleMemberJoined(me serf.MemberEvent) {}
+func (m *membership) handleMemberJoined(me serf.MemberEvent) {
+	m.logger.Infof("Member joined: %v", me)
+}
 
-func handleMemberLeave(me serf.MemberEvent) {}
+func (m *membership) handleMemberLeave(me serf.MemberEvent) {
+	m.logger.Infof("Member left: %v", me)
+}
 
-func handleMemberFailed(me serf.MemberEvent) {}
+func (m *membership) handleMemberFailed(me serf.MemberEvent) {
+	m.logger.Infof("Member failed: %v", me)
+}

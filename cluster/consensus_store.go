@@ -47,12 +47,11 @@ func createNewConsensusStore(config clusterConfig) (*consensusStoreImpl, error) 
 	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	config.nodeId = raftNodeId
 	config.raftNotifyCh = make(chan bool, 1)
-
 	hn, _ := os.Hostname()
-	config.AdvertizedHostname = hn
+	config.hostname = hn
 	config.logger = log.WithFields(log.Fields{
 		"raftNodeId": raftNodeId,
-		"hostname":   hn,
+		"hostname":   config.hostname,
 		"raftPort":   config.RaftPort,
 	})
 
@@ -96,12 +95,8 @@ func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, erro
 	raftConfig.LocalID = raft.ServerID(raftNodeId)
 	raftConfig.Logger = golanglog.New(config.logger.Writer(), "raft", 0)
 	raftConfig.NotifyCh = config.raftNotifyCh
-	hostname, err := os.Hostname()
-	if err != nil {
-		config.logger.Panicf("Hostname error: %s", err)
-	}
 
-	localhost := fmt.Sprintf("%s:%d", hostname, config.RaftPort)
+	localhost := fmt.Sprintf("%s:%d", config.hostname, config.RaftPort)
 	// Setup Raft communication.
 	addr, err := net.ResolveTCPAddr("tcp", localhost)
 	if err != nil {
@@ -188,18 +183,12 @@ func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, erro
 
 func createValueService(config clusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
 	if config.Peers != nil && len(config.Peers) > 0 {
-		hostname, err := os.Hostname()
-		if err != nil {
-			config.logger.Panicf("Hostname error: %s", err)
-		}
-
+		joinedRaft := false
 		joinReq := &pb.RaftJoinRequest{
-			Host: hostname,
+			Host: config.hostname,
 			Port: int32(config.RaftPort),
 			Id:   raftNodeId,
 		}
-
-		joinedRaft := false
 
 		for _, peer := range config.Peers {
 			config.logger.Infof("Connecting to peer %s", peer)
@@ -228,7 +217,7 @@ func createValueService(config clusterConfig, r *raft.Raft, raftNodeId string) (
 		}
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.ServicePort))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.ServicePort))
 	if err != nil {
 		return nil, err
 	}
