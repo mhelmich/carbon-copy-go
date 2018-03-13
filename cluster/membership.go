@@ -30,6 +30,8 @@ func createSerf(config clusterConfig) (*membership, error) {
 	serfConfig := serf.DefaultConfig()
 	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf", 0)
 	// it's important that this guy never blocks
+	// if it blocks, the sender will block and therefore stop applying log entries
+	// which means we're not up to date with the current cluster state anymore
 	serfConfig.EventCh = make(chan serf.Event, serfEventChannelBufferSize)
 	serfConfig.MemberlistConfig.BindAddr = config.hostname
 	serfConfig.MemberlistConfig.BindPort = config.SerfPort
