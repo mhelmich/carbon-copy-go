@@ -17,9 +17,11 @@
 package cluster
 
 import (
+	"fmt"
 	"github.com/hashicorp/serf/serf"
 	log "github.com/sirupsen/logrus"
 	golanglog "log"
+	"os"
 )
 
 const (
@@ -32,51 +34,101 @@ func createSerf(config clusterConfig) (*membership, error) {
 	// it's important that this guy never blocks
 	// if it blocks, the sender will block and therefore stop applying log entries
 	// which means we're not up to date with the current cluster state anymore
-	serfConfig.EventCh = make(chan serf.Event, serfEventChannelBufferSize)
+	serfEventCh := make(chan serf.Event, serfEventChannelBufferSize)
+	serfConfig.EventCh = serfEventCh
+	serfConfig.NodeName = config.nodeId
+	serfConfig.EnableNameConflictResolution = false
 	serfConfig.MemberlistConfig.BindAddr = config.hostname
 	serfConfig.MemberlistConfig.BindPort = config.SerfPort
+
+	if config.SerfSnapshotPath != "" {
+		if err := os.MkdirAll(config.SerfSnapshotPath, 0755); err != nil {
+			return nil, fmt.Errorf("couldn't create dirs: %s", err)
+		}
+		serfConfig.SnapshotPath = config.SerfSnapshotPath
+	} else {
+		config.logger.Warn("Starting serf without a persistent snapshot!")
+	}
+
+	serfConfig.Tags = make(map[string]string)
+	serfConfig.Tags["role"] = "carbon-copy"
+	serfConfig.Tags["raft_addr"] = fmt.Sprintf("%s:%d", config.hostname, config.RaftPort)
+	serfConfig.Tags["serf_addr"] = fmt.Sprintf("%s:%d", config.hostname, config.SerfPort)
+	serfConfig.Tags["grid_addr"] = fmt.Sprintf("%s:%d", config.hostname, config.ServicePort)
 
 	s, err := serf.Create(serfConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	m := &membership{
-		serf:   s,
-		logger: config.logger,
+	// if we have peers, let's join the cluster
+	if config.Peers != nil && len(config.Peers) > 0 {
+		numContactedNodes, err := s.Join(config.Peers, true)
+
+		if err != nil {
+			return nil, fmt.Errorf("Can't connect to serf nodes: %s", err.Error())
+		} else if numContactedNodes == 0 {
+			return nil, fmt.Errorf("Wasn't able to connect to any serf node: %v", config.Peers)
+		} else {
+			config.logger.Infof("Contacted %d serf nodes! List: %v", numContactedNodes, config.Peers)
+		}
+	} else {
+		config.logger.Info("No peers defined")
 	}
 
-	go m.handleSerfEvents(serfConfig.EventCh)
+	m := &membership{
+		serf:           s,
+		logger:         config.logger,
+		currentCluster: make(map[string]map[string]string),
+	}
+
+	go m.handleSerfEvents(serfEventCh)
 	return m, nil
 }
 
 type membership struct {
-	serf   *serf.Serf
-	logger *log.Entry
+	serf           *serf.Serf
+	currentCluster map[string]map[string]string
+	logger         *log.Entry
 }
 
-func (m *membership) handleSerfEvents(ch chan serf.Event) {
+func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
 	for {
-		e := <-ch
-		switch e.EventType() {
-		case serf.EventMemberJoin:
-			m.handleMemberJoined(e.(serf.MemberEvent))
-		case serf.EventMemberLeave:
-			m.handleMemberLeave(e.(serf.MemberEvent))
-		case serf.EventMemberFailed:
-			m.handleMemberFailed(e.(serf.MemberEvent))
+		select {
+		case e := <-ch:
+			if e == nil {
+				// seems the channel was closed
+				// let's stop this go routine
+				break
+			}
+
+			switch e.EventType() {
+			case serf.EventMemberJoin:
+				m.handleMemberChangeEvent(e.(serf.MemberEvent))
+			case serf.EventMemberLeave:
+				m.handleMemberChangeEvent(e.(serf.MemberEvent))
+			case serf.EventMemberFailed:
+				m.handleMemberChangeEvent(e.(serf.MemberEvent))
+			}
+		case <-m.serf.ShutdownCh():
+			return
 		}
 	}
 }
 
-func (m *membership) handleMemberJoined(me serf.MemberEvent) {
-	m.logger.Infof("Member joined: %v", me)
+func (m *membership) handleMemberChangeEvent(me serf.MemberEvent) {
+	m.logger.Infof("Member event: current members: %v", me.Members)
+	for _, item := range me.Members {
+		m.currentCluster[item.Name] = item.Tags
+	}
 }
 
-func (m *membership) handleMemberLeave(me serf.MemberEvent) {
-	m.logger.Infof("Member left: %v", me)
+func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
+	v, ok := m.currentCluster[nodeId]
+	return v, ok
 }
 
-func (m *membership) handleMemberFailed(me serf.MemberEvent) {
-	m.logger.Infof("Member failed: %v", me)
+func (m *membership) close() {
+	m.serf.Leave()
+	m.serf.Shutdown()
 }

@@ -27,16 +27,17 @@ type NodeConnectionInfo struct {
 }
 
 type clusterConfig struct {
-	RaftPort     int
-	RaftStoreDir string
-	Peers        []string
-	hostname     string
-	ServicePort  int
-	SerfPort     int
-	nodeId       string
-	raftNotifyCh chan bool
-	logger       *log.Entry
-	isDevMode    bool
+	RaftPort         int
+	RaftStoreDir     string
+	Peers            []string
+	hostname         string
+	ServicePort      int
+	SerfPort         int
+	SerfSnapshotPath string
+	nodeId           string
+	raftNotifyCh     chan bool
+	logger           *log.Entry
+	isDevMode        bool
 }
 
 type Cluster interface {
