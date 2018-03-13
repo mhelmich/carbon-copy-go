@@ -19,8 +19,7 @@ package cluster
 import (
 	"context"
 	"github.com/golang/protobuf/proto"
-	// "github.com/mhelmich/carbon-copy-go/pb"
-	"carbon-copy-go/pb"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 )

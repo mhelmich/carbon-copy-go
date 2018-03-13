@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/oklog/ulid"
-	// log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"

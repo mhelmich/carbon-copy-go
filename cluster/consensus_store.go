@@ -17,14 +17,13 @@
 package cluster
 
 import (
-	// "github.com/mhelmich/carbon-copy-go/pb"
-	"carbon-copy-go/pb"
 	"context"
 	"crypto/rand"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

@@ -18,10 +18,9 @@ package cluster
 
 import (
 	"context"
-	// "github.com/mhelmich/carbon-copy-go/pb"
-	"carbon-copy-go/pb"
 	"fmt"
 	"github.com/hashicorp/raft"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
