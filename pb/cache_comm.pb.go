@@ -30,6 +30,8 @@ It has these top-level messages:
 	RaftSnapshot
 	RaftJoinRequest
 	RaftJoinResponse
+	RaftLeaderRequest
+	RaftLeaderResponse
 	GetReq
 	GetResp
 	SetReq

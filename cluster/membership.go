@@ -128,6 +128,14 @@ func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
 	return v, ok
 }
 
+func (m *membership) updateRaftStatus(status string) {
+	tags := make(map[string]string)
+	tags["raft_status"] = status
+	// this will update the nodes metadata and broadcast it out
+	// blocks until broadcasting was successful or timed out
+	m.serf.SetTags(tags)
+}
+
 func (m *membership) close() {
 	m.serf.Leave()
 	m.serf.Shutdown()

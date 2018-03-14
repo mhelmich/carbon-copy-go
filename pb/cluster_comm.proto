@@ -63,6 +63,8 @@ service RaftCluster {
     // The raft leader then adds the new node to the cluster (if appropriate) and sends back an ok.
     // The forward nature of this call is completely transparent to the caller.
     rpc joinRaftCluster(RaftJoinRequest) returns (RaftJoinResponse) {}
+    // This rpc is used to query a random node for the address of the raft leader.
+    rpc whoIsRaftLeader(RaftLeaderRequest) returns (RaftLeaderResponse) {}
     rpc get(GetReq) returns (GetResp) {}
     rpc set(SetReq) returns (SetResp) {}
     rpc delete(DeleteReq) returns (DeleteResp) {}
@@ -77,6 +79,14 @@ message RaftJoinRequest {
 message RaftJoinResponse {
     bool ok = 1;
     string error = 2;
+}
+
+message RaftLeaderRequest {}
+
+message RaftLeaderResponse {
+    string raftLeaderHost = 1;
+    int32 raftLeaderPort = 2;
+    string raftLeaderAddr = 3;
 }
 
 message GetReq {
