@@ -24,17 +24,6 @@ import (
 	"os"
 )
 
-// Cluster metadata is a flat map with a bunch of keys.
-// This metadata is kept track of and socialized by serf.
-// The map includes all information necessary to manage the cluster,
-// the membership to clusters and specific roles and tasks that need to be
-// fulfilled within the cluster.
-// serf_addr: <hostname>:<port> - the address on which serf for this node operates
-// raft_addr: <hostname>:<port> - the address on which raft for this node operates
-// raft_service_addr: <hostname>:<port> - the address on which the raft service for this node operates
-// raft_role: leader, voter, nonvoter, none - the role a particular node has in the raft cluster
-// grid_addr: <hostname>:<port> - the addres on which the grid messages are being exchanged
-
 const (
 	serfEventChannelBufferSize = 256
 	serfMDKeySerfAddr          = "serf_addr"
