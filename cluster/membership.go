@@ -24,13 +24,29 @@ import (
 	"os"
 )
 
+// Cluster metadata is a flat map with a bunch of keys.
+// This metadata is kept track of and socialized by serf.
+// The map includes all information necessary to manage the cluster,
+// the membership to clusters and specific roles and tasks that need to be
+// fulfilled within the cluster.
+// serf_addr: <hostname>:<port> - the address on which serf for this node operates
+// raft_addr: <hostname>:<port> - the address on which raft for this node operates
+// raft_service_addr: <hostname>:<port> - the address on which the raft service for this node operates
+// raft_role: leader, voter, nonvoter, none - the role a particular node has in the raft cluster
+// grid_addr: <hostname>:<port> - the addres on which the grid messages are being exchanged
+
 const (
 	serfEventChannelBufferSize = 256
+	serfMDKeySerfAddr          = "serf_addr"
+	serfMDKeyRaftAddr          = "raft_addr"
+	serfMDKeyRaftServiceAddr   = "raft_service_addr"
+	serfMDKeyRaftRole          = "raft_role"
+	serfMDKeyGridAddr          = "grid_addr"
 )
 
 func createSerf(config clusterConfig) (*membership, error) {
 	serfConfig := serf.DefaultConfig()
-	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf", 0)
+	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf ", 0)
 	// it's important that this guy never blocks
 	// if it blocks, the sender will block and therefore stop applying log entries
 	// which means we're not up to date with the current cluster state anymore
@@ -52,9 +68,9 @@ func createSerf(config clusterConfig) (*membership, error) {
 
 	serfConfig.Tags = make(map[string]string)
 	serfConfig.Tags["role"] = "carbon-copy"
-	serfConfig.Tags["raft_addr"] = fmt.Sprintf("%s:%d", config.hostname, config.RaftPort)
-	serfConfig.Tags["serf_addr"] = fmt.Sprintf("%s:%d", config.hostname, config.SerfPort)
-	serfConfig.Tags["grid_addr"] = fmt.Sprintf("%s:%d", config.hostname, config.ServicePort)
+	serfConfig.Tags[serfMDKeySerfAddr] = fmt.Sprintf("%s:%d", config.hostname, config.SerfPort)
+	serfConfig.Tags[serfMDKeyRaftAddr] = fmt.Sprintf("%s:%d", config.hostname, config.RaftPort)
+	serfConfig.Tags[serfMDKeyRaftServiceAddr] = fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort)
 
 	s, err := serf.Create(serfConfig)
 	if err != nil {

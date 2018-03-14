@@ -216,7 +216,7 @@ func createValueService(config clusterConfig, r *raft.Raft, raftNodeId string) (
 		}
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.ServicePort))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
 	if err != nil {
 		return nil, err
 	}

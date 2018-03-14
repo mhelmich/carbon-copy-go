@@ -28,10 +28,10 @@ import (
 func TestConsensusStoreBasic(t *testing.T) {
 	raftDbPath1 := "./db.raft1.db"
 	cfg1 := clusterConfig{
-		RaftPort:     9876,
-		ServicePort:  9877,
-		RaftStoreDir: raftDbPath1,
-		isDevMode:    true,
+		RaftPort:        9876,
+		RaftServicePort: 9877,
+		RaftStoreDir:    raftDbPath1,
+		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
 	assert.Nil(t, err)
@@ -43,14 +43,14 @@ func TestConsensusStoreBasic(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
+	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
 	raftDbPath2 := "./db.raft2.db"
 	cfg2 := clusterConfig{
-		RaftPort:     6789,
-		ServicePort:  6780,
-		RaftStoreDir: raftDbPath2,
-		Peers:        peers,
-		isDevMode:    true,
+		RaftPort:        6789,
+		RaftServicePort: 6780,
+		RaftStoreDir:    raftDbPath2,
+		Peers:           peers,
+		isDevMode:       true,
 	}
 	store2, err := createNewConsensusStore(cfg2)
 	assert.Nil(t, err)
@@ -81,10 +81,10 @@ func TestConsensusStoreBasic(t *testing.T) {
 func TestConsensusStoreHopscotch(t *testing.T) {
 	raftDbPath1 := "./db.raft1.db"
 	cfg1 := clusterConfig{
-		RaftPort:     9876,
-		ServicePort:  9877,
-		RaftStoreDir: raftDbPath1,
-		isDevMode:    true,
+		RaftPort:        9876,
+		RaftServicePort: 9877,
+		RaftStoreDir:    raftDbPath1,
+		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
 	assert.Nil(t, err)
@@ -96,14 +96,14 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
+	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
 	raftDbPath2 := "./db.raft2.db"
 	cfg2 := clusterConfig{
-		RaftPort:     6789,
-		ServicePort:  6780,
-		RaftStoreDir: raftDbPath2,
-		Peers:        peers,
-		isDevMode:    true,
+		RaftPort:        6789,
+		RaftServicePort: 6780,
+		RaftStoreDir:    raftDbPath2,
+		Peers:           peers,
+		isDevMode:       true,
 	}
 	store2, err := createNewConsensusStore(cfg2)
 	assert.Nil(t, err)
@@ -115,14 +115,14 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	peers2 := make([]string, 1)
-	peers2[0] = fmt.Sprintf("localhost:%d", cfg2.ServicePort)
+	peers2[0] = fmt.Sprintf("localhost:%d", cfg2.RaftServicePort)
 	raftDbPath3 := "./db.raft3.db"
 	cfg3 := clusterConfig{
-		RaftPort:     4567,
-		ServicePort:  7654,
-		RaftStoreDir: raftDbPath3,
-		Peers:        peers2,
-		isDevMode:    true,
+		RaftPort:        4567,
+		RaftServicePort: 7654,
+		RaftStoreDir:    raftDbPath3,
+		Peers:           peers2,
+		isDevMode:       true,
 	}
 	store3, err := createNewConsensusStore(cfg3)
 	assert.Nil(t, err)
@@ -132,10 +132,10 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 func TestConsensusStoreConsistentGet(t *testing.T) {
 	raftDbPath1 := "./db.raft1.db"
 	cfg1 := clusterConfig{
-		RaftPort:     9876,
-		ServicePort:  9877,
-		RaftStoreDir: raftDbPath1,
-		isDevMode:    true,
+		RaftPort:        9876,
+		RaftServicePort: 9877,
+		RaftStoreDir:    raftDbPath1,
+		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
 	assert.Nil(t, err)
@@ -147,14 +147,14 @@ func TestConsensusStoreConsistentGet(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("localhost:%d", cfg1.ServicePort)
+	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
 	raftDbPath2 := "./db.raft2.db"
 	cfg2 := clusterConfig{
-		RaftPort:     6789,
-		ServicePort:  6780,
-		RaftStoreDir: raftDbPath2,
-		Peers:        peers,
-		isDevMode:    true,
+		RaftPort:        6789,
+		RaftServicePort: 6780,
+		RaftStoreDir:    raftDbPath2,
+		Peers:           peers,
+		isDevMode:       true,
 	}
 	store2, err := createNewConsensusStore(cfg2)
 	assert.Nil(t, err)

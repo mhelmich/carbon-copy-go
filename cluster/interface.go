@@ -31,7 +31,7 @@ type clusterConfig struct {
 	RaftStoreDir     string
 	Peers            []string
 	hostname         string
-	ServicePort      int
+	RaftServicePort  int
 	SerfPort         int
 	SerfSnapshotPath string
 	nodeId           string
