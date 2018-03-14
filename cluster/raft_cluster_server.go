@@ -64,7 +64,7 @@ func (rcs *raftClusterServerImpl) JoinRaftCluster(ctx context.Context, req *pb.R
 	}, nil
 }
 
-func (rcs *raftClusterServerImpl) WhoIsRaftLeader(ctx context.Context, in *RaftLeaderRequest, opts ...grpc.CallOption) (*RaftLeaderResponse, error) {
+func (rcs *raftClusterServerImpl) WhoIsRaftLeader(ctx context.Context, in *pb.RaftLeaderRequest) (*pb.RaftLeaderResponse, error) {
 	return nil, nil
 }
 
