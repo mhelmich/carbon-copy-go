@@ -163,6 +163,12 @@ func (m *membership) updateMyRaftStatus(raftRole string) {
 	m.serf.SetTags(tags)
 }
 
+func (m *membership) updateRaftTag(newTags map[string]string) {
+	// this will update the nodes metadata and broadcast it out
+	// blocks until broadcasting was successful or timed out
+	m.serf.SetTags(newTags)
+}
+
 // this is only used for testing right now
 func (m *membership) getClusterSize() int {
 	return m.clusterState.getNumMembers()

@@ -60,8 +60,8 @@ import (
 // grid_addr: <hostname>:<port> - the addres on which the grid messages are being exchanged
 //
 // TODO:
-// How to allocate a cluster-unique, short (int32) node id? -> raft
-// How to pass on changes in cluster membership?            -> forwarding serf events
+// * How to allocate a cluster-unique, short (int32) node id? -> raft - maybe even in its seperate command implementation
+// * How to pass on changes in cluster membership?            -> forwarding serf events
 
 const (
 	nameSeparator          = "/"
