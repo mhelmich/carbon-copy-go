@@ -35,7 +35,7 @@ type clusterConfig struct {
 	SerfPort         int
 	SerfSnapshotPath string
 	nodeId           string
-	raftNotifyCh     chan bool
+	raftNotifyCh     <-chan bool
 	logger           *log.Entry
 	isDevMode        bool
 }

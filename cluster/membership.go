@@ -89,13 +89,18 @@ func createSerf(config clusterConfig) (*membership, error) {
 		config.logger.Info("No peers defined - starting a brandnew cluster!")
 	}
 
+	nodeJoined := make(chan string, serfEventChannelBufferSize)
+	nodeLeft := make(chan string, serfEventChannelBufferSize)
+
 	m := &membership{
 		serf:         surf,
 		logger:       config.logger,
 		clusterState: newMembershipState(config.logger),
+		nodeJoined:   nodeJoined,
+		nodeLeft:     nodeLeft,
 	}
 
-	go m.handleSerfEvents(serfEventCh)
+	go m.handleSerfEvents(serfEventCh, nodeJoined, nodeLeft, nodeUpdated)
 	return m, nil
 }
 
@@ -103,9 +108,12 @@ type membership struct {
 	serf         *serf.Serf
 	logger       *log.Entry
 	clusterState *membershipState
+
+	nodeJoined chan<- string
+	nodeLeft   chan<- string
 }
 
-func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
+func (m *membership) handleSerfEvents(ch <-chan serf.Event, nodeJoined chan<- string, nodeLeft chan<- string) {
 	for { // ever...
 		select {
 		case e := <-ch:
@@ -116,12 +124,10 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
 			}
 
 			switch e.EventType() {
-			case serf.EventMemberJoin:
-				m.handleMemberJoinEvent(e.(serf.MemberEvent))
-			case serf.EventMemberLeave:
-				m.handleMemberLeaveEvent(e.(serf.MemberEvent))
-			case serf.EventMemberFailed:
-				m.handleMemberLeaveEvent(e.(serf.MemberEvent))
+			case serf.EventMemberJoin, serf.EventMemberUpdate:
+				m.handleMemberJoinEvent(e.(serf.MemberEvent), nodeJoined)
+			case serf.EventMemberLeave, serf.EventMemberFailed:
+				m.handleMemberLeaveEvent(e.(serf.MemberEvent), nodeLeft)
 			}
 		case <-m.serf.ShutdownCh():
 			return
@@ -129,15 +135,17 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
 	}
 }
 
-func (m *membership) handleMemberJoinEvent(me serf.MemberEvent) {
+func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, nodeJoined chan<- string) {
 	for _, item := range me.Members {
 		m.clusterState.updateMember(item.Name, item.Tags)
+		nodeJoined <- item.Name
 	}
 }
 
-func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent) {
+func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent, nodeLeft chan<- string) {
 	for _, item := range me.Members {
 		m.clusterState.removeMember(item.Name)
+		nodeLeft <- item.Name
 	}
 }
 

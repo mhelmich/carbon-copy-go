@@ -24,9 +24,20 @@ import (
 	"strconv"
 )
 
-// the cluster construct consists of a few components taking over different tasks.
+// The cluster construct consists of a few components taking over different tasks.
 // There is serf for cluster membership and metadata gossip.
-// There is raft for leader election and coordination tasks that need consensus.
+// There is raft for leader election and coordination tasks that need consensus. It basically implements a consistent data store.
+//
+// This introduces a little weird interdependency between the cluster metadata and
+// and the consensus store. Metadata about who the raft leader is is distributed by
+// serf. The raft leader broadcasts its status via serf. That means serf needs to listen
+// for raft leader changes. At the same time raft needs to know where new nodes are located.
+// This way it will be able to always form a big enough (but not too big) voter base for consensus.
+//
+// Membership captures the state of the serf cluster and makes the state available to the node.
+// The raft cluster however needs to know who else is available to ensure a quorum.
+// Serf in turn needs to be updated with all status changes to the cluster structure (such as raft leadership changes or additions and removals).
+//
 // That means when a cluster starts, the components are started in the following order:
 // * start serf
 // *** join the current cluster or form a new one
@@ -47,7 +58,7 @@ import (
 // raft_service_addr: <hostname>:<port> - the address on which the raft service for this node operates
 // raft_role: leader, voter, nonvoter, none - the role a particular node has in the raft cluster
 // grid_addr: <hostname>:<port> - the addres on which the grid messages are being exchanged
-
+//
 // TODO:
 // How to allocate a cluster-unique, short (int32) node id? -> raft
 // How to pass on changes in cluster membership?            -> forwarding serf events
