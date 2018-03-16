@@ -44,7 +44,7 @@ const (
 func createNewConsensusStore(config clusterConfig) (*consensusStoreImpl, error) {
 	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	config.nodeId = raftNodeId
-	config.raftNotifyCh = make(chan bool, 1)
+	config.raftNotifyCh = make(chan bool, 16)
 	hn, _ := os.Hostname()
 	config.hostname = hn
 	config.logger = log.WithFields(log.Fields{
@@ -54,24 +54,26 @@ func createNewConsensusStore(config clusterConfig) (*consensusStoreImpl, error) 
 	})
 
 	// creating the actual raft instance
-	r, raftFsm, err := createRaft(config, raftNodeId)
+	r, raftFsm, err := createRaft(config)
 	if err != nil {
 		return nil, err
 	}
 
 	// create the service providing non-consensus nodes with values
-	grpcServer, err := createValueService(config, r, raftNodeId)
+	grpcServer, err := createRaftService(config, r, raftNodeId)
 	if err != nil {
 		return nil, err
 	}
 
-	return &consensusStoreImpl{
+	consensusStore := &consensusStoreImpl{
 		raft:            r,
 		raftFsm:         raftFsm,
 		raftValueServer: grpcServer,
 		logger:          config.logger,
 		raftNotifyCh:    config.raftNotifyCh,
-	}, nil
+	}
+
+	return consensusStore, nil
 }
 
 // see this example or rather reference usage
@@ -85,17 +87,17 @@ type consensusStoreImpl struct {
 	raftNotifyCh    chan bool
 }
 
-func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, error) {
+func createRaft(config clusterConfig) (*raft.Raft, *fsm, error) {
 	var err error
 
-	// Setup Raft configuration.
+	// setup Raft configuration
 	raftConfig := raft.DefaultConfig()
-	raftConfig.LocalID = raft.ServerID(raftNodeId)
-	raftConfig.Logger = golanglog.New(config.logger.Writer(), "raft", 0)
+	raftConfig.LocalID = raft.ServerID(config.nodeId)
+	raftConfig.Logger = golanglog.New(config.logger.Writer(), "raft ", 0)
 	raftConfig.NotifyCh = config.raftNotifyCh
 
 	localhost := fmt.Sprintf("%s:%d", config.hostname, config.RaftPort)
-	// Setup Raft communication.
+	// setup Raft communication
 	addr, err := net.ResolveTCPAddr("tcp", localhost)
 	if err != nil {
 		return nil, nil, err
@@ -115,13 +117,14 @@ func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, erro
 		stableStore = raft.NewInmemStore()
 		snapshotStore = raft.NewInmemSnapshotStore()
 	} else {
-		// Create the snapshot store. This allows the Raft to truncate the log.
+		// create the snapshot store
+		// this allows the Raft to truncate the log
 		snapshotStore, err = raft.NewFileSnapshotStore(config.RaftStoreDir, retainSnapshotCount, config.logger.Writer())
 		if err != nil {
 			return nil, nil, fmt.Errorf("file snapshot store: %s", err)
 		}
 
-		// Create the log store and stable store.
+		// create the log store and stable store
 		if err := os.MkdirAll(config.RaftStoreDir, 0755); err != nil {
 			return nil, nil, fmt.Errorf("couldn't create dirs: %s", err)
 		}
@@ -147,7 +150,7 @@ func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, erro
 		mutex:  sync.Mutex{},
 	}
 
-	// Instantiate the Raft systems.
+	// instantiate the Raft systems
 	newRaft, err := raft.NewRaft(raftConfig, fsm, logStore, stableStore, snapshotStore, transport)
 
 	// we all assume this is a brandnew cluster if no peers are being
@@ -167,7 +170,6 @@ func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, erro
 
 			f := newRaft.BootstrapCluster(configuration)
 			err := f.Error()
-			config.logger.Infof("Result of bootstrap %v", err)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -179,7 +181,7 @@ func createRaft(config clusterConfig, raftNodeId string) (*raft.Raft, *fsm, erro
 	return newRaft, fsm, err
 }
 
-func createValueService(config clusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
+func createRaftService(config clusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
 	// if config.Peers != nil && len(config.Peers) > 0 {
 	// 	joinedRaft := false
 	// 	joinReq := &pb.RaftJoinRequest{

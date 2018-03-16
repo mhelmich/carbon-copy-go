@@ -26,11 +26,12 @@ import (
 
 const (
 	serfEventChannelBufferSize = 256
-	serfMDKeySerfAddr          = "serf_addr"
-	serfMDKeyRaftAddr          = "raft_addr"
-	serfMDKeyRaftServiceAddr   = "raft_service_addr"
-	serfMDKeyRaftRole          = "raft_role"
-	serfMDKeyGridAddr          = "grid_addr"
+
+	serfMDKeySerfAddr        = "serf_addr"
+	serfMDKeyRaftAddr        = "raft_addr"
+	serfMDKeyRaftServiceAddr = "raft_service_addr"
+	serfMDKeyRaftRole        = "raft_role"
+	serfMDKeyGridAddr        = "grid_addr"
 
 	raftRoleLeader   = "l"
 	raftRoleVoter    = "v"
@@ -67,7 +68,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 	serfConfig.Tags[serfMDKeyRaftServiceAddr] = fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort)
 	serfConfig.Tags[serfMDKeyRaftRole] = raftRoleNone
 
-	s, err := serf.Create(serfConfig)
+	surf, err := serf.Create(serfConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 	// if we have peers, let's join the cluster
 	if config.Peers != nil && len(config.Peers) > 0 {
 		config.logger.Infof("Peers to contact: %v", config.Peers)
-		numContactedNodes, err := s.Join(config.Peers, true)
+		numContactedNodes, err := surf.Join(config.Peers, true)
 
 		if err != nil {
 			return nil, fmt.Errorf("Can't connect to serf nodes: %s", err.Error())
@@ -89,7 +90,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 	}
 
 	m := &membership{
-		serf:         s,
+		serf:         surf,
 		logger:       config.logger,
 		clusterState: newMembershipState(config.logger),
 	}
