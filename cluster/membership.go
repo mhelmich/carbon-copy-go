@@ -31,12 +31,17 @@ const (
 	serfMDKeyRaftServiceAddr   = "raft_service_addr"
 	serfMDKeyRaftRole          = "raft_role"
 	serfMDKeyGridAddr          = "grid_addr"
+
+	raftRoleLeader   = "l"
+	raftRoleVoter    = "v"
+	raftRoleNonvoter = "n"
+	raftRoleNone     = "x"
 )
 
 func createSerf(config clusterConfig) (*membership, error) {
 	serfConfig := serf.DefaultConfig()
 	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf ", 0)
-	// it's important that this guy never blocks
+	// it's important that this channel never blocks
 	// if it blocks, the sender will block and therefore stop applying log entries
 	// which means we're not up to date with the current cluster state anymore
 	serfEventCh := make(chan serf.Event, serfEventChannelBufferSize)
@@ -60,6 +65,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 	serfConfig.Tags[serfMDKeySerfAddr] = fmt.Sprintf("%s:%d", config.hostname, config.SerfPort)
 	serfConfig.Tags[serfMDKeyRaftAddr] = fmt.Sprintf("%s:%d", config.hostname, config.RaftPort)
 	serfConfig.Tags[serfMDKeyRaftServiceAddr] = fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort)
+	serfConfig.Tags[serfMDKeyRaftRole] = raftRoleNone
 
 	s, err := serf.Create(serfConfig)
 	if err != nil {
@@ -68,6 +74,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 
 	// if we have peers, let's join the cluster
 	if config.Peers != nil && len(config.Peers) > 0 {
+		config.logger.Infof("Peers to contact: %v", config.Peers)
 		numContactedNodes, err := s.Join(config.Peers, true)
 
 		if err != nil {
@@ -78,13 +85,13 @@ func createSerf(config clusterConfig) (*membership, error) {
 			config.logger.Infof("Contacted %d serf nodes! List: %v", numContactedNodes, config.Peers)
 		}
 	} else {
-		config.logger.Info("No peers defined")
+		config.logger.Info("No peers defined - starting a brandnew cluster!")
 	}
 
 	m := &membership{
-		serf:           s,
-		logger:         config.logger,
-		currentCluster: make(map[string]map[string]string),
+		serf:         s,
+		logger:       config.logger,
+		clusterState: newClusterState(config.logger),
 	}
 
 	go m.handleSerfEvents(serfEventCh)
@@ -92,13 +99,13 @@ func createSerf(config clusterConfig) (*membership, error) {
 }
 
 type membership struct {
-	serf           *serf.Serf
-	currentCluster map[string]map[string]string
-	logger         *log.Entry
+	serf         *serf.Serf
+	logger       *log.Entry
+	clusterState *clusterState
 }
 
 func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
-	for {
+	for { // ever...
 		select {
 		case e := <-ch:
 			if e == nil {
@@ -109,11 +116,11 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
 
 			switch e.EventType() {
 			case serf.EventMemberJoin:
-				m.handleMemberChangeEvent(e.(serf.MemberEvent))
+				m.handleMemberJoinEvent(e.(serf.MemberEvent))
 			case serf.EventMemberLeave:
-				m.handleMemberChangeEvent(e.(serf.MemberEvent))
+				m.handleMemberLeaveEvent(e.(serf.MemberEvent))
 			case serf.EventMemberFailed:
-				m.handleMemberChangeEvent(e.(serf.MemberEvent))
+				m.handleMemberLeaveEvent(e.(serf.MemberEvent))
 			}
 		case <-m.serf.ShutdownCh():
 			return
@@ -121,24 +128,35 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
 	}
 }
 
-func (m *membership) handleMemberChangeEvent(me serf.MemberEvent) {
-	m.logger.Infof("Member event: current members: %v", me.Members)
+func (m *membership) handleMemberJoinEvent(me serf.MemberEvent) {
 	for _, item := range me.Members {
-		m.currentCluster[item.Name] = item.Tags
+		m.clusterState.updateMember(item.Name, item.Tags)
+	}
+}
+
+func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent) {
+	for _, item := range me.Members {
+		m.clusterState.removeMember(item.Name)
 	}
 }
 
 func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
-	v, ok := m.currentCluster[nodeId]
-	return v, ok
+	// v, ok := m.currentCluster[nodeId]
+	// return v, ok
+	return m.clusterState.getNodeById(nodeId)
 }
 
-func (m *membership) updateRaftStatus(status string) {
+func (m *membership) updateMyRaftStatus(raftRole string) {
 	tags := make(map[string]string)
-	tags["raft_status"] = status
+	tags[serfMDKeyRaftRole] = raftRole
 	// this will update the nodes metadata and broadcast it out
 	// blocks until broadcasting was successful or timed out
 	m.serf.SetTags(tags)
+}
+
+// this is only used for testing right now
+func (m *membership) getClusterSize() int {
+	return m.clusterState.getClusterSize()
 }
 
 func (m *membership) close() {

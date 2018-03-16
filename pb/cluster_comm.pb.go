@@ -21,20 +21,23 @@ var _ = math.Inf
 type RaftOps int32
 
 const (
-	RaftOps_Set           RaftOps = 0
-	RaftOps_Delete        RaftOps = 1
-	RaftOps_ConsistentGet RaftOps = 2
+	RaftOps_Set                      RaftOps = 0
+	RaftOps_Delete                   RaftOps = 1
+	RaftOps_ConsistentGet            RaftOps = 2
+	RaftOps_AcquireUniqueShortNodeId RaftOps = 3
 )
 
 var RaftOps_name = map[int32]string{
 	0: "Set",
 	1: "Delete",
 	2: "ConsistentGet",
+	3: "AcquireUniqueShortNodeId",
 }
 var RaftOps_value = map[string]int32{
-	"Set":           0,
-	"Delete":        1,
-	"ConsistentGet": 2,
+	"Set":                      0,
+	"Delete":                   1,
+	"ConsistentGet":            2,
+	"AcquireUniqueShortNodeId": 3,
 }
 
 func (x RaftOps) String() string {
@@ -210,46 +213,6 @@ func (m *RaftJoinResponse) GetError() string {
 	return ""
 }
 
-type RaftLeaderRequest struct {
-}
-
-func (m *RaftLeaderRequest) Reset()                    { *m = RaftLeaderRequest{} }
-func (m *RaftLeaderRequest) String() string            { return proto.CompactTextString(m) }
-func (*RaftLeaderRequest) ProtoMessage()               {}
-func (*RaftLeaderRequest) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{5} }
-
-type RaftLeaderResponse struct {
-	RaftLeaderHost string `protobuf:"bytes,1,opt,name=raftLeaderHost" json:"raftLeaderHost,omitempty"`
-	RaftLeaderPort int32  `protobuf:"varint,2,opt,name=raftLeaderPort" json:"raftLeaderPort,omitempty"`
-	RaftLeaderAddr string `protobuf:"bytes,3,opt,name=raftLeaderAddr" json:"raftLeaderAddr,omitempty"`
-}
-
-func (m *RaftLeaderResponse) Reset()                    { *m = RaftLeaderResponse{} }
-func (m *RaftLeaderResponse) String() string            { return proto.CompactTextString(m) }
-func (*RaftLeaderResponse) ProtoMessage()               {}
-func (*RaftLeaderResponse) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{6} }
-
-func (m *RaftLeaderResponse) GetRaftLeaderHost() string {
-	if m != nil {
-		return m.RaftLeaderHost
-	}
-	return ""
-}
-
-func (m *RaftLeaderResponse) GetRaftLeaderPort() int32 {
-	if m != nil {
-		return m.RaftLeaderPort
-	}
-	return 0
-}
-
-func (m *RaftLeaderResponse) GetRaftLeaderAddr() string {
-	if m != nil {
-		return m.RaftLeaderAddr
-	}
-	return ""
-}
-
 type GetReq struct {
 	Key string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
 }
@@ -257,7 +220,7 @@ type GetReq struct {
 func (m *GetReq) Reset()                    { *m = GetReq{} }
 func (m *GetReq) String() string            { return proto.CompactTextString(m) }
 func (*GetReq) ProtoMessage()               {}
-func (*GetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{7} }
+func (*GetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{5} }
 
 func (m *GetReq) GetKey() string {
 	if m != nil {
@@ -273,7 +236,7 @@ type GetResp struct {
 func (m *GetResp) Reset()                    { *m = GetResp{} }
 func (m *GetResp) String() string            { return proto.CompactTextString(m) }
 func (*GetResp) ProtoMessage()               {}
-func (*GetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{8} }
+func (*GetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{6} }
 
 func (m *GetResp) GetValue() []byte {
 	if m != nil {
@@ -290,7 +253,7 @@ type SetReq struct {
 func (m *SetReq) Reset()                    { *m = SetReq{} }
 func (m *SetReq) String() string            { return proto.CompactTextString(m) }
 func (*SetReq) ProtoMessage()               {}
-func (*SetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{9} }
+func (*SetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{7} }
 
 func (m *SetReq) GetKey() string {
 	if m != nil {
@@ -313,7 +276,7 @@ type SetResp struct {
 func (m *SetResp) Reset()                    { *m = SetResp{} }
 func (m *SetResp) String() string            { return proto.CompactTextString(m) }
 func (*SetResp) ProtoMessage()               {}
-func (*SetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{10} }
+func (*SetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{8} }
 
 func (m *SetResp) GetCreated() bool {
 	if m != nil {
@@ -329,7 +292,7 @@ type DeleteReq struct {
 func (m *DeleteReq) Reset()                    { *m = DeleteReq{} }
 func (m *DeleteReq) String() string            { return proto.CompactTextString(m) }
 func (*DeleteReq) ProtoMessage()               {}
-func (*DeleteReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{11} }
+func (*DeleteReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{9} }
 
 func (m *DeleteReq) GetKey() string {
 	if m != nil {
@@ -345,7 +308,7 @@ type DeleteResp struct {
 func (m *DeleteResp) Reset()                    { *m = DeleteResp{} }
 func (m *DeleteResp) String() string            { return proto.CompactTextString(m) }
 func (*DeleteResp) ProtoMessage()               {}
-func (*DeleteResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{12} }
+func (*DeleteResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{10} }
 
 func (m *DeleteResp) GetDeleted() bool {
 	if m != nil {
@@ -354,20 +317,44 @@ func (m *DeleteResp) GetDeleted() bool {
 	return false
 }
 
+type AcquireUniqueShortNodeIdReq struct {
+}
+
+func (m *AcquireUniqueShortNodeIdReq) Reset()                    { *m = AcquireUniqueShortNodeIdReq{} }
+func (m *AcquireUniqueShortNodeIdReq) String() string            { return proto.CompactTextString(m) }
+func (*AcquireUniqueShortNodeIdReq) ProtoMessage()               {}
+func (*AcquireUniqueShortNodeIdReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{11} }
+
+type AcquireUniqueShortNodeIdResp struct {
+	NodeId int32 `protobuf:"varint,1,opt,name=nodeId" json:"nodeId,omitempty"`
+}
+
+func (m *AcquireUniqueShortNodeIdResp) Reset()                    { *m = AcquireUniqueShortNodeIdResp{} }
+func (m *AcquireUniqueShortNodeIdResp) String() string            { return proto.CompactTextString(m) }
+func (*AcquireUniqueShortNodeIdResp) ProtoMessage()               {}
+func (*AcquireUniqueShortNodeIdResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{12} }
+
+func (m *AcquireUniqueShortNodeIdResp) GetNodeId() int32 {
+	if m != nil {
+		return m.NodeId
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*NodeInfo)(nil), "pb.NodeInfo")
 	proto.RegisterType((*RaftCommand)(nil), "pb.RaftCommand")
 	proto.RegisterType((*RaftSnapshot)(nil), "pb.RaftSnapshot")
 	proto.RegisterType((*RaftJoinRequest)(nil), "pb.RaftJoinRequest")
 	proto.RegisterType((*RaftJoinResponse)(nil), "pb.RaftJoinResponse")
-	proto.RegisterType((*RaftLeaderRequest)(nil), "pb.RaftLeaderRequest")
-	proto.RegisterType((*RaftLeaderResponse)(nil), "pb.RaftLeaderResponse")
 	proto.RegisterType((*GetReq)(nil), "pb.GetReq")
 	proto.RegisterType((*GetResp)(nil), "pb.GetResp")
 	proto.RegisterType((*SetReq)(nil), "pb.SetReq")
 	proto.RegisterType((*SetResp)(nil), "pb.SetResp")
 	proto.RegisterType((*DeleteReq)(nil), "pb.DeleteReq")
 	proto.RegisterType((*DeleteResp)(nil), "pb.DeleteResp")
+	proto.RegisterType((*AcquireUniqueShortNodeIdReq)(nil), "pb.AcquireUniqueShortNodeIdReq")
+	proto.RegisterType((*AcquireUniqueShortNodeIdResp)(nil), "pb.AcquireUniqueShortNodeIdResp")
 	proto.RegisterEnum("pb.RaftOps", RaftOps_name, RaftOps_value)
 }
 
@@ -379,208 +366,239 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for RaftCluster service
+// Client API for RaftService service
 
-type RaftClusterClient interface {
+type RaftServiceClient interface {
 	// A new node is supposed to join this RPC to join the raft cluster if it wishes so.
 	// Every node in the cluster exposes this API and calling it on peers that have been provided to you,
 	// sounds like a good idea. The receiving node will try to forward the request to the actual raft leader.
 	// The raft leader then adds the new node to the cluster (if appropriate) and sends back an ok.
 	// The forward nature of this call is completely transparent to the caller.
 	JoinRaftCluster(ctx context.Context, in *RaftJoinRequest, opts ...grpc.CallOption) (*RaftJoinResponse, error)
-	// This rpc is used to query a random node for the address of the raft leader.
-	WhoIsRaftLeader(ctx context.Context, in *RaftLeaderRequest, opts ...grpc.CallOption) (*RaftLeaderResponse, error)
 	Get(ctx context.Context, in *GetReq, opts ...grpc.CallOption) (*GetResp, error)
+	ConsistentGet(ctx context.Context, in *GetReq, opts ...grpc.CallOption) (*GetResp, error)
 	Set(ctx context.Context, in *SetReq, opts ...grpc.CallOption) (*SetResp, error)
 	Delete(ctx context.Context, in *DeleteReq, opts ...grpc.CallOption) (*DeleteResp, error)
+	AcquireUniqueShortNodeId(ctx context.Context, in *AcquireUniqueShortNodeIdReq, opts ...grpc.CallOption) (*AcquireUniqueShortNodeIdResp, error)
 }
 
-type raftClusterClient struct {
+type raftServiceClient struct {
 	cc *grpc.ClientConn
 }
 
-func NewRaftClusterClient(cc *grpc.ClientConn) RaftClusterClient {
-	return &raftClusterClient{cc}
+func NewRaftServiceClient(cc *grpc.ClientConn) RaftServiceClient {
+	return &raftServiceClient{cc}
 }
 
-func (c *raftClusterClient) JoinRaftCluster(ctx context.Context, in *RaftJoinRequest, opts ...grpc.CallOption) (*RaftJoinResponse, error) {
+func (c *raftServiceClient) JoinRaftCluster(ctx context.Context, in *RaftJoinRequest, opts ...grpc.CallOption) (*RaftJoinResponse, error) {
 	out := new(RaftJoinResponse)
-	err := grpc.Invoke(ctx, "/pb.RaftCluster/joinRaftCluster", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/pb.RaftService/joinRaftCluster", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raftClusterClient) WhoIsRaftLeader(ctx context.Context, in *RaftLeaderRequest, opts ...grpc.CallOption) (*RaftLeaderResponse, error) {
-	out := new(RaftLeaderResponse)
-	err := grpc.Invoke(ctx, "/pb.RaftCluster/whoIsRaftLeader", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *raftClusterClient) Get(ctx context.Context, in *GetReq, opts ...grpc.CallOption) (*GetResp, error) {
+func (c *raftServiceClient) Get(ctx context.Context, in *GetReq, opts ...grpc.CallOption) (*GetResp, error) {
 	out := new(GetResp)
-	err := grpc.Invoke(ctx, "/pb.RaftCluster/get", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/pb.RaftService/get", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raftClusterClient) Set(ctx context.Context, in *SetReq, opts ...grpc.CallOption) (*SetResp, error) {
+func (c *raftServiceClient) ConsistentGet(ctx context.Context, in *GetReq, opts ...grpc.CallOption) (*GetResp, error) {
+	out := new(GetResp)
+	err := grpc.Invoke(ctx, "/pb.RaftService/consistentGet", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *raftServiceClient) Set(ctx context.Context, in *SetReq, opts ...grpc.CallOption) (*SetResp, error) {
 	out := new(SetResp)
-	err := grpc.Invoke(ctx, "/pb.RaftCluster/set", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/pb.RaftService/set", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raftClusterClient) Delete(ctx context.Context, in *DeleteReq, opts ...grpc.CallOption) (*DeleteResp, error) {
+func (c *raftServiceClient) Delete(ctx context.Context, in *DeleteReq, opts ...grpc.CallOption) (*DeleteResp, error) {
 	out := new(DeleteResp)
-	err := grpc.Invoke(ctx, "/pb.RaftCluster/delete", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/pb.RaftService/delete", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for RaftCluster service
+func (c *raftServiceClient) AcquireUniqueShortNodeId(ctx context.Context, in *AcquireUniqueShortNodeIdReq, opts ...grpc.CallOption) (*AcquireUniqueShortNodeIdResp, error) {
+	out := new(AcquireUniqueShortNodeIdResp)
+	err := grpc.Invoke(ctx, "/pb.RaftService/acquireUniqueShortNodeId", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
-type RaftClusterServer interface {
+// Server API for RaftService service
+
+type RaftServiceServer interface {
 	// A new node is supposed to join this RPC to join the raft cluster if it wishes so.
 	// Every node in the cluster exposes this API and calling it on peers that have been provided to you,
 	// sounds like a good idea. The receiving node will try to forward the request to the actual raft leader.
 	// The raft leader then adds the new node to the cluster (if appropriate) and sends back an ok.
 	// The forward nature of this call is completely transparent to the caller.
 	JoinRaftCluster(context.Context, *RaftJoinRequest) (*RaftJoinResponse, error)
-	// This rpc is used to query a random node for the address of the raft leader.
-	WhoIsRaftLeader(context.Context, *RaftLeaderRequest) (*RaftLeaderResponse, error)
 	Get(context.Context, *GetReq) (*GetResp, error)
+	ConsistentGet(context.Context, *GetReq) (*GetResp, error)
 	Set(context.Context, *SetReq) (*SetResp, error)
 	Delete(context.Context, *DeleteReq) (*DeleteResp, error)
+	AcquireUniqueShortNodeId(context.Context, *AcquireUniqueShortNodeIdReq) (*AcquireUniqueShortNodeIdResp, error)
 }
 
-func RegisterRaftClusterServer(s *grpc.Server, srv RaftClusterServer) {
-	s.RegisterService(&_RaftCluster_serviceDesc, srv)
+func RegisterRaftServiceServer(s *grpc.Server, srv RaftServiceServer) {
+	s.RegisterService(&_RaftService_serviceDesc, srv)
 }
 
-func _RaftCluster_JoinRaftCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaftService_JoinRaftCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RaftJoinRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaftClusterServer).JoinRaftCluster(ctx, in)
+		return srv.(RaftServiceServer).JoinRaftCluster(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.RaftCluster/JoinRaftCluster",
+		FullMethod: "/pb.RaftService/JoinRaftCluster",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaftClusterServer).JoinRaftCluster(ctx, req.(*RaftJoinRequest))
+		return srv.(RaftServiceServer).JoinRaftCluster(ctx, req.(*RaftJoinRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaftCluster_WhoIsRaftLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RaftLeaderRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RaftClusterServer).WhoIsRaftLeader(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.RaftCluster/WhoIsRaftLeader",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaftClusterServer).WhoIsRaftLeader(ctx, req.(*RaftLeaderRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _RaftCluster_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaftService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaftClusterServer).Get(ctx, in)
+		return srv.(RaftServiceServer).Get(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.RaftCluster/Get",
+		FullMethod: "/pb.RaftService/Get",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaftClusterServer).Get(ctx, req.(*GetReq))
+		return srv.(RaftServiceServer).Get(ctx, req.(*GetReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaftCluster_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaftService_ConsistentGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftServiceServer).ConsistentGet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.RaftService/ConsistentGet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftServiceServer).ConsistentGet(ctx, req.(*GetReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RaftService_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaftClusterServer).Set(ctx, in)
+		return srv.(RaftServiceServer).Set(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.RaftCluster/Set",
+		FullMethod: "/pb.RaftService/Set",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaftClusterServer).Set(ctx, req.(*SetReq))
+		return srv.(RaftServiceServer).Set(ctx, req.(*SetReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaftCluster_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaftService_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaftClusterServer).Delete(ctx, in)
+		return srv.(RaftServiceServer).Delete(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.RaftCluster/Delete",
+		FullMethod: "/pb.RaftService/Delete",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaftClusterServer).Delete(ctx, req.(*DeleteReq))
+		return srv.(RaftServiceServer).Delete(ctx, req.(*DeleteReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _RaftCluster_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "pb.RaftCluster",
-	HandlerType: (*RaftClusterServer)(nil),
+func _RaftService_AcquireUniqueShortNodeId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcquireUniqueShortNodeIdReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftServiceServer).AcquireUniqueShortNodeId(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.RaftService/AcquireUniqueShortNodeId",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftServiceServer).AcquireUniqueShortNodeId(ctx, req.(*AcquireUniqueShortNodeIdReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _RaftService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "pb.RaftService",
+	HandlerType: (*RaftServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "joinRaftCluster",
-			Handler:    _RaftCluster_JoinRaftCluster_Handler,
-		},
-		{
-			MethodName: "whoIsRaftLeader",
-			Handler:    _RaftCluster_WhoIsRaftLeader_Handler,
+			Handler:    _RaftService_JoinRaftCluster_Handler,
 		},
 		{
 			MethodName: "get",
-			Handler:    _RaftCluster_Get_Handler,
+			Handler:    _RaftService_Get_Handler,
+		},
+		{
+			MethodName: "consistentGet",
+			Handler:    _RaftService_ConsistentGet_Handler,
 		},
 		{
 			MethodName: "set",
-			Handler:    _RaftCluster_Set_Handler,
+			Handler:    _RaftService_Set_Handler,
 		},
 		{
 			MethodName: "delete",
-			Handler:    _RaftCluster_Delete_Handler,
+			Handler:    _RaftService_Delete_Handler,
+		},
+		{
+			MethodName: "acquireUniqueShortNodeId",
+			Handler:    _RaftService_AcquireUniqueShortNodeId_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -590,42 +608,43 @@ var _RaftCluster_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("cluster_comm.proto", fileDescriptor1) }
 
 var fileDescriptor1 = []byte{
-	// 585 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0xdf, 0x6e, 0xda, 0x3c,
-	0x14, 0x6f, 0x12, 0x08, 0x70, 0x68, 0x81, 0xba, 0xfd, 0x2a, 0x14, 0xa9, 0xfa, 0x90, 0x27, 0x55,
-	0x6c, 0x17, 0x68, 0x63, 0x17, 0xab, 0x76, 0x31, 0x69, 0xeb, 0xa6, 0x8e, 0x69, 0xda, 0xaa, 0x64,
-	0xf7, 0x53, 0xc0, 0x87, 0xc2, 0x80, 0x38, 0xb5, 0x4d, 0xab, 0xde, 0xed, 0x01, 0xf6, 0x38, 0x7b,
-	0xc0, 0xc9, 0x76, 0x12, 0x02, 0x63, 0x77, 0xfe, 0xfd, 0xf1, 0xcf, 0xc7, 0xe7, 0x38, 0x01, 0x32,
-	0x59, 0xae, 0xa5, 0x42, 0xf1, 0x7d, 0xc2, 0x57, 0xab, 0x41, 0x2a, 0xb8, 0xe2, 0xc4, 0x4d, 0xc7,
-	0xf4, 0xb7, 0x03, 0xf5, 0x2f, 0x9c, 0xe1, 0x28, 0x99, 0x72, 0x42, 0xa0, 0x32, 0xe3, 0x52, 0x75,
-	0x9d, 0x9e, 0xd3, 0x6f, 0x84, 0x66, 0x4d, 0xce, 0xc0, 0x4f, 0xb4, 0xce, 0xba, 0x6e, 0xcf, 0xe9,
-	0x57, 0xc3, 0x0c, 0x91, 0x00, 0xea, 0x22, 0x9e, 0xaa, 0x1b, 0x2e, 0x54, 0xd7, 0x33, 0x4a, 0x81,
-	0x49, 0x1f, 0xda, 0xf7, 0xf1, 0x72, 0x8d, 0x11, 0x8a, 0x7b, 0x14, 0xc6, 0x52, 0x31, 0x96, 0x5d,
-	0x5a, 0xa7, 0xdc, 0x8a, 0x39, 0x33, 0x96, 0xaa, 0x4d, 0xc9, 0xb1, 0xd6, 0x24, 0x8a, 0xa9, 0xd1,
-	0x7c, 0xab, 0xe5, 0x98, 0x7e, 0x83, 0x66, 0x18, 0x4f, 0xd5, 0x15, 0x5f, 0xad, 0xe2, 0x84, 0x91,
-	0x73, 0xf0, 0x26, 0x2b, 0x66, 0xea, 0x6e, 0x0d, 0x9b, 0x83, 0x74, 0x3c, 0xd0, 0xea, 0xd7, 0x54,
-	0x86, 0x9a, 0x27, 0x1d, 0xf0, 0x16, 0xf8, 0x68, 0x2e, 0xd0, 0x08, 0xf5, 0x92, 0x9c, 0x42, 0xd5,
-	0x94, 0x62, 0x4a, 0x3f, 0x0c, 0x2d, 0xa0, 0x0f, 0x70, 0xa8, 0xf7, 0x45, 0x49, 0x9c, 0xca, 0x19,
-	0x57, 0x64, 0x00, 0x15, 0x99, 0xc4, 0x69, 0xd7, 0xe9, 0x79, 0xfd, 0xe6, 0x30, 0xc8, 0x73, 0x73,
-	0x7d, 0xa0, 0x17, 0x1f, 0x12, 0x25, 0x1e, 0x43, 0xe3, 0x0b, 0x5e, 0x41, 0xa3, 0xa0, 0xf2, 0x43,
-	0x9d, 0x3d, 0x87, 0xba, 0xa5, 0x43, 0x5f, 0xbb, 0x97, 0x0e, 0x1d, 0x41, 0x5b, 0x07, 0x7f, 0xe2,
-	0xf3, 0x24, 0xc4, 0xbb, 0x35, 0x4a, 0xb5, 0x77, 0x16, 0x04, 0x2a, 0xa9, 0xee, 0x86, 0x9d, 0x84,
-	0x59, 0x93, 0x16, 0xb8, 0x73, 0x66, 0xae, 0xd1, 0x08, 0xdd, 0x39, 0xa3, 0x97, 0xd0, 0xd9, 0x44,
-	0xc9, 0x94, 0x27, 0x12, 0xb5, 0x87, 0x2f, 0x4c, 0x52, 0x3d, 0x74, 0xf9, 0x42, 0x17, 0x82, 0x42,
-	0x70, 0x91, 0x75, 0xc4, 0x02, 0x7a, 0x02, 0xc7, 0x7a, 0xe7, 0x67, 0x8c, 0x19, 0x8a, 0xac, 0x0c,
-	0xfa, 0xcb, 0x01, 0x52, 0x66, 0xb3, 0xc4, 0x0b, 0x68, 0x89, 0x82, 0xfd, 0xb8, 0xa9, 0x73, 0x87,
-	0xdd, 0xf6, 0xdd, 0x6c, 0x6a, 0xdf, 0x61, 0xb7, 0x7d, 0x6f, 0x19, 0x13, 0xd9, 0x8d, 0x76, 0x58,
-	0x1a, 0x80, 0x7f, 0x8d, 0x2a, 0xc4, 0xbb, 0xbf, 0xdb, 0x4b, 0xff, 0x87, 0x9a, 0xd1, 0x64, 0xba,
-	0xe9, 0xb4, 0x53, 0x1e, 0xef, 0x73, 0xf0, 0xa3, 0x7f, 0x6c, 0xde, 0x3f, 0x1b, 0xfa, 0x04, 0x6a,
-	0x51, 0x16, 0xd9, 0x85, 0xda, 0x44, 0x60, 0xac, 0x90, 0x65, 0x8d, 0xcc, 0x21, 0x3d, 0x87, 0xc6,
-	0x7b, 0x5c, 0xa2, 0xc2, 0xfd, 0x65, 0x5d, 0x00, 0xe4, 0xb2, 0x8d, 0x61, 0x06, 0x15, 0x31, 0x19,
-	0x7c, 0xf6, 0x02, 0x6a, 0xd9, 0xa3, 0x25, 0x35, 0xf0, 0x22, 0x54, 0x9d, 0x03, 0x02, 0xe0, 0xdb,
-	0xbd, 0x1d, 0x87, 0x1c, 0xc3, 0xd1, 0x15, 0x4f, 0xe4, 0x5c, 0x2a, 0x4c, 0xd4, 0x35, 0xaa, 0x8e,
-	0x3b, 0xfc, 0xe9, 0x66, 0x9f, 0x81, 0xfd, 0xb6, 0xc9, 0x1b, 0x68, 0xff, 0xd0, 0x73, 0x2f, 0x51,
-	0x27, 0xf9, 0xa3, 0x2d, 0xbd, 0xad, 0xe0, 0x74, 0x9b, 0xb4, 0x33, 0xa5, 0x07, 0xe4, 0x1d, 0xb4,
-	0x1f, 0x66, 0x7c, 0x24, 0x37, 0x03, 0x27, 0xff, 0xe5, 0xd6, 0xad, 0x67, 0x11, 0x9c, 0xed, 0xd2,
-	0x45, 0x46, 0x0f, 0xbc, 0x5b, 0x54, 0x04, 0xb4, 0xc1, 0x8e, 0x2a, 0x68, 0x16, 0x6b, 0x99, 0x5a,
-	0x87, 0xcc, 0x1d, 0x51, 0xc9, 0x11, 0x15, 0x8e, 0xa7, 0xe0, 0xdb, 0xae, 0x90, 0x23, 0x2d, 0x14,
-	0xdd, 0x0d, 0x5a, 0x65, 0xa8, 0xad, 0x63, 0xdf, 0xfc, 0xca, 0x5e, 0xfe, 0x09, 0x00, 0x00, 0xff,
-	0xff, 0x44, 0x75, 0xdf, 0x73, 0xe0, 0x04, 0x00, 0x00,
+	// 595 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x54, 0xdd, 0x6e, 0xd3, 0x4c,
+	0x10, 0xad, 0xed, 0xd4, 0x69, 0x26, 0xfd, 0xc9, 0x37, 0x5f, 0x85, 0x2c, 0xd3, 0xaa, 0xd1, 0x22,
+	0xa1, 0xd0, 0x8b, 0x08, 0x15, 0x09, 0x2a, 0x2e, 0x90, 0x50, 0x41, 0x55, 0xb9, 0xa0, 0x68, 0x0d,
+	0xd7, 0x95, 0x6b, 0x4f, 0x5a, 0xd3, 0xc6, 0xeb, 0xec, 0x6e, 0x8a, 0xfa, 0x5e, 0xbc, 0x04, 0x6f,
+	0x85, 0x76, 0x37, 0x76, 0x0d, 0x24, 0xbd, 0x9b, 0xb3, 0xe7, 0x78, 0xe6, 0xec, 0xcc, 0xac, 0x01,
+	0xb3, 0xdb, 0xb9, 0xd2, 0x24, 0x2f, 0x32, 0x31, 0x9d, 0x8e, 0x2b, 0x29, 0xb4, 0x40, 0xbf, 0xba,
+	0x64, 0x3f, 0x3d, 0xd8, 0xf8, 0x2c, 0x72, 0x3a, 0x2b, 0x27, 0x02, 0x11, 0x3a, 0xd7, 0x42, 0xe9,
+	0xc8, 0x1b, 0x7a, 0xa3, 0x1e, 0xb7, 0x31, 0x3e, 0x81, 0xb0, 0x34, 0x7c, 0x1e, 0xf9, 0x43, 0x6f,
+	0xb4, 0xce, 0x17, 0x08, 0x63, 0xd8, 0x90, 0xe9, 0x44, 0x7f, 0x11, 0x52, 0x47, 0x81, 0x65, 0x1a,
+	0x8c, 0x23, 0xd8, 0xb9, 0x4b, 0x6f, 0xe7, 0x94, 0x90, 0xbc, 0x23, 0x69, 0x25, 0x1d, 0x2b, 0xf9,
+	0xfb, 0xd8, 0x64, 0xb9, 0x92, 0x45, 0x6e, 0x25, 0xeb, 0x2e, 0x4b, 0x8d, 0x0d, 0xa7, 0x48, 0x4e,
+	0x2c, 0x17, 0x3a, 0xae, 0xc6, 0xec, 0x2b, 0xf4, 0x79, 0x3a, 0xd1, 0x27, 0x62, 0x3a, 0x4d, 0xcb,
+	0x1c, 0xf7, 0x21, 0xc8, 0xa6, 0xb9, 0xf5, 0xbd, 0x7d, 0xd4, 0x1f, 0x57, 0x97, 0x63, 0xc3, 0x9e,
+	0x57, 0x8a, 0x9b, 0x73, 0x1c, 0x40, 0x70, 0x43, 0xf7, 0xf6, 0x02, 0x3d, 0x6e, 0x42, 0xdc, 0x85,
+	0x75, 0x6b, 0xc5, 0x5a, 0xdf, 0xe4, 0x0e, 0xb0, 0x1f, 0xb0, 0x69, 0xbe, 0x4b, 0xca, 0xb4, 0x52,
+	0xd7, 0x42, 0xe3, 0x18, 0x3a, 0xaa, 0x4c, 0xab, 0xc8, 0x1b, 0x06, 0xa3, 0xfe, 0x51, 0x5c, 0xe7,
+	0xad, 0xf9, 0xb1, 0x09, 0x3e, 0x96, 0x5a, 0xde, 0x73, 0xab, 0x8b, 0xdf, 0x40, 0xaf, 0x39, 0xaa,
+	0x8b, 0x7a, 0x4b, 0x8a, 0xfa, 0xad, 0xa2, 0x6f, 0xfd, 0x63, 0x8f, 0x9d, 0xc1, 0x8e, 0x49, 0xfc,
+	0x49, 0x14, 0x25, 0xa7, 0xd9, 0x9c, 0x94, 0x5e, 0x3a, 0x0b, 0x84, 0x4e, 0x65, 0xba, 0xe1, 0x26,
+	0x61, 0x63, 0xdc, 0x06, 0xbf, 0xc8, 0xed, 0x35, 0x7a, 0xdc, 0x2f, 0x72, 0x76, 0x0c, 0x83, 0x87,
+	0x54, 0xaa, 0x12, 0xa5, 0x22, 0xa3, 0x11, 0x37, 0x36, 0xd3, 0x06, 0xf7, 0xc5, 0x8d, 0x31, 0x42,
+	0x52, 0x0a, 0xb9, 0xe8, 0x88, 0x03, 0x2c, 0x86, 0xf0, 0x94, 0x34, 0xa7, 0xd9, 0xbf, 0xd6, 0xd9,
+	0x01, 0x74, 0x2d, 0xa7, 0xaa, 0x87, 0x5b, 0x78, 0xed, 0xd6, 0xbd, 0x84, 0x30, 0x59, 0xf1, 0xf1,
+	0xf2, 0x7b, 0xb3, 0x67, 0xd0, 0x4d, 0x16, 0x29, 0x23, 0xe8, 0x66, 0x92, 0x52, 0x4d, 0xf9, 0xc2,
+	0x64, 0x0d, 0xd9, 0x3e, 0xf4, 0x3e, 0xd0, 0x2d, 0x69, 0x5a, 0x6e, 0xeb, 0x39, 0x40, 0x4d, 0xbb,
+	0x34, 0xb9, 0x45, 0x4d, 0x9a, 0x05, 0x64, 0xfb, 0xf0, 0xf4, 0x7d, 0x36, 0x9b, 0x17, 0x92, 0xbe,
+	0x95, 0xc5, 0x6c, 0x4e, 0xc9, 0xb5, 0x90, 0xda, 0xae, 0x7d, 0xce, 0x69, 0xc6, 0x5e, 0xc3, 0xde,
+	0x6a, 0x5a, 0x55, 0xad, 0x37, 0xe0, 0xb5, 0xdf, 0xc0, 0xe1, 0x39, 0x74, 0x17, 0x7b, 0x86, 0x5d,
+	0x08, 0x12, 0xd2, 0x83, 0x35, 0x04, 0x08, 0x9d, 0xa5, 0x81, 0x87, 0xff, 0xc1, 0xd6, 0x89, 0x28,
+	0x55, 0xa1, 0x34, 0x95, 0xfa, 0x94, 0xf4, 0xc0, 0xc7, 0x3d, 0x88, 0x56, 0x95, 0x1a, 0x04, 0x47,
+	0xbf, 0x7c, 0xb7, 0xd7, 0xe6, 0x85, 0x14, 0x19, 0xe1, 0x3b, 0xd8, 0xf9, 0x6e, 0x06, 0x69, 0x56,
+	0xdd, 0xbd, 0x5f, 0xfc, 0xbf, 0xde, 0xc2, 0xd6, 0xb2, 0xc4, 0xbb, 0x7f, 0x1e, 0xba, 0xb1, 0xb3,
+	0x35, 0x1c, 0x42, 0x70, 0x45, 0x1a, 0xc1, 0xd0, 0x6e, 0xb6, 0x71, 0xbf, 0x89, 0x55, 0xc5, 0xd6,
+	0xf0, 0x10, 0xb6, 0xb2, 0xb6, 0xc5, 0xc7, 0xb4, 0x43, 0x08, 0x54, 0xad, 0x48, 0x5a, 0x8a, 0xa4,
+	0x51, 0xbc, 0x80, 0xd0, 0xb5, 0x1c, 0xb7, 0x0c, 0xd1, 0x8c, 0x2e, 0xde, 0x6e, 0x43, 0x2b, 0xbd,
+	0x80, 0x28, 0x5d, 0xd1, 0x08, 0x3c, 0x30, 0xea, 0x47, 0x06, 0x16, 0x0f, 0x1f, 0x17, 0x98, 0x02,
+	0x97, 0xa1, 0xfd, 0xc9, 0xbd, 0xfa, 0x1d, 0x00, 0x00, 0xff, 0xff, 0x2d, 0xf8, 0xe8, 0xc0, 0xfa,
+	0x04, 0x00, 0x00,
 }

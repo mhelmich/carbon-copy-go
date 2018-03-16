@@ -33,19 +33,46 @@ message NodeInfo {
     int32 serfPort = 6;
 }
 
-// these are the only two raft operations possible
+// This enum defines all raft operations.
+// 
 enum RaftOps {
     Set = 0;
     Delete = 1;
     ConsistentGet = 2;
+    AcquireUniqueShortNodeId = 3;
 }
 
-// the raft api enforces string as key and value type
+// Generic container for raft commands.
+// All operations need to be compressed somehow into this format.
 message RaftCommand {
     RaftOps cmd = 1;
     string key = 2;
     bytes value = 3;
 }
+
+message RaftCommand2 {
+    oneof cmd {
+        GetCommand getCmd = 1;
+        SetCommand setCmd = 2;
+        DeleteCommand deleteCmd = 3;
+        NodeIdCommand nodeIdCmd = 4;
+    }
+}
+
+message GetCommand {
+    string key = 1;
+}
+
+message SetCommand {
+    string key = 1;
+    bytes value = 2;
+}
+
+message DeleteCommand {
+    string key = 1;
+}
+
+message NodeIdCommand {}
 
 // I decided to cheap this out and make all of this a proto
 message RaftSnapshot {
@@ -56,37 +83,16 @@ message RaftSnapshot {
 // 1. It provides the ability for every node to join the raft cluster.
 //    It does that by providing the joinRaftCluster RPC.
 // 2. It provides the ability to access consensus values even though you're not part of the cluster.
-service RaftCluster {
-    // A new node is supposed to join this RPC to join the raft cluster if it wishes so.
-    // Every node in the cluster exposes this API and calling it on peers that have been provided to you,
-    // sounds like a good idea. The receiving node will try to forward the request to the actual raft leader.
-    // The raft leader then adds the new node to the cluster (if appropriate) and sends back an ok.
-    // The forward nature of this call is completely transparent to the caller.
-    rpc joinRaftCluster(RaftJoinRequest) returns (RaftJoinResponse) {}
-    // This rpc is used to query a random node for the address of the raft leader.
-    rpc whoIsRaftLeader(RaftLeaderRequest) returns (RaftLeaderResponse) {}
+service RaftService {
     rpc get(GetReq) returns (GetResp) {}
+    rpc consistentGet(GetReq) returns (GetResp) {}
     rpc set(SetReq) returns (SetResp) {}
     rpc delete(DeleteReq) returns (DeleteResp) {}
+    rpc acquireUniqueShortNodeId(AcquireUniqueShortNodeIdReq) returns (AcquireUniqueShortNodeIdResp) {}
 }
 
-message RaftJoinRequest {
-    string host = 1;
-    int32 port = 2;
-    string id = 3;
-}
-
-message RaftJoinResponse {
-    bool ok = 1;
-    string error = 2;
-}
-
-message RaftLeaderRequest {}
-
-message RaftLeaderResponse {
-    string raftLeaderHost = 1;
-    int32 raftLeaderPort = 2;
-    string raftLeaderAddr = 3;
+enum RaftServiceError {
+    NotLeader = 0;
 }
 
 message GetReq {
@@ -94,7 +100,9 @@ message GetReq {
 }
 
 message GetResp {
-    bytes value = 1;
+    RaftServiceError error = 1;
+    bytes value = 2;
+
 }
 
 message SetReq {
@@ -103,7 +111,8 @@ message SetReq {
 }
 
 message SetResp {
-    bool created = 1;
+    RaftServiceError error = 1;
+    bool created = 2;
 }
 
 message DeleteReq {
@@ -111,5 +120,13 @@ message DeleteReq {
 }
 
 message DeleteResp {
-    bool deleted = 1;
+    RaftServiceError error = 1;
+    bool deleted = 2;
+}
+
+message AcquireUniqueShortNodeIdReq {}
+
+message AcquireUniqueShortNodeIdResp {
+    RaftServiceError error = 1;
+    int32 nodeId = 2;
 }

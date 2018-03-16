@@ -52,13 +52,17 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	case pb.RaftOps_Delete:
 		return f.applyDelete(cmdProto.GetKey())
 	case pb.RaftOps_ConsistentGet:
-		f.logger.Info("Doing consistent get")
 		return f.applyConsistentGet(cmdProto.GetKey())
 	default:
 		return &raftApplyResponse{
 			err: fmt.Errorf("Unknown command: %v", cmdProto.Cmd),
 		}
 	}
+
+	// switch cmd := cmdProto.cmd.(type) {
+	// case *pb.GetCommand:
+	// case *pb.SetCommand:
+	// }
 }
 
 // Snapshot returns a snapshot of the key-value store.

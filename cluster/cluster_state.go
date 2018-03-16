@@ -1,0 +1,112 @@
+/*
+ * Copyright 2018 Marco Helmich
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package cluster
+
+import (
+	log "github.com/sirupsen/logrus"
+	"sync"
+)
+
+func newClusterState(logger *log.Entry) *clusterState {
+	return &clusterState{
+		mutex:          &sync.RWMutex{},
+		currentCluster: make(map[string]map[string]string),
+		raftLeader:     "",
+		raftVoters:     make(map[string]bool),
+		raftNonvoters:  make(map[string]bool),
+		raftNones:      make(map[string]bool),
+		logger:         logger,
+	}
+}
+
+type clusterState struct {
+	mutex          *sync.RWMutex
+	currentCluster map[string]map[string]string
+	raftLeader     string
+	raftVoters     map[string]bool
+	raftNonvoters  map[string]bool
+	raftNones      map[string]bool
+	logger         *log.Entry
+}
+
+func (cs *clusterState) updateMember(name string, tags map[string]string) {
+	cs.mutex.Lock()
+	// carry over all tags
+	cs.currentCluster[name] = tags
+
+	// find and set raft role for this node
+	v, ok := tags[serfMDKeyRaftRole]
+	if ok {
+		switch v {
+		case raftRoleLeader:
+			cs.raftLeader = name
+		case raftRoleVoter:
+			cs.raftVoters[name] = true
+		case raftRoleNonvoter:
+			cs.raftNonvoters[name] = true
+		case raftRoleNone:
+			cs.raftNones[name] = true
+		default:
+			cs.logger.Warnf("Found serf member (%s) with unknown raft role %s", name, v)
+		}
+	} else {
+		cs.logger.Warnf("Found serf member (%s) without raft role %s", name, v)
+	}
+
+	cs.mutex.Unlock()
+}
+
+func (cs *clusterState) removeMember(name string) {
+	cs.mutex.Lock()
+
+	delete(cs.currentCluster, name)
+	// just be sure to not leave dead bodies in our basement
+	delete(cs.raftVoters, name)
+	delete(cs.raftNonvoters, name)
+	delete(cs.raftNones, name)
+
+	cs.mutex.Unlock()
+}
+
+func (cs *clusterState) getNodeById(nodeId string) (map[string]string, bool) {
+	newMap := make(map[string]string)
+	cs.mutex.RLock()
+	m, ok := cs.currentCluster[nodeId]
+	if ok {
+		for k, v := range m {
+			newMap[k] = v
+		}
+	}
+	cs.mutex.RUnlock()
+
+	if ok {
+		return newMap, ok
+	} else {
+		return nil, ok
+	}
+
+}
+
+// currently only used for testing
+func (cs *clusterState) getClusterSize() int {
+	cs.mutex.RLock()
+	i := len(cs.currentCluster)
+	cs.mutex.RUnlock()
+	return i
+}
+
+func (cs *clusterState) printClusterState() {}

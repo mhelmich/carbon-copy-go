@@ -26,12 +26,12 @@ import (
 	"strings"
 )
 
-type raftClusterServerImpl struct {
+type raftServiceImpl struct {
 	r          *raft.Raft
 	raftNodeId string
 }
 
-func (rcs *raftClusterServerImpl) JoinRaftCluster(ctx context.Context, req *pb.RaftJoinRequest) (*pb.RaftJoinResponse, error) {
+func (rcs *raftServiceImpl) JoinRaftCluster(ctx context.Context, req *pb.RaftJoinRequest) (*pb.RaftJoinResponse, error) {
 	logger := rcs.setupLogger()
 	if rcs.r.State() == raft.Leader {
 		addr := fmt.Sprintf("%s:%d", req.Host, req.Port)
@@ -64,23 +64,19 @@ func (rcs *raftClusterServerImpl) JoinRaftCluster(ctx context.Context, req *pb.R
 	}, nil
 }
 
-func (rcs *raftClusterServerImpl) WhoIsRaftLeader(ctx context.Context, in *pb.RaftLeaderRequest) (*pb.RaftLeaderResponse, error) {
+func (rcs *raftServiceImpl) Get(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
 	return nil, nil
 }
 
-func (rcs *raftClusterServerImpl) Get(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
+func (rcs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp, error) {
 	return nil, nil
 }
 
-func (rcs *raftClusterServerImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp, error) {
+func (rcs *raftServiceImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.DeleteResp, error) {
 	return nil, nil
 }
 
-func (rcs *raftClusterServerImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.DeleteResp, error) {
-	return nil, nil
-}
-
-func (rcs *raftClusterServerImpl) setupLogger() *log.Entry {
+func (rcs *raftServiceImpl) setupLogger() *log.Entry {
 	hn, _ := os.Hostname()
 	return log.WithFields(log.Fields{
 		"hostname":   hn,

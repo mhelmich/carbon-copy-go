@@ -22,20 +22,22 @@ import (
 	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"os"
 	"testing"
 	"time"
 )
 
 func TestMembershipBasic(t *testing.T) {
-	hn, _ := os.Hostname()
+	hn := "127.0.0.1"
 	nid1 := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	c1 := clusterConfig{
 		Peers:    make([]string, 0),
 		hostname: hn,
-		SerfPort: 7474,
+		SerfPort: 47474,
 		nodeId:   nid1,
-		logger:   log.WithFields(log.Fields{"cluster": "AAA"}),
+		logger: log.WithFields(log.Fields{
+			"serf_port": 47474,
+			"node_id":   nid1,
+		}),
 	}
 
 	m1, err := createSerf(c1)
@@ -44,13 +46,16 @@ func TestMembershipBasic(t *testing.T) {
 
 	nid2 := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("localhost:%d", c1.SerfPort)
+	peers[0] = fmt.Sprintf("%s:%d", hn, c1.SerfPort)
 	c2 := clusterConfig{
 		Peers:    peers,
 		hostname: hn,
-		SerfPort: 7575,
+		SerfPort: 57575,
 		nodeId:   nid2,
-		logger:   log.WithFields(log.Fields{"cluster": "BBB"}),
+		logger: log.WithFields(log.Fields{
+			"serf_port": 57575,
+			"node_id":   nid2,
+		}),
 	}
 
 	m2, err := createSerf(c2)
@@ -70,6 +75,9 @@ func TestMembershipBasic(t *testing.T) {
 	assert.True(t, ok)
 	_, ok = m2.getNodeById(nid2)
 	assert.True(t, ok)
+
+	assert.Equal(t, 2, m1.getClusterSize())
+	assert.Equal(t, 2, m2.getClusterSize())
 
 	m1.close()
 	m2.close()
