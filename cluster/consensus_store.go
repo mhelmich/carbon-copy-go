@@ -215,22 +215,20 @@ func createValueService(config clusterConfig, r *raft.Raft, raftNodeId string) (
 	// 	}
 	// }
 
-	// lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
-	// if err != nil {
-	// 	return nil, err
-	// }
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
+	if err != nil {
+		return nil, err
+	}
 
-	// grpcServer := grpc.NewServer()
-	// raftServer := &raftServiceImpl{
-	// 	r:          r,
-	// 	raftNodeId: raftNodeId,
-	// }
+	grpcServer := grpc.NewServer()
+	raftServer := &raftServiceImpl{
+		raft:       r,
+		raftNodeId: raftNodeId,
+	}
 
-	// pb.RegisterRaftClusterServer(grpcServer, raftServer)
-	// go grpcServer.Serve(lis)
-	// return grpcServer, nil
-
-	return nil, nil
+	pb.RegisterRaftServiceServer(grpcServer, raftServer)
+	go grpcServer.Serve(lis)
+	return grpcServer, nil
 }
 
 func (cs *consensusStoreImpl) AcquireUniqueShortNodeId() (int, error) {

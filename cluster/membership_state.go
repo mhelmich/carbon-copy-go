@@ -21,10 +21,10 @@ import (
 	"sync"
 )
 
-func newClusterState(logger *log.Entry) *clusterState {
-	return &clusterState{
+func newMembershipState(logger *log.Entry) *membershipState {
+	return &membershipState{
 		mutex:          &sync.RWMutex{},
-		currentCluster: make(map[string]map[string]string),
+		currentMembers: make(map[string]map[string]string),
 		raftLeader:     "",
 		raftVoters:     make(map[string]bool),
 		raftNonvoters:  make(map[string]bool),
@@ -33,9 +33,9 @@ func newClusterState(logger *log.Entry) *clusterState {
 	}
 }
 
-type clusterState struct {
+type membershipState struct {
 	mutex          *sync.RWMutex
-	currentCluster map[string]map[string]string
+	currentMembers map[string]map[string]string
 	raftLeader     string
 	raftVoters     map[string]bool
 	raftNonvoters  map[string]bool
@@ -43,10 +43,10 @@ type clusterState struct {
 	logger         *log.Entry
 }
 
-func (cs *clusterState) updateMember(name string, tags map[string]string) {
+func (cs *membershipState) updateMember(name string, tags map[string]string) {
 	cs.mutex.Lock()
 	// carry over all tags
-	cs.currentCluster[name] = tags
+	cs.currentMembers[name] = tags
 
 	// find and set raft role for this node
 	v, ok := tags[serfMDKeyRaftRole]
@@ -70,10 +70,10 @@ func (cs *clusterState) updateMember(name string, tags map[string]string) {
 	cs.mutex.Unlock()
 }
 
-func (cs *clusterState) removeMember(name string) {
+func (cs *membershipState) removeMember(name string) {
 	cs.mutex.Lock()
 
-	delete(cs.currentCluster, name)
+	delete(cs.currentMembers, name)
 	// just be sure to not leave dead bodies in our basement
 	delete(cs.raftVoters, name)
 	delete(cs.raftNonvoters, name)
@@ -82,10 +82,10 @@ func (cs *clusterState) removeMember(name string) {
 	cs.mutex.Unlock()
 }
 
-func (cs *clusterState) getNodeById(nodeId string) (map[string]string, bool) {
+func (cs *membershipState) getMemberById(nodeId string) (map[string]string, bool) {
 	newMap := make(map[string]string)
 	cs.mutex.RLock()
-	m, ok := cs.currentCluster[nodeId]
+	m, ok := cs.currentMembers[nodeId]
 	if ok {
 		for k, v := range m {
 			newMap[k] = v
@@ -102,11 +102,11 @@ func (cs *clusterState) getNodeById(nodeId string) (map[string]string, bool) {
 }
 
 // currently only used for testing
-func (cs *clusterState) getClusterSize() int {
+func (cs *membershipState) getNumMembers() int {
 	cs.mutex.RLock()
-	i := len(cs.currentCluster)
+	i := len(cs.currentMembers)
 	cs.mutex.RUnlock()
 	return i
 }
 
-func (cs *clusterState) printClusterState() {}
+func (cs *membershipState) printMemberState() {}

@@ -91,7 +91,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 	m := &membership{
 		serf:         s,
 		logger:       config.logger,
-		clusterState: newClusterState(config.logger),
+		clusterState: newMembershipState(config.logger),
 	}
 
 	go m.handleSerfEvents(serfEventCh)
@@ -101,7 +101,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 type membership struct {
 	serf         *serf.Serf
 	logger       *log.Entry
-	clusterState *clusterState
+	clusterState *membershipState
 }
 
 func (m *membership) handleSerfEvents(ch <-chan serf.Event) {
@@ -143,7 +143,7 @@ func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent) {
 func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
 	// v, ok := m.currentCluster[nodeId]
 	// return v, ok
-	return m.clusterState.getNodeById(nodeId)
+	return m.clusterState.getMemberById(nodeId)
 }
 
 func (m *membership) updateMyRaftStatus(raftRole string) {
@@ -156,7 +156,7 @@ func (m *membership) updateMyRaftStatus(raftRole string) {
 
 // this is only used for testing right now
 func (m *membership) getClusterSize() int {
-	return m.clusterState.getClusterSize()
+	return m.clusterState.getNumMembers()
 }
 
 func (m *membership) close() {

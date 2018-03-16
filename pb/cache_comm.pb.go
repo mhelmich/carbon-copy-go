@@ -27,9 +27,12 @@ It has these top-level messages:
 	OwnerChanged
 	NodeInfo
 	RaftCommand
+	RaftCommand2
+	GetCommand
+	SetCommand
+	DeleteCommand
+	NodeIdCommand
 	RaftSnapshot
-	RaftJoinRequest
-	RaftJoinResponse
 	GetReq
 	GetResp
 	SetReq
