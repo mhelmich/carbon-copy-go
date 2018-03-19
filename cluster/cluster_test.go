@@ -185,15 +185,14 @@ func (ec *mockConsensusClient) close() error {
 
 func TestClusterBasic(t *testing.T) {
 	cfg1 := clusterConfig{
-		RaftPort:         17171,
-		RaftStoreDir:     "./db.raft1.db",
-		Peers:            nil,
-		hostname:         "127.0.0.1",
-		RaftServicePort:  27272,
-		SerfPort:         37373,
-		SerfSnapshotPath: "./db.serf1.db",
-		nodeId:           "node1",
-		raftNotifyCh:     make(chan bool, 16),
+		RaftPort:        17171,
+		numRaftVoters:   3,
+		Peers:           nil,
+		hostname:        "127.0.0.1",
+		RaftServicePort: 27272,
+		SerfPort:        37373,
+		nodeId:          "node1",
+		raftNotifyCh:    make(chan bool, 16),
 		logger: log.WithFields(log.Fields{
 			"cluster": "AAA",
 		}),
@@ -203,20 +202,21 @@ func TestClusterBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
 
-	time.Sleep(7 * time.Second)
+	c1.printClusterState()
+	time.Sleep(3 * time.Second)
+	c1.printClusterState()
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", "127.0.0.1", cfg1.SerfPort)
 	cfg2 := clusterConfig{
-		RaftPort:         18181,
-		RaftStoreDir:     "./db.raft2.db",
-		Peers:            peers,
-		hostname:         "127.0.0.1",
-		RaftServicePort:  28282,
-		SerfPort:         38383,
-		SerfSnapshotPath: "./db.serf2.db",
-		nodeId:           "node2",
-		raftNotifyCh:     make(chan bool, 16),
+		RaftPort:        18181,
+		numRaftVoters:   3,
+		Peers:           peers,
+		hostname:        "127.0.0.1",
+		RaftServicePort: 28282,
+		SerfPort:        38383,
+		nodeId:          "node2",
+		raftNotifyCh:    make(chan bool, 16),
 		logger: log.WithFields(log.Fields{
 			"cluster": "BBB",
 		}),
@@ -226,33 +226,12 @@ func TestClusterBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c2)
 
-	time.Sleep(7 * time.Second)
+	time.Sleep(3 * time.Second)
+	c2.printClusterState()
 
-	peers2 := make([]string, 1)
-	peers2[0] = fmt.Sprintf("%s:%d", "127.0.0.1", cfg2.SerfPort)
-	cfg3 := clusterConfig{
-		RaftPort:         19191,
-		RaftStoreDir:     "./db.raft3.db",
-		Peers:            peers2,
-		hostname:         "127.0.0.1",
-		RaftServicePort:  29292,
-		SerfPort:         39393,
-		SerfSnapshotPath: "./db.serf3.db",
-		nodeId:           "node3",
-		raftNotifyCh:     make(chan bool, 16),
-		logger: log.WithFields(log.Fields{
-			"cluster": "CCC",
-		}),
-		isDevMode: true,
-	}
-	c3, err := createNewCluster(cfg3)
-	assert.Nil(t, err)
-	assert.NotNil(t, c3)
-
-	time.Sleep(14 * time.Second)
+	time.Sleep(4 * time.Second)
+	c2.printClusterState()
 	c1.Close()
-	time.Sleep(14 * time.Second)
+	time.Sleep(3 * time.Second)
 	c2.Close()
-	time.Sleep(7 * time.Second)
-	c3.Close()
 }

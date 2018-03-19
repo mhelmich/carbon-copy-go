@@ -37,6 +37,7 @@ type clusterConfig struct {
 	nodeId           string
 	raftNotifyCh     chan bool
 	logger           *log.Entry
+	numRaftVoters    int
 	isDevMode        bool
 }
 

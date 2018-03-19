@@ -147,23 +147,26 @@ func createRaft(config clusterConfig) (*raft.Raft, *fsm, error) {
 	fsm := &fsm{
 		logger: config.logger,
 		state:  make(map[string][]byte),
-		mutex:  sync.Mutex{},
+		mutex:  sync.RWMutex{},
 	}
 
 	// instantiate the Raft systems
 	newRaft, err := raft.NewRaft(raftConfig, fsm, logStore, stableStore, snapshotStore, transport)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// we all assume this is a brandnew cluster if no peers are being
 	// supplied in the config
 	if config.Peers == nil || len(config.Peers) == 0 {
 		hasExistingState, _ := raft.HasExistingState(logStore, stableStore, snapshotStore)
 		if !hasExistingState {
-			config.logger.Infof("Bootstrapping cluster with %v and %v", transport.LocalAddr(), raftConfig.LocalID)
+			config.logger.Infof("Bootstrapping cluster with %v and %v", raft.ServerAddress(localhost), raftConfig.LocalID)
 			configuration := raft.Configuration{
 				Servers: []raft.Server{
 					{
 						ID:      raftConfig.LocalID,
-						Address: transport.LocalAddr(),
+						Address: raft.ServerAddress(localhost),
 					},
 				},
 			}
@@ -178,7 +181,7 @@ func createRaft(config clusterConfig) (*raft.Raft, *fsm, error) {
 		}
 	}
 
-	return newRaft, fsm, err
+	return newRaft, fsm, nil
 }
 
 func createRaftService(config clusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
@@ -256,8 +259,8 @@ func (cs *consensusStoreImpl) ConsistentGet(key string) ([]byte, error) {
 }
 
 func (cs *consensusStoreImpl) Get(key string) ([]byte, error) {
-	cs.raftFsm.mutex.Lock()
-	defer cs.raftFsm.mutex.Unlock()
+	cs.raftFsm.mutex.RLock()
+	defer cs.raftFsm.mutex.RUnlock()
 	// this might be a stale read :/
 	return cs.raftFsm.state[key], nil
 }
@@ -301,7 +304,6 @@ func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) raft.ApplyFuture {
 
 	switch v := f.(type) {
 	case raft.ApplyFuture:
-		cs.logger.Infof("apply future: %v", v)
 		return v
 	default:
 		return localApplyFuture{}

@@ -50,11 +50,11 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) boo
 	equal := reflect.DeepEqual(cs.currentMembers[name], tags)
 	cs.mutex.RUnlock()
 
-	cs.logger.Infof("During update %s: existing [%t] equal [%t] updated [%t]", name, existing, equal, !(existing && equal))
 	if existing && equal {
 		return false
 	}
 
+	// TODO - I might be able to rid of all of this
 	cs.mutex.Lock()
 	// carry over all tags
 	cs.currentMembers[name] = tags
@@ -75,8 +75,6 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) boo
 		default:
 			cs.logger.Warnf("Found serf member (%s) with unknown raft role %s", name, v)
 		}
-	} else {
-		cs.logger.Warnf("Found serf member (%s) without raft role %s", name, v)
 	}
 
 	cs.mutex.Unlock()

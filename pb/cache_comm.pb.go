@@ -32,6 +32,7 @@ It has these top-level messages:
 	DeleteCommand
 	NodeIdCommand
 	RaftSnapshot
+	RaftVoterState
 	GetReq
 	GetResp
 	SetReq

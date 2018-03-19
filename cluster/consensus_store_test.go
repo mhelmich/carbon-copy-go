@@ -19,6 +19,7 @@ package cluster
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/hashicorp/raft"
 	"github.com/oklog/ulid"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -26,11 +27,9 @@ import (
 )
 
 func TestConsensusStoreBasic(t *testing.T) {
-	raftDbPath1 := "./db.raft1.db"
 	cfg1 := clusterConfig{
 		RaftPort:        9876,
 		RaftServicePort: 9877,
-		RaftStoreDir:    raftDbPath1,
 		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
@@ -44,11 +43,9 @@ func TestConsensusStoreBasic(t *testing.T) {
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
-	raftDbPath2 := "./db.raft2.db"
 	cfg2 := clusterConfig{
 		RaftPort:        6789,
 		RaftServicePort: 6780,
-		RaftStoreDir:    raftDbPath2,
 		Peers:           peers,
 		isDevMode:       true,
 	}
@@ -79,11 +76,9 @@ func TestConsensusStoreBasic(t *testing.T) {
 }
 
 func TestConsensusStoreHopscotch(t *testing.T) {
-	raftDbPath1 := "./db.raft1.db"
 	cfg1 := clusterConfig{
 		RaftPort:        9876,
 		RaftServicePort: 9877,
-		RaftStoreDir:    raftDbPath1,
 		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
@@ -97,11 +92,9 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
-	raftDbPath2 := "./db.raft2.db"
 	cfg2 := clusterConfig{
 		RaftPort:        6789,
 		RaftServicePort: 6780,
-		RaftStoreDir:    raftDbPath2,
 		Peers:           peers,
 		isDevMode:       true,
 	}
@@ -116,11 +109,9 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 
 	peers2 := make([]string, 1)
 	peers2[0] = fmt.Sprintf("localhost:%d", cfg2.RaftServicePort)
-	raftDbPath3 := "./db.raft3.db"
 	cfg3 := clusterConfig{
 		RaftPort:        4567,
 		RaftServicePort: 7654,
-		RaftStoreDir:    raftDbPath3,
 		Peers:           peers2,
 		isDevMode:       true,
 	}
@@ -148,11 +139,9 @@ func _TestConsensusStoreConsistentGet(t *testing.T) {
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
-	raftDbPath2 := "./db.raft2.db"
 	cfg2 := clusterConfig{
 		RaftPort:        6789,
 		RaftServicePort: 6780,
-		RaftStoreDir:    raftDbPath2,
 		Peers:           peers,
 		isDevMode:       true,
 	}

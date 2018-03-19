@@ -20,19 +20,21 @@ import (
 	"fmt"
 	"github.com/hashicorp/serf/serf"
 	log "github.com/sirupsen/logrus"
-	golanglog "log"
-	// "os"
+	// golanglog "log"
+	"strconv"
 )
 
 const (
 	serfEventChannelBufferSize = 256
 
-	serfMDKeySerfAddr        = "serf_addr"
-	serfMDKeyRaftAddr        = "raft_addr"
-	serfMDKeyRaftServiceAddr = "raft_service_addr"
+	serfMDKeyHost            = "host"
+	serfMDKeySerfPort        = "serf_port"
+	serfMDKeyRaftPort        = "raft_port"
+	serfMDKeyRaftServicePort = "raft_service_port"
 	serfMDKeyRaftRole        = "raft_role"
-	serfMDKeyGridAddr        = "grid_addr"
+	serfMDKeyGridPort        = "grid_port"
 
+	// TODO: this can be changed to use ints instead
 	raftRoleLeader   = "l"
 	raftRoleVoter    = "v"
 	raftRoleNonvoter = "n"
@@ -41,7 +43,7 @@ const (
 
 func createNewMembership(config clusterConfig) (*membership, error) {
 	serfConfig := serf.DefaultConfig()
-	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf ", 0)
+	// serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf ", 0)
 	// it's important that this channel never blocks
 	// if it blocks, the sender will block and therefore stop applying log entries
 	// which means we're not up to date with the current cluster state anymore
@@ -60,10 +62,11 @@ func createNewMembership(config clusterConfig) (*membership, error) {
 
 	serfConfig.Tags = make(map[string]string)
 	serfConfig.Tags["role"] = "carbon-copy"
-	serfConfig.Tags[serfMDKeySerfAddr] = fmt.Sprintf("%s:%d", config.hostname, config.SerfPort)
-	serfConfig.Tags[serfMDKeyRaftAddr] = fmt.Sprintf("%s:%d", config.hostname, config.RaftPort)
-	serfConfig.Tags[serfMDKeyRaftServiceAddr] = fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort)
-	serfConfig.Tags[serfMDKeyRaftRole] = raftRoleNone
+	serfConfig.Tags[serfMDKeyHost] = config.hostname
+	serfConfig.Tags[serfMDKeySerfPort] = strconv.Itoa(config.SerfPort)
+	serfConfig.Tags[serfMDKeyRaftPort] = strconv.Itoa(config.RaftPort)
+	serfConfig.Tags[serfMDKeyRaftServicePort] = strconv.Itoa(config.RaftServicePort)
+	serfConfig.Tags[serfMDKeyGridPort] = strconv.Itoa(0)
 
 	surf, err := serf.Create(serfConfig)
 	if err != nil {
@@ -126,7 +129,6 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- 
 			// Obviously we receive these events multiple times per actual event.
 			// That means we need to do some sort of diffing.
 			//
-
 			switch e.EventType() {
 			case serf.EventMemberJoin, serf.EventMemberUpdate:
 				m.handleMemberJoinEvent(e.(serf.MemberEvent), memberJoined)
@@ -168,8 +170,17 @@ func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
 func (m *membership) updateRaftTag(newTags map[string]string) error {
 	// this will update the nodes metadata and broadcast it out
 	// blocks until broadcasting was successful or timed out
-	err := m.serf.SetTags(newTags)
-	m.membershipState.updateMember(m.myNodeId(), newTags)
+	tags, ok := m.getNodeById(m.myNodeId())
+	if ok {
+		for k, v := range newTags {
+			tags[k] = v
+		}
+	} else {
+		tags = newTags
+	}
+
+	err := m.serf.SetTags(tags)
+	m.membershipState.updateMember(m.myNodeId(), tags)
 	return err
 }
 

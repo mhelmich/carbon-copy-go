@@ -35,7 +35,7 @@ type raftApplyResponse struct {
 
 type fsm struct {
 	state  map[string][]byte
-	mutex  sync.Mutex
+	mutex  sync.RWMutex
 	logger *log.Entry
 }
 
@@ -45,6 +45,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	if err := proto.Unmarshal(l.Data, cmdProto); err != nil {
 		f.logger.Panicf("Shutting down as I can't apply a raft change: %s", err)
 	}
+
+	f.logger.Infof("Applying %d", l.Index)
 
 	switch cmdProto.GetCmd().(type) {
 	case *pb.RaftCommand_SetCmd:
@@ -98,9 +100,9 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 }
 
 func (f *fsm) applyConsistentGet(key string) interface{} {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
+	f.mutex.RLock()
 	buf, ok := f.state[key]
+	f.mutex.RUnlock()
 	f.logger.Infof("applyConsistentGet -- key: %s - ok: %t - buf: %v", key, ok, buf)
 	return &raftApplyResponse{
 		err:   nil,
@@ -110,15 +112,15 @@ func (f *fsm) applyConsistentGet(key string) interface{} {
 
 func (f *fsm) applySet(key string, value []byte) interface{} {
 	f.mutex.Lock()
-	defer f.mutex.Unlock()
 	f.state[key] = value
+	f.mutex.Unlock()
 	return nil
 }
 
 func (f *fsm) applyDelete(key string) interface{} {
 	f.mutex.Lock()
-	defer f.mutex.Unlock()
 	delete(f.state, key)
+	f.mutex.Unlock()
 	return nil
 }
 
