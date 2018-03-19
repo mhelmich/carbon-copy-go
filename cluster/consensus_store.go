@@ -84,7 +84,7 @@ type consensusStoreImpl struct {
 	raft            *raft.Raft
 	raftFsm         *fsm
 	raftValueServer *grpc.Server
-	raftNotifyCh    chan bool
+	raftNotifyCh    <-chan bool
 }
 
 func createRaft(config clusterConfig) (*raft.Raft, *fsm, error) {
@@ -297,6 +297,10 @@ func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) raft.ApplyFuture {
 	default:
 		return localApplyFuture{}
 	}
+}
+
+func (cs *consensusStoreImpl) isRaftLeader() bool {
+	return cs.raft.State() == raft.Leader
 }
 
 func (cs *consensusStoreImpl) Close() error {

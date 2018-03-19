@@ -35,7 +35,7 @@ type clusterConfig struct {
 	SerfPort         int
 	SerfSnapshotPath string
 	nodeId           string
-	raftNotifyCh     <-chan bool
+	raftNotifyCh     chan bool
 	logger           *log.Entry
 	isDevMode        bool
 }
@@ -47,7 +47,8 @@ type Cluster interface {
 }
 
 func NewCluster() (Cluster, error) {
-	return createNewCluster()
+	// return createNewCluster()
+	return nil, nil
 }
 
 type consensusClient interface {

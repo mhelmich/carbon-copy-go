@@ -40,7 +40,7 @@ func TestMembershipBasic(t *testing.T) {
 		}),
 	}
 
-	m1, err := createSerf(c1)
+	m1, err := createNewMembership(c1)
 	assert.Nil(t, err)
 	assert.NotNil(t, m1)
 
@@ -58,7 +58,7 @@ func TestMembershipBasic(t *testing.T) {
 		}),
 	}
 
-	m2, err := createSerf(c2)
+	m2, err := createNewMembership(c2)
 	assert.Nil(t, err)
 	assert.NotNil(t, m2)
 

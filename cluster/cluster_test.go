@@ -18,16 +18,12 @@ package cluster
 
 import (
 	"context"
-	"encoding/binary"
-	"github.com/golang/protobuf/proto"
-	"github.com/google/uuid"
-	"github.com/mhelmich/carbon-copy-go/pb"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"strconv"
-	"strings"
 	"testing"
+	"time"
 )
 
 ////////////////////////////////////////////////////////////////////////
@@ -96,93 +92,167 @@ func (ec *mockConsensusClient) close() error {
 /////
 ////////////////////////////////////////////////////////////////////////
 
-func TestClusterAllocateMyNodeIdBasic(t *testing.T) {
-	mockEtcd := &mockConsensusClient{}
-	// mock node id allocation
-	kvs := []kvStr{
-		kvStr{"0", ""},
-		kvStr{"1", ""},
-		kvStr{"2", ""},
-		kvStr{"4", ""},
-		kvStr{"7", ""},
+// func TestClusterAllocateMyNodeIdBasic(t *testing.T) {
+// 	mockEtcd := &mockConsensusClient{}
+// 	// mock node id allocation
+// 	kvs := []kvStr{
+// 		kvStr{"0", ""},
+// 		kvStr{"1", ""},
+// 		kvStr{"2", ""},
+// 		kvStr{"4", ""},
+// 		kvStr{"7", ""},
+// 	}
+// 	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
+// 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"3", "").Return(true, nil)
+
+// 	// run test
+// 	idChan := startMyNodeIdProvider(context.Background(), mockEtcd)
+// 	nodeId := <-idChan
+// 	log.Infof("Acquired node id %d", nodeId)
+// }
+
+// func TestClusterAllocateMyNodeIdConflict(t *testing.T) {
+// 	mockEtcd := &mockConsensusClient{}
+// 	// mock node id allocation
+// 	kvs := []kvStr{
+// 		kvStr{"0", ""},
+// 		kvStr{"1", ""},
+// 		kvStr{"2", ""},
+// 		kvStr{"4", ""},
+// 		kvStr{"7", ""},
+// 	}
+// 	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
+// 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"3", "").Return(false, nil)
+// 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"5", "").Return(true, nil)
+
+// 	// run test
+// 	idChan := startMyNodeIdProvider(context.Background(), mockEtcd)
+// 	nodeId := <-idChan
+// 	log.Infof("Acquired node id %d", nodeId)
+// }
+
+// func TestClusterNodeInfoWatcher(t *testing.T) {
+// 	mockEtcd := &mockConsensusClient{}
+// 	// mock node id allocation
+// 	kvs := []kvStr{}
+// 	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
+// 	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"1", "").Return(true, nil)
+
+// 	kvBytesChan := make(chan []*kvBytes)
+// 	mockEtcd.On("watchKeyPrefix", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvBytesChan, nil)
+
+// 	cluster, err := createNewClusterWithConsensus(context.Background(), mockEtcd)
+// 	assert.Nil(t, err)
+// 	nodeInfoChan, err := cluster.GetNodeConnectionInfoUpdates()
+// 	assert.Nil(t, err)
+// 	assert.NotNil(t, nodeInfoChan)
+
+// 	numNodeInfos := 8
+// 	go func() {
+// 		allNodeInfos := make([]*kvBytes, numNodeInfos)
+// 		for i := 0; i < numNodeInfos; i++ {
+// 			uuid, err := uuid.NewRandom()
+// 			assert.Nil(t, err)
+// 			nodeInfoProto := &pb.NodeInfo{
+// 				NodeId: int32(i),
+// 				Host:   uuid.String() + "_" + strconv.Itoa(i),
+// 			}
+// 			buf, err := proto.Marshal(nodeInfoProto)
+// 			assert.Nil(t, err)
+// 			assert.NotNil(t, buf)
+// 			bs := make([]byte, 4)
+// 			binary.LittleEndian.PutUint32(bs, uint32(i))
+// 			allNodeInfos[i] = &kvBytes{
+// 				key:   bs,
+// 				value: buf,
+// 			}
+// 		}
+
+// 		kvBytesChan <- allNodeInfos
+// 	}()
+
+// 	nodeInfos := <-nodeInfoChan
+// 	assert.Equal(t, numNodeInfos, len(nodeInfos))
+// 	assert.True(t, nodeInfos[0].nodeId == 0)
+// 	assert.True(t, strings.HasSuffix(nodeInfos[0].nodeAddress, "_0"))
+// 	assert.True(t, nodeInfos[3].nodeId == 3)
+// 	assert.True(t, strings.HasSuffix(nodeInfos[3].nodeAddress, "_3"))
+// 	assert.True(t, nodeInfos[5].nodeId == 5)
+// 	assert.True(t, strings.HasSuffix(nodeInfos[5].nodeAddress, "_5"))
+// 	assert.True(t, nodeInfos[7].nodeId == 7)
+// 	assert.True(t, strings.HasSuffix(nodeInfos[7].nodeAddress, "_7"))
+// }
+
+func TestCluster2Basic(t *testing.T) {
+	cfg1 := clusterConfig{
+		RaftPort:         17171,
+		RaftStoreDir:     "./db.raft1.db",
+		Peers:            nil,
+		hostname:         "127.0.0.1",
+		RaftServicePort:  27272,
+		SerfPort:         37373,
+		SerfSnapshotPath: "./db.serf1.db",
+		nodeId:           "node1",
+		raftNotifyCh:     make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "AAA",
+		}),
+		isDevMode: true,
 	}
-	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"3", "").Return(true, nil)
+	c1, err := createNewCluster(cfg1)
+	assert.Nil(t, err)
+	assert.NotNil(t, c1)
 
-	// run test
-	idChan := startMyNodeIdProvider(context.Background(), mockEtcd)
-	nodeId := <-idChan
-	log.Infof("Acquired node id %d", nodeId)
-}
+	time.Sleep(7 * time.Second)
 
-func TestClusterAllocateMyNodeIdConflict(t *testing.T) {
-	mockEtcd := &mockConsensusClient{}
-	// mock node id allocation
-	kvs := []kvStr{
-		kvStr{"0", ""},
-		kvStr{"1", ""},
-		kvStr{"2", ""},
-		kvStr{"4", ""},
-		kvStr{"7", ""},
+	peers := make([]string, 1)
+	peers[0] = fmt.Sprintf("%s:%d", "127.0.0.1", cfg1.SerfPort)
+	cfg2 := clusterConfig{
+		RaftPort:         18181,
+		RaftStoreDir:     "./db.raft2.db",
+		Peers:            peers,
+		hostname:         "127.0.0.1",
+		RaftServicePort:  28282,
+		SerfPort:         38383,
+		SerfSnapshotPath: "./db.serf2.db",
+		nodeId:           "node2",
+		raftNotifyCh:     make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "BBB",
+		}),
+		isDevMode: true,
 	}
-	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"3", "").Return(false, nil)
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"5", "").Return(true, nil)
-
-	// run test
-	idChan := startMyNodeIdProvider(context.Background(), mockEtcd)
-	nodeId := <-idChan
-	log.Infof("Acquired node id %d", nodeId)
-}
-
-func TestClusterNodeInfoWatcher(t *testing.T) {
-	mockEtcd := &mockConsensusClient{}
-	// mock node id allocation
-	kvs := []kvStr{}
-	mockEtcd.On("getSortedRange", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvs, nil)
-	mockEtcd.On("putIfAbsent", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName+"1", "").Return(true, nil)
-
-	kvBytesChan := make(chan []*kvBytes)
-	mockEtcd.On("watchKeyPrefix", mock.AnythingOfTypeArgument("*context.emptyCtx"), consensusNodesRootName).Return(kvBytesChan, nil)
-
-	cluster, err := createNewClusterWithConsensus(context.Background(), mockEtcd)
+	c2, err := createNewCluster(cfg2)
 	assert.Nil(t, err)
-	nodeInfoChan, err := cluster.GetNodeConnectionInfoUpdates()
+	assert.NotNil(t, c2)
+
+	time.Sleep(7 * time.Second)
+
+	peers2 := make([]string, 1)
+	peers2[0] = fmt.Sprintf("%s:%d", "127.0.0.1", cfg2.SerfPort)
+	cfg3 := clusterConfig{
+		RaftPort:         19191,
+		RaftStoreDir:     "./db.raft3.db",
+		Peers:            peers2,
+		hostname:         "127.0.0.1",
+		RaftServicePort:  29292,
+		SerfPort:         39393,
+		SerfSnapshotPath: "./db.serf3.db",
+		nodeId:           "node3",
+		raftNotifyCh:     make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "CCC",
+		}),
+		isDevMode: true,
+	}
+	c3, err := createNewCluster(cfg3)
 	assert.Nil(t, err)
-	assert.NotNil(t, nodeInfoChan)
+	assert.NotNil(t, c3)
 
-	numNodeInfos := 8
-	go func() {
-		allNodeInfos := make([]*kvBytes, numNodeInfos)
-		for i := 0; i < numNodeInfos; i++ {
-			uuid, err := uuid.NewRandom()
-			assert.Nil(t, err)
-			nodeInfoProto := &pb.NodeInfo{
-				NodeId: int32(i),
-				Host:   uuid.String() + "_" + strconv.Itoa(i),
-			}
-			buf, err := proto.Marshal(nodeInfoProto)
-			assert.Nil(t, err)
-			assert.NotNil(t, buf)
-			bs := make([]byte, 4)
-			binary.LittleEndian.PutUint32(bs, uint32(i))
-			allNodeInfos[i] = &kvBytes{
-				key:   bs,
-				value: buf,
-			}
-		}
-
-		kvBytesChan <- allNodeInfos
-	}()
-
-	nodeInfos := <-nodeInfoChan
-	assert.Equal(t, numNodeInfos, len(nodeInfos))
-	assert.True(t, nodeInfos[0].nodeId == 0)
-	assert.True(t, strings.HasSuffix(nodeInfos[0].nodeAddress, "_0"))
-	assert.True(t, nodeInfos[3].nodeId == 3)
-	assert.True(t, strings.HasSuffix(nodeInfos[3].nodeAddress, "_3"))
-	assert.True(t, nodeInfos[5].nodeId == 5)
-	assert.True(t, strings.HasSuffix(nodeInfos[5].nodeAddress, "_5"))
-	assert.True(t, nodeInfos[7].nodeId == 7)
-	assert.True(t, strings.HasSuffix(nodeInfos[7].nodeAddress, "_7"))
+	time.Sleep(14 * time.Second)
+	c1.Close()
+	time.Sleep(14 * time.Second)
+	c2.Close()
+	time.Sleep(7 * time.Second)
+	c3.Close()
 }

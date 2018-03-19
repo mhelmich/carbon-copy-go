@@ -21,7 +21,7 @@ import (
 	"github.com/hashicorp/serf/serf"
 	log "github.com/sirupsen/logrus"
 	golanglog "log"
-	"os"
+	// "os"
 )
 
 const (
@@ -39,7 +39,7 @@ const (
 	raftRoleNone     = "x"
 )
 
-func createSerf(config clusterConfig) (*membership, error) {
+func createNewMembership(config clusterConfig) (*membership, error) {
 	serfConfig := serf.DefaultConfig()
 	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf ", 0)
 	// it's important that this channel never blocks
@@ -52,10 +52,7 @@ func createSerf(config clusterConfig) (*membership, error) {
 	serfConfig.MemberlistConfig.BindAddr = config.hostname
 	serfConfig.MemberlistConfig.BindPort = config.SerfPort
 
-	if config.SerfSnapshotPath != "" {
-		if err := os.MkdirAll(config.SerfSnapshotPath, 0755); err != nil {
-			return nil, fmt.Errorf("couldn't create dirs: %s", err)
-		}
+	if config.SerfSnapshotPath != "" && config.isDevMode == false {
 		serfConfig.SnapshotPath = config.SerfSnapshotPath
 	} else {
 		config.logger.Warn("Starting serf without a persistent snapshot!")
@@ -89,45 +86,52 @@ func createSerf(config clusterConfig) (*membership, error) {
 		config.logger.Info("No peers defined - starting a brandnew cluster!")
 	}
 
-	nodeJoined := make(chan string, serfEventChannelBufferSize)
-	nodeLeft := make(chan string, serfEventChannelBufferSize)
+	memberJoined := make(chan string)
+	memberLeft := make(chan string)
 
 	m := &membership{
-		serf:         surf,
-		logger:       config.logger,
-		clusterState: newMembershipState(config.logger),
-		nodeJoined:   nodeJoined,
-		nodeLeft:     nodeLeft,
+		serf:            surf,
+		logger:          config.logger,
+		membershipState: newMembershipState(config.logger),
+		memberJoined:    memberJoined,
+		memberLeft:      memberLeft,
+		config:          config,
 	}
 
-	go m.handleSerfEvents(serfEventCh, nodeJoined, nodeLeft, nodeUpdated)
+	go m.handleSerfEvents(serfEventCh, memberJoined, memberLeft)
 	return m, nil
 }
 
 type membership struct {
-	serf         *serf.Serf
-	logger       *log.Entry
-	clusterState *membershipState
+	serf            *serf.Serf
+	logger          *log.Entry
+	membershipState *membershipState
+	config          clusterConfig
 
-	nodeJoined chan<- string
-	nodeLeft   chan<- string
+	memberJoined <-chan string
+	memberLeft   <-chan string
 }
 
-func (m *membership) handleSerfEvents(ch <-chan serf.Event, nodeJoined chan<- string, nodeLeft chan<- string) {
+func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- string, memberLeft chan<- string) {
 	for { // ever...
 		select {
 		case e := <-ch:
 			if e == nil {
 				// seems the channel was closed
 				// let's stop this go routine
-				break
+				return
 			}
+
+			//
+			// Obviously we receive these events multiple times per actual event.
+			// That means we need to do some sort of diffing.
+			//
 
 			switch e.EventType() {
 			case serf.EventMemberJoin, serf.EventMemberUpdate:
-				m.handleMemberJoinEvent(e.(serf.MemberEvent), nodeJoined)
+				m.handleMemberJoinEvent(e.(serf.MemberEvent), memberJoined)
 			case serf.EventMemberLeave, serf.EventMemberFailed:
-				m.handleMemberLeaveEvent(e.(serf.MemberEvent), nodeLeft)
+				m.handleMemberLeaveEvent(e.(serf.MemberEvent), memberLeft)
 			}
 		case <-m.serf.ShutdownCh():
 			return
@@ -135,43 +139,46 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event, nodeJoined chan<- st
 	}
 }
 
-func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, nodeJoined chan<- string) {
+func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined chan<- string) {
 	for _, item := range me.Members {
-		m.clusterState.updateMember(item.Name, item.Tags)
-		nodeJoined <- item.Name
+		updated := m.membershipState.updateMember(item.Name, item.Tags)
+		if updated {
+			memberJoined <- item.Name
+		}
 	}
 }
 
-func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent, nodeLeft chan<- string) {
+func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent, memberLeft chan<- string) {
 	for _, item := range me.Members {
-		m.clusterState.removeMember(item.Name)
-		nodeLeft <- item.Name
+		removed := m.membershipState.removeMember(item.Name)
+		if removed {
+			memberLeft <- item.Name
+		}
 	}
+}
+
+func (m *membership) getRaftLeaderTags() (map[string]string, bool) {
+	return m.membershipState.getMemberById(m.membershipState.raftLeader)
 }
 
 func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
-	// v, ok := m.currentCluster[nodeId]
-	// return v, ok
-	return m.clusterState.getMemberById(nodeId)
+	return m.membershipState.getMemberById(nodeId)
 }
 
-func (m *membership) updateMyRaftStatus(raftRole string) {
-	tags := make(map[string]string)
-	tags[serfMDKeyRaftRole] = raftRole
+func (m *membership) updateRaftTag(newTags map[string]string) error {
 	// this will update the nodes metadata and broadcast it out
 	// blocks until broadcasting was successful or timed out
-	m.serf.SetTags(tags)
+	err := m.serf.SetTags(newTags)
+	m.membershipState.updateMember(m.myNodeId(), newTags)
+	return err
 }
 
-func (m *membership) updateRaftTag(newTags map[string]string) {
-	// this will update the nodes metadata and broadcast it out
-	// blocks until broadcasting was successful or timed out
-	m.serf.SetTags(newTags)
+func (m *membership) myNodeId() string {
+	return m.config.nodeId
 }
 
-// this is only used for testing right now
 func (m *membership) getClusterSize() int {
-	return m.clusterState.getNumMembers()
+	return m.membershipState.getNumMembers()
 }
 
 func (m *membership) close() {

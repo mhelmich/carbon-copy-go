@@ -17,11 +17,9 @@
 package cluster
 
 import (
-	"context"
-	"github.com/golang/protobuf/proto"
-	"github.com/mhelmich/carbon-copy-go/pb"
+	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
-	"strconv"
+	"time"
 )
 
 // The cluster construct consists of a few components taking over different tasks.
@@ -80,109 +78,259 @@ type kvBytes struct {
 }
 
 type clusterImpl struct {
-	consensus consensusClient
-	myNodeId  int
-	// this channel will only receive one int
-	// after that it is closed
-	myNodeIdCh chan int
+	consensusStore *consensusStoreImpl
+	membership     *membership
+	logger         *log.Entry
+	config         clusterConfig
 }
 
-func createNewCluster() (*clusterImpl, error) {
-	ctx := context.Background()
-	// make an actual connection
-	etcd, err := createNewEtcdConsensus(ctx)
+func createNewCluster(config clusterConfig) (*clusterImpl, error) {
+	m, err := createNewMembership(config)
 	if err != nil {
 		return nil, err
 	}
 
-	return createNewClusterWithConsensus(ctx, etcd)
-}
-
-func createNewClusterWithConsensus(ctx context.Context, cc consensusClient) (*clusterImpl, error) {
-	c := &clusterImpl{
-		consensus:  cc,
-		myNodeIdCh: startMyNodeIdProvider(ctx, cc),
-		myNodeId:   -1,
+	cs, err := createNewConsensusStore(config)
+	if err != nil {
+		return nil, err
 	}
 
-	return c, nil
+	ci := &clusterImpl{
+		membership:     m,
+		consensusStore: cs,
+		config:         config,
+		logger:         config.logger,
+	}
+
+	go ci.leaderWatch()
+	return ci, nil
 }
 
-func startMyNodeIdProvider(ctx context.Context, cc consensusClient) chan int {
-	ch := make(chan int, 1)
+func (ci *clusterImpl) leaderWatch() {
+	for { // ever...
+		isLeader := <-ci.consensusStore.raftNotifyCh
+		if isLeader {
+			ci.logger.Info("I'm the leader ... wheeee!")
+			go ci.leaderLoop()
+		} else {
+			ci.logger.Info("I'm not the leader ... cruel world!")
+		}
+	}
+}
 
-	go func() {
-		for {
-			kvs, err := cc.getSortedRange(ctx, consensusNodesRootName)
-			if err != nil {
-				log.Errorf("Can't connect to consensus %s", err.Error())
+func (ci *clusterImpl) leaderLoop() {
+
+	if ci.consensusStore.isRaftLeader() {
+		// update my own state in serf
+		newTags := make(map[string]string)
+		newTags[serfMDKeyRaftRole] = raftRoleLeader
+		err := ci.membership.updateRaftTag(newTags)
+		if err == nil {
+			ci.logger.Infof("Updated serf status to reflect me being raft leader.")
+			time.Sleep(3 * time.Second)
+		} else {
+			ci.logger.Infof("Updating serf failed: %s", err.Error())
+		}
+	}
+
+	for { // ever...
+		ci.logger.Infof("isRaftLeader %t", ci.consensusStore.isRaftLeader())
+		if ci.consensusStore.isRaftLeader() {
+			// make sure we have enough other nodes in the cluster
+			clusterSize := ci.membership.getClusterSize()
+			numVoters := len(ci.membership.membershipState.raftVoters)
+			numNonvoters := len(ci.membership.membershipState.raftNonvoters)
+			numNonvotersIWant := 1 - numNonvoters
+			numVotersIWant := 3 - numVoters
+			ci.logger.Infof("Consensus store only has %d voters and I want %d. I will ask %d nodes to become voter.", numVoters, 5, numVotersIWant)
+
+			//
+			// add new nonvoters to raft cluster
+			// if we find that there's enough nodes in the cluster
+			// to begin with
+			//
+			if clusterSize-numVotersIWant-numNonvotersIWant > 0 {
+				if numNonvotersIWant > 0 {
+					// recruit more nonvoters
+					numNonvotersIWant = numNonvotersIWant - ci.addNonvotersFrom(numNonvotersIWant, ci.membership.membershipState.raftNones)
+				}
+
+				if numNonvotersIWant > 0 {
+					ci.logger.Warnf("I did all I could and I'm still %d voters missing.", numNonvotersIWant)
+				}
+			} else {
+				ci.logger.Infof("I'm not even trying to find nonvoters because the cluster is too small: clusterSize [%d] numVotersIWant [%d] numNonvotersIWant [%d]", clusterSize, numVotersIWant, numNonvotersIWant)
 			}
-			keySet := make(map[string]bool)
 
-			for _, kv := range kvs {
-				keySet[kv.key] = true
+			//
+			// add new voters to raft cluster
+			// do this *after* nonvoter business
+			// worst case scenario we add a nonvoter and promote right away
+			// that's better than needing voters and demoting them to nonvoters
+			// because there aren't enough nodes in the cluster to begin with
+			//
+			if numVotersIWant > 0 {
+				// recruit more nodes to be voters
+				numVotersIWant = numVotersIWant - ci.addVotersFrom(numVotersIWant, ci.membership.membershipState.raftNonvoters)
+				if numVotersIWant > 0 {
+					numVotersIWant = numVotersIWant - ci.addVotersFrom(numVotersIWant, ci.membership.membershipState.raftNones)
+				}
 			}
 
-			i := 1
-			for i < 16384 {
-				_, ok := keySet[strconv.Itoa(i)]
-				if !ok {
-					b, err := cc.putIfAbsent(ctx, consensusNodesRootName+strconv.Itoa(i), "")
-					if b && err == nil {
-						ch <- i
-						close(ch)
-						log.Infof("Aqcuired node id %d", i)
-						return
+			if numVotersIWant > 0 {
+				ci.logger.Warnf("I did all I could and I'm still %d voters missing.", numVotersIWant)
+			}
+		} else {
+			ci.logger.Info("I'm not the leader anymore ... Goodbye cruel world!")
+			return
+		}
+
+		//
+		// wait until the cluster topology changes
+		// then go through the same loop again
+		// or after every so and so seconds for good measure
+		//
+		select {
+		case <-ci.membership.memberJoined:
+		case <-ci.membership.memberLeft:
+		}
+	}
+}
+
+func (ci *clusterImpl) addVotersFrom(numVotersToAdd int, source map[string]bool) int {
+	numAdded := 0
+	for id, _ := range source {
+		if id != ci.membership.myNodeId() {
+			if numVotersToAdd <= numAdded {
+				break
+			}
+
+			m, ok := ci.membership.getNodeById(id)
+			if ok {
+				raftAddr, ok := m[serfMDKeyRaftAddr]
+				if ok {
+					err := ci.consensusStore.raft.AddVoter(raft.ServerID(id), raft.ServerAddress(raftAddr), 0, 0).Error()
+					if err == nil {
+						log.Infof("Added (%s - %s) as raft voter", id, raftAddr)
+						numAdded++
+					} else {
+						log.Infof("Couldn't add (%s - %s) as raft voter: %v", id, raftAddr, err.Error())
 					}
 				}
-				i++
 			}
 		}
-	}()
+	}
 
-	return ch
+	return numAdded
 }
 
-func (ci *clusterImpl) GetMyNodeId() int {
-	if ci.myNodeId == -1 {
-		ci.myNodeId = <-ci.myNodeIdCh
+func (ci *clusterImpl) addNonvotersFrom(numNonvotersToAdd int, source map[string]bool) int {
+	numAdded := 0
+	for id, _ := range source {
+		if id != ci.membership.myNodeId() {
+			if numNonvotersToAdd <= numAdded {
+				break
+			}
+
+			m, ok := ci.membership.getNodeById(id)
+			if ok {
+				raftAddr, ok := m[serfMDKeyRaftAddr]
+				if ok {
+					err := ci.consensusStore.raft.AddNonvoter(raft.ServerID(id), raft.ServerAddress(raftAddr), 0, 0).Error()
+					if err == nil {
+						log.Infof("Added (%s - %s) as raft nonvoter", id, raftAddr)
+						numAdded++
+					} else {
+						log.Warnf("Couldn't add (%s - %s) as raft nonvoter: %s", id, raftAddr, err.Error())
+					}
+				}
+			}
+		}
 	}
-	return ci.myNodeId
+
+	return numAdded
+}
+
+// func startMyNodeIdProvider(ctx context.Context, cc consensusClient) chan int {
+// 	ch := make(chan int, 1)
+
+// 	go func() {
+// 		for {
+// 			kvs, err := cc.getSortedRange(ctx, consensusNodesRootName)
+// 			if err != nil {
+// 				log.Errorf("Can't connect to consensus %s", err.Error())
+// 			}
+// 			keySet := make(map[string]bool)
+
+// 			for _, kv := range kvs {
+// 				keySet[kv.key] = true
+// 			}
+
+// 			i := 1
+// 			for i < 16384 {
+// 				_, ok := keySet[strconv.Itoa(i)]
+// 				if !ok {
+// 					b, err := cc.putIfAbsent(ctx, consensusNodesRootName+strconv.Itoa(i), "")
+// 					if b && err == nil {
+// 						ch <- i
+// 						close(ch)
+// 						log.Infof("Aqcuired node id %d", i)
+// 						return
+// 					}
+// 				}
+// 				i++
+// 			}
+// 		}
+// 	}()
+
+// 	return ch
+// }
+
+func (ci *clusterImpl) GetMyNodeId() int {
+	// if ci.myNodeId == -1 {
+	// 	ci.myNodeId = <-ci.myNodeIdCh
+	// }
+	// return ci.myNodeId
+	return -1
 }
 
 func (ci *clusterImpl) GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error) {
-	kvBytesChan, err := ci.consensus.watchKeyPrefix(context.Background(), consensusNodesRootName)
-	if err != nil {
-		return nil, err
-	}
+	// kvBytesChan, err := ci.consensus.watchKeyPrefix(context.Background(), consensusNodesRootName)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	nodeConnInfoChan := make(chan []*NodeConnectionInfo)
-	go func() {
-		for kvBatchBytes := range kvBytesChan {
-			if len(kvBatchBytes) <= 0 {
-				close(nodeConnInfoChan)
-				return
-			}
+	// nodeConnInfoChan := make(chan []*NodeConnectionInfo)
+	// go func() {
+	// 	for kvBatchBytes := range kvBytesChan {
+	// 		if len(kvBatchBytes) <= 0 {
+	// 			close(nodeConnInfoChan)
+	// 			return
+	// 		}
 
-			nodeInfos := make([]*NodeConnectionInfo, len(kvBatchBytes))
-			for idx, kvBytes := range kvBatchBytes {
-				nodeInfoProto := &pb.NodeInfo{}
-				err = proto.Unmarshal(kvBytes.value, nodeInfoProto)
-				if err == nil {
-					nodeInfos[idx] = &NodeConnectionInfo{
-						nodeId:      int(nodeInfoProto.NodeId),
-						nodeAddress: nodeInfoProto.Host,
-					}
-				}
-			}
+	// 		nodeInfos := make([]*NodeConnectionInfo, len(kvBatchBytes))
+	// 		for idx, kvBytes := range kvBatchBytes {
+	// 			nodeInfoProto := &pb.NodeInfo{}
+	// 			err = proto.Unmarshal(kvBytes.value, nodeInfoProto)
+	// 			if err == nil {
+	// 				nodeInfos[idx] = &NodeConnectionInfo{
+	// 					nodeId:      int(nodeInfoProto.NodeId),
+	// 					nodeAddress: nodeInfoProto.Host,
+	// 				}
+	// 			}
+	// 		}
 
-			nodeConnInfoChan <- nodeInfos
-		}
-	}()
+	// 		nodeConnInfoChan <- nodeInfos
+	// 	}
+	// }()
 
-	return nodeConnInfoChan, nil
+	// return nodeConnInfoChan, nil
+	return nil, nil
 }
 
 func (ci *clusterImpl) Close() {
-	ci.consensus.close()
+	ci.membership.close()
+	time.Sleep(1 * time.Second)
+	ci.consensusStore.Close()
+	time.Sleep(1 * time.Second)
 }

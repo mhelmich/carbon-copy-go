@@ -18,6 +18,7 @@ package cluster
 
 import (
 	log "github.com/sirupsen/logrus"
+	"reflect"
 	"sync"
 )
 
@@ -43,7 +44,17 @@ type membershipState struct {
 	logger         *log.Entry
 }
 
-func (cs *membershipState) updateMember(name string, tags map[string]string) {
+func (cs *membershipState) updateMember(name string, tags map[string]string) bool {
+	cs.mutex.RLock()
+	_, existing := cs.currentMembers[name]
+	equal := reflect.DeepEqual(cs.currentMembers[name], tags)
+	cs.mutex.RUnlock()
+
+	cs.logger.Infof("During update %s: existing [%t] equal [%t] updated [%t]", name, existing, equal, !(existing && equal))
+	if existing && equal {
+		return false
+	}
+
 	cs.mutex.Lock()
 	// carry over all tags
 	cs.currentMembers[name] = tags
@@ -54,6 +65,7 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) {
 		switch v {
 		case raftRoleLeader:
 			cs.raftLeader = name
+			cs.raftVoters[name] = true
 		case raftRoleVoter:
 			cs.raftVoters[name] = true
 		case raftRoleNonvoter:
@@ -68,18 +80,28 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) {
 	}
 
 	cs.mutex.Unlock()
+
+	return true
 }
 
-func (cs *membershipState) removeMember(name string) {
-	cs.mutex.Lock()
+func (cs *membershipState) removeMember(name string) bool {
+	cs.mutex.RLock()
+	_, existing := cs.currentMembers[name]
+	cs.mutex.RUnlock()
 
+	if !existing {
+		return false
+	}
+
+	cs.mutex.Lock()
 	delete(cs.currentMembers, name)
 	// just be sure to not leave dead bodies in our basement
 	delete(cs.raftVoters, name)
 	delete(cs.raftNonvoters, name)
 	delete(cs.raftNones, name)
-
 	cs.mutex.Unlock()
+
+	return true
 }
 
 func (cs *membershipState) getMemberById(nodeId string) (map[string]string, bool) {
@@ -101,7 +123,6 @@ func (cs *membershipState) getMemberById(nodeId string) (map[string]string, bool
 
 }
 
-// currently only used for testing
 func (cs *membershipState) getNumMembers() int {
 	cs.mutex.RLock()
 	i := len(cs.currentMembers)
