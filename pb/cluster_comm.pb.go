@@ -17,35 +17,6 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
-// This enum defines all raft operations.
-//
-type RaftOps int32
-
-const (
-	RaftOps_Set                      RaftOps = 0
-	RaftOps_Delete                   RaftOps = 1
-	RaftOps_ConsistentGet            RaftOps = 2
-	RaftOps_AcquireUniqueShortNodeId RaftOps = 3
-)
-
-var RaftOps_name = map[int32]string{
-	0: "Set",
-	1: "Delete",
-	2: "ConsistentGet",
-	3: "AcquireUniqueShortNodeId",
-}
-var RaftOps_value = map[string]int32{
-	"Set":                      0,
-	"Delete":                   1,
-	"ConsistentGet":            2,
-	"AcquireUniqueShortNodeId": 3,
-}
-
-func (x RaftOps) String() string {
-	return proto.EnumName(RaftOps_name, int32(x))
-}
-func (RaftOps) EnumDescriptor() ([]byte, []int) { return fileDescriptor1, []int{0} }
-
 type RaftServiceError int32
 
 const (
@@ -62,7 +33,7 @@ var RaftServiceError_value = map[string]int32{
 func (x RaftServiceError) String() string {
 	return proto.EnumName(RaftServiceError_name, int32(x))
 }
-func (RaftServiceError) EnumDescriptor() ([]byte, []int) { return fileDescriptor1, []int{1} }
+func (RaftServiceError) EnumDescriptor() ([]byte, []int) { return fileDescriptor1, []int{0} }
 
 type NodeInfo struct {
 	// contains hostname
@@ -77,6 +48,8 @@ type NodeInfo struct {
 	GridPort int32 `protobuf:"varint,5,opt,name=gridPort" json:"gridPort,omitempty"`
 	// the port on which serf operates
 	SerfPort int32 `protobuf:"varint,6,opt,name=serfPort" json:"serfPort,omitempty"`
+	// copy of the serf tags
+	Tags map[string]string `protobuf:"bytes,7,rep,name=tags" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
 func (m *NodeInfo) Reset()                    { *m = NodeInfo{} }
@@ -126,12 +99,24 @@ func (m *NodeInfo) GetSerfPort() int32 {
 	return 0
 }
 
-// Generic container for raft commands.
-// All operations need to be compressed somehow into this format.
+func (m *NodeInfo) GetTags() map[string]string {
+	if m != nil {
+		return m.Tags
+	}
+	return nil
+}
+
+// This is the base raft command that can be sent.
+// All actual commands need to appear in here and be part of this composition.
+// Unfortunately that means that there's multiple places where messages need to be added.
+// Here, on the sending side, and the receiving end. Well...you can't have everything in life.
 type RaftCommand struct {
-	Cmd   RaftOps `protobuf:"varint,1,opt,name=cmd,enum=pb.RaftOps" json:"cmd,omitempty"`
-	Key   string  `protobuf:"bytes,2,opt,name=key" json:"key,omitempty"`
-	Value []byte  `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	// Types that are valid to be assigned to Cmd:
+	//	*RaftCommand_GetCmd
+	//	*RaftCommand_SetCmd
+	//	*RaftCommand_DeleteCmd
+	//	*RaftCommand_NodeIdCmd
+	Cmd isRaftCommand_Cmd `protobuf_oneof:"cmd"`
 }
 
 func (m *RaftCommand) Reset()                    { *m = RaftCommand{} }
@@ -139,141 +124,106 @@ func (m *RaftCommand) String() string            { return proto.CompactTextStrin
 func (*RaftCommand) ProtoMessage()               {}
 func (*RaftCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{1} }
 
-func (m *RaftCommand) GetCmd() RaftOps {
-	if m != nil {
-		return m.Cmd
-	}
-	return RaftOps_Set
+type isRaftCommand_Cmd interface {
+	isRaftCommand_Cmd()
 }
 
-func (m *RaftCommand) GetKey() string {
-	if m != nil {
-		return m.Key
-	}
-	return ""
-}
-
-func (m *RaftCommand) GetValue() []byte {
-	if m != nil {
-		return m.Value
-	}
-	return nil
-}
-
-type RaftCommand2 struct {
-	// Types that are valid to be assigned to Cmd:
-	//	*RaftCommand2_GetCmd
-	//	*RaftCommand2_SetCmd
-	//	*RaftCommand2_DeleteCmd
-	//	*RaftCommand2_NodeIdCmd
-	Cmd isRaftCommand2_Cmd `protobuf_oneof:"cmd"`
-}
-
-func (m *RaftCommand2) Reset()                    { *m = RaftCommand2{} }
-func (m *RaftCommand2) String() string            { return proto.CompactTextString(m) }
-func (*RaftCommand2) ProtoMessage()               {}
-func (*RaftCommand2) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{2} }
-
-type isRaftCommand2_Cmd interface {
-	isRaftCommand2_Cmd()
-}
-
-type RaftCommand2_GetCmd struct {
+type RaftCommand_GetCmd struct {
 	GetCmd *GetCommand `protobuf:"bytes,1,opt,name=getCmd,oneof"`
 }
-type RaftCommand2_SetCmd struct {
+type RaftCommand_SetCmd struct {
 	SetCmd *SetCommand `protobuf:"bytes,2,opt,name=setCmd,oneof"`
 }
-type RaftCommand2_DeleteCmd struct {
+type RaftCommand_DeleteCmd struct {
 	DeleteCmd *DeleteCommand `protobuf:"bytes,3,opt,name=deleteCmd,oneof"`
 }
-type RaftCommand2_NodeIdCmd struct {
+type RaftCommand_NodeIdCmd struct {
 	NodeIdCmd *NodeIdCommand `protobuf:"bytes,4,opt,name=nodeIdCmd,oneof"`
 }
 
-func (*RaftCommand2_GetCmd) isRaftCommand2_Cmd()    {}
-func (*RaftCommand2_SetCmd) isRaftCommand2_Cmd()    {}
-func (*RaftCommand2_DeleteCmd) isRaftCommand2_Cmd() {}
-func (*RaftCommand2_NodeIdCmd) isRaftCommand2_Cmd() {}
+func (*RaftCommand_GetCmd) isRaftCommand_Cmd()    {}
+func (*RaftCommand_SetCmd) isRaftCommand_Cmd()    {}
+func (*RaftCommand_DeleteCmd) isRaftCommand_Cmd() {}
+func (*RaftCommand_NodeIdCmd) isRaftCommand_Cmd() {}
 
-func (m *RaftCommand2) GetCmd() isRaftCommand2_Cmd {
+func (m *RaftCommand) GetCmd() isRaftCommand_Cmd {
 	if m != nil {
 		return m.Cmd
 	}
 	return nil
 }
 
-func (m *RaftCommand2) GetGetCmd() *GetCommand {
-	if x, ok := m.GetCmd().(*RaftCommand2_GetCmd); ok {
+func (m *RaftCommand) GetGetCmd() *GetCommand {
+	if x, ok := m.GetCmd().(*RaftCommand_GetCmd); ok {
 		return x.GetCmd
 	}
 	return nil
 }
 
-func (m *RaftCommand2) GetSetCmd() *SetCommand {
-	if x, ok := m.GetCmd().(*RaftCommand2_SetCmd); ok {
+func (m *RaftCommand) GetSetCmd() *SetCommand {
+	if x, ok := m.GetCmd().(*RaftCommand_SetCmd); ok {
 		return x.SetCmd
 	}
 	return nil
 }
 
-func (m *RaftCommand2) GetDeleteCmd() *DeleteCommand {
-	if x, ok := m.GetCmd().(*RaftCommand2_DeleteCmd); ok {
+func (m *RaftCommand) GetDeleteCmd() *DeleteCommand {
+	if x, ok := m.GetCmd().(*RaftCommand_DeleteCmd); ok {
 		return x.DeleteCmd
 	}
 	return nil
 }
 
-func (m *RaftCommand2) GetNodeIdCmd() *NodeIdCommand {
-	if x, ok := m.GetCmd().(*RaftCommand2_NodeIdCmd); ok {
+func (m *RaftCommand) GetNodeIdCmd() *NodeIdCommand {
+	if x, ok := m.GetCmd().(*RaftCommand_NodeIdCmd); ok {
 		return x.NodeIdCmd
 	}
 	return nil
 }
 
 // XXX_OneofFuncs is for the internal use of the proto package.
-func (*RaftCommand2) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _RaftCommand2_OneofMarshaler, _RaftCommand2_OneofUnmarshaler, _RaftCommand2_OneofSizer, []interface{}{
-		(*RaftCommand2_GetCmd)(nil),
-		(*RaftCommand2_SetCmd)(nil),
-		(*RaftCommand2_DeleteCmd)(nil),
-		(*RaftCommand2_NodeIdCmd)(nil),
+func (*RaftCommand) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _RaftCommand_OneofMarshaler, _RaftCommand_OneofUnmarshaler, _RaftCommand_OneofSizer, []interface{}{
+		(*RaftCommand_GetCmd)(nil),
+		(*RaftCommand_SetCmd)(nil),
+		(*RaftCommand_DeleteCmd)(nil),
+		(*RaftCommand_NodeIdCmd)(nil),
 	}
 }
 
-func _RaftCommand2_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*RaftCommand2)
+func _RaftCommand_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*RaftCommand)
 	// cmd
 	switch x := m.Cmd.(type) {
-	case *RaftCommand2_GetCmd:
+	case *RaftCommand_GetCmd:
 		b.EncodeVarint(1<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.GetCmd); err != nil {
 			return err
 		}
-	case *RaftCommand2_SetCmd:
+	case *RaftCommand_SetCmd:
 		b.EncodeVarint(2<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.SetCmd); err != nil {
 			return err
 		}
-	case *RaftCommand2_DeleteCmd:
+	case *RaftCommand_DeleteCmd:
 		b.EncodeVarint(3<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.DeleteCmd); err != nil {
 			return err
 		}
-	case *RaftCommand2_NodeIdCmd:
+	case *RaftCommand_NodeIdCmd:
 		b.EncodeVarint(4<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.NodeIdCmd); err != nil {
 			return err
 		}
 	case nil:
 	default:
-		return fmt.Errorf("RaftCommand2.Cmd has unexpected type %T", x)
+		return fmt.Errorf("RaftCommand.Cmd has unexpected type %T", x)
 	}
 	return nil
 }
 
-func _RaftCommand2_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*RaftCommand2)
+func _RaftCommand_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*RaftCommand)
 	switch tag {
 	case 1: // cmd.getCmd
 		if wire != proto.WireBytes {
@@ -281,7 +231,7 @@ func _RaftCommand2_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.B
 		}
 		msg := new(GetCommand)
 		err := b.DecodeMessage(msg)
-		m.Cmd = &RaftCommand2_GetCmd{msg}
+		m.Cmd = &RaftCommand_GetCmd{msg}
 		return true, err
 	case 2: // cmd.setCmd
 		if wire != proto.WireBytes {
@@ -289,7 +239,7 @@ func _RaftCommand2_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.B
 		}
 		msg := new(SetCommand)
 		err := b.DecodeMessage(msg)
-		m.Cmd = &RaftCommand2_SetCmd{msg}
+		m.Cmd = &RaftCommand_SetCmd{msg}
 		return true, err
 	case 3: // cmd.deleteCmd
 		if wire != proto.WireBytes {
@@ -297,7 +247,7 @@ func _RaftCommand2_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.B
 		}
 		msg := new(DeleteCommand)
 		err := b.DecodeMessage(msg)
-		m.Cmd = &RaftCommand2_DeleteCmd{msg}
+		m.Cmd = &RaftCommand_DeleteCmd{msg}
 		return true, err
 	case 4: // cmd.nodeIdCmd
 		if wire != proto.WireBytes {
@@ -305,33 +255,33 @@ func _RaftCommand2_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.B
 		}
 		msg := new(NodeIdCommand)
 		err := b.DecodeMessage(msg)
-		m.Cmd = &RaftCommand2_NodeIdCmd{msg}
+		m.Cmd = &RaftCommand_NodeIdCmd{msg}
 		return true, err
 	default:
 		return false, nil
 	}
 }
 
-func _RaftCommand2_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*RaftCommand2)
+func _RaftCommand_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*RaftCommand)
 	// cmd
 	switch x := m.Cmd.(type) {
-	case *RaftCommand2_GetCmd:
+	case *RaftCommand_GetCmd:
 		s := proto.Size(x.GetCmd)
 		n += proto.SizeVarint(1<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
 		n += s
-	case *RaftCommand2_SetCmd:
+	case *RaftCommand_SetCmd:
 		s := proto.Size(x.SetCmd)
 		n += proto.SizeVarint(2<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
 		n += s
-	case *RaftCommand2_DeleteCmd:
+	case *RaftCommand_DeleteCmd:
 		s := proto.Size(x.DeleteCmd)
 		n += proto.SizeVarint(3<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
 		n += s
-	case *RaftCommand2_NodeIdCmd:
+	case *RaftCommand_NodeIdCmd:
 		s := proto.Size(x.NodeIdCmd)
 		n += proto.SizeVarint(4<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
@@ -343,6 +293,10 @@ func _RaftCommand2_OneofSizer(msg proto.Message) (n int) {
 	return n
 }
 
+// This is "consistent get" message.
+// The advantage is: This read will be up-to-date with the strongly consistent store.
+// The bad part is: It need to travel to the leader, be processed, and replicated.
+// Pretty expensive if you can live with stale data, do that instead.
 type GetCommand struct {
 	Key string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
 }
@@ -350,7 +304,7 @@ type GetCommand struct {
 func (m *GetCommand) Reset()                    { *m = GetCommand{} }
 func (m *GetCommand) String() string            { return proto.CompactTextString(m) }
 func (*GetCommand) ProtoMessage()               {}
-func (*GetCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{3} }
+func (*GetCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{2} }
 
 func (m *GetCommand) GetKey() string {
 	if m != nil {
@@ -359,6 +313,7 @@ func (m *GetCommand) GetKey() string {
 	return ""
 }
 
+// This sets a key-value-pair in the consistent store.
 type SetCommand struct {
 	Key   string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
 	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
@@ -367,7 +322,7 @@ type SetCommand struct {
 func (m *SetCommand) Reset()                    { *m = SetCommand{} }
 func (m *SetCommand) String() string            { return proto.CompactTextString(m) }
 func (*SetCommand) ProtoMessage()               {}
-func (*SetCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{4} }
+func (*SetCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{3} }
 
 func (m *SetCommand) GetKey() string {
 	if m != nil {
@@ -383,6 +338,7 @@ func (m *SetCommand) GetValue() []byte {
 	return nil
 }
 
+// This deletes a key-value-pair from the consistent store.
 type DeleteCommand struct {
 	Key string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
 }
@@ -390,7 +346,7 @@ type DeleteCommand struct {
 func (m *DeleteCommand) Reset()                    { *m = DeleteCommand{} }
 func (m *DeleteCommand) String() string            { return proto.CompactTextString(m) }
 func (*DeleteCommand) ProtoMessage()               {}
-func (*DeleteCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{5} }
+func (*DeleteCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{4} }
 
 func (m *DeleteCommand) GetKey() string {
 	if m != nil {
@@ -399,13 +355,14 @@ func (m *DeleteCommand) GetKey() string {
 	return ""
 }
 
+// This allocates a cluster-wide unique short node id from the consistent store.
 type NodeIdCommand struct {
 }
 
 func (m *NodeIdCommand) Reset()                    { *m = NodeIdCommand{} }
 func (m *NodeIdCommand) String() string            { return proto.CompactTextString(m) }
 func (*NodeIdCommand) ProtoMessage()               {}
-func (*NodeIdCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{6} }
+func (*NodeIdCommand) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{5} }
 
 // I decided to cheap this out and make all of this a proto
 type RaftSnapshot struct {
@@ -415,7 +372,7 @@ type RaftSnapshot struct {
 func (m *RaftSnapshot) Reset()                    { *m = RaftSnapshot{} }
 func (m *RaftSnapshot) String() string            { return proto.CompactTextString(m) }
 func (*RaftSnapshot) ProtoMessage()               {}
-func (*RaftSnapshot) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{7} }
+func (*RaftSnapshot) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{6} }
 
 func (m *RaftSnapshot) GetSnap() map[string][]byte {
 	if m != nil {
@@ -431,7 +388,7 @@ type GetReq struct {
 func (m *GetReq) Reset()                    { *m = GetReq{} }
 func (m *GetReq) String() string            { return proto.CompactTextString(m) }
 func (*GetReq) ProtoMessage()               {}
-func (*GetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{8} }
+func (*GetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{7} }
 
 func (m *GetReq) GetKey() string {
 	if m != nil {
@@ -448,7 +405,7 @@ type GetResp struct {
 func (m *GetResp) Reset()                    { *m = GetResp{} }
 func (m *GetResp) String() string            { return proto.CompactTextString(m) }
 func (*GetResp) ProtoMessage()               {}
-func (*GetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{9} }
+func (*GetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{8} }
 
 func (m *GetResp) GetError() RaftServiceError {
 	if m != nil {
@@ -472,7 +429,7 @@ type SetReq struct {
 func (m *SetReq) Reset()                    { *m = SetReq{} }
 func (m *SetReq) String() string            { return proto.CompactTextString(m) }
 func (*SetReq) ProtoMessage()               {}
-func (*SetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{10} }
+func (*SetReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{9} }
 
 func (m *SetReq) GetKey() string {
 	if m != nil {
@@ -496,7 +453,7 @@ type SetResp struct {
 func (m *SetResp) Reset()                    { *m = SetResp{} }
 func (m *SetResp) String() string            { return proto.CompactTextString(m) }
 func (*SetResp) ProtoMessage()               {}
-func (*SetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{11} }
+func (*SetResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{10} }
 
 func (m *SetResp) GetError() RaftServiceError {
 	if m != nil {
@@ -519,7 +476,7 @@ type DeleteReq struct {
 func (m *DeleteReq) Reset()                    { *m = DeleteReq{} }
 func (m *DeleteReq) String() string            { return proto.CompactTextString(m) }
 func (*DeleteReq) ProtoMessage()               {}
-func (*DeleteReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{12} }
+func (*DeleteReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{11} }
 
 func (m *DeleteReq) GetKey() string {
 	if m != nil {
@@ -536,7 +493,7 @@ type DeleteResp struct {
 func (m *DeleteResp) Reset()                    { *m = DeleteResp{} }
 func (m *DeleteResp) String() string            { return proto.CompactTextString(m) }
 func (*DeleteResp) ProtoMessage()               {}
-func (*DeleteResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{13} }
+func (*DeleteResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{12} }
 
 func (m *DeleteResp) GetError() RaftServiceError {
 	if m != nil {
@@ -558,7 +515,7 @@ type AcquireUniqueShortNodeIdReq struct {
 func (m *AcquireUniqueShortNodeIdReq) Reset()                    { *m = AcquireUniqueShortNodeIdReq{} }
 func (m *AcquireUniqueShortNodeIdReq) String() string            { return proto.CompactTextString(m) }
 func (*AcquireUniqueShortNodeIdReq) ProtoMessage()               {}
-func (*AcquireUniqueShortNodeIdReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{14} }
+func (*AcquireUniqueShortNodeIdReq) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{13} }
 
 type AcquireUniqueShortNodeIdResp struct {
 	Error  RaftServiceError `protobuf:"varint,1,opt,name=error,enum=pb.RaftServiceError" json:"error,omitempty"`
@@ -568,7 +525,7 @@ type AcquireUniqueShortNodeIdResp struct {
 func (m *AcquireUniqueShortNodeIdResp) Reset()                    { *m = AcquireUniqueShortNodeIdResp{} }
 func (m *AcquireUniqueShortNodeIdResp) String() string            { return proto.CompactTextString(m) }
 func (*AcquireUniqueShortNodeIdResp) ProtoMessage()               {}
-func (*AcquireUniqueShortNodeIdResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{15} }
+func (*AcquireUniqueShortNodeIdResp) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{14} }
 
 func (m *AcquireUniqueShortNodeIdResp) GetError() RaftServiceError {
 	if m != nil {
@@ -587,7 +544,6 @@ func (m *AcquireUniqueShortNodeIdResp) GetNodeId() int32 {
 func init() {
 	proto.RegisterType((*NodeInfo)(nil), "pb.NodeInfo")
 	proto.RegisterType((*RaftCommand)(nil), "pb.RaftCommand")
-	proto.RegisterType((*RaftCommand2)(nil), "pb.RaftCommand2")
 	proto.RegisterType((*GetCommand)(nil), "pb.GetCommand")
 	proto.RegisterType((*SetCommand)(nil), "pb.SetCommand")
 	proto.RegisterType((*DeleteCommand)(nil), "pb.DeleteCommand")
@@ -601,7 +557,6 @@ func init() {
 	proto.RegisterType((*DeleteResp)(nil), "pb.DeleteResp")
 	proto.RegisterType((*AcquireUniqueShortNodeIdReq)(nil), "pb.AcquireUniqueShortNodeIdReq")
 	proto.RegisterType((*AcquireUniqueShortNodeIdResp)(nil), "pb.AcquireUniqueShortNodeIdResp")
-	proto.RegisterEnum("pb.RaftOps", RaftOps_name, RaftOps_value)
 	proto.RegisterEnum("pb.RaftServiceError", RaftServiceError_name, RaftServiceError_value)
 }
 
@@ -812,46 +767,44 @@ var _RaftService_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("cluster_comm.proto", fileDescriptor1) }
 
 var fileDescriptor1 = []byte{
-	// 641 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x95, 0xdf, 0x6e, 0xd3, 0x30,
-	0x14, 0xc6, 0x9b, 0xa4, 0x4d, 0xd7, 0xd3, 0x75, 0xcb, 0xac, 0x09, 0x45, 0x65, 0x83, 0x2c, 0x57,
-	0xa5, 0x17, 0x15, 0x14, 0x24, 0x10, 0x77, 0x30, 0xa6, 0x81, 0x40, 0x1b, 0x72, 0xe0, 0x7a, 0x4a,
-	0x93, 0xd3, 0xad, 0x62, 0x8d, 0x53, 0xc7, 0x1d, 0xda, 0x23, 0xf0, 0x3e, 0xbc, 0x07, 0xaf, 0x84,
-	0x6c, 0xe7, 0x4f, 0x37, 0x35, 0x15, 0xe3, 0xce, 0xc7, 0xdf, 0xcf, 0xe7, 0x7c, 0x3e, 0x27, 0x75,
-	0x81, 0x44, 0xd7, 0xcb, 0x4c, 0x20, 0xbf, 0x88, 0xd8, 0x7c, 0x3e, 0x4a, 0x39, 0x13, 0x8c, 0x98,
-	0xe9, 0xc4, 0xff, 0x6d, 0xc0, 0xd6, 0x19, 0x8b, 0xf1, 0x53, 0x32, 0x65, 0x84, 0x40, 0xf3, 0x8a,
-	0x65, 0xc2, 0x35, 0x3c, 0x63, 0xd0, 0xa1, 0x6a, 0x4d, 0x1e, 0x81, 0x9d, 0x48, 0x3d, 0x76, 0x4d,
-	0xcf, 0x18, 0xb4, 0x68, 0x1e, 0x91, 0x3e, 0x6c, 0xf1, 0x70, 0x2a, 0xbe, 0x32, 0x2e, 0x5c, 0x4b,
-	0x29, 0x65, 0x4c, 0x06, 0xb0, 0x7b, 0x13, 0x5e, 0x2f, 0x31, 0x40, 0x7e, 0x83, 0x5c, 0x21, 0x4d,
-	0x85, 0xdc, 0xdf, 0x96, 0x59, 0x2e, 0xf9, 0x2c, 0x56, 0x48, 0x4b, 0x67, 0x29, 0x62, 0xa9, 0x65,
-	0xc8, 0xa7, 0x4a, 0xb3, 0xb5, 0x56, 0xc4, 0xfe, 0x37, 0xe8, 0xd2, 0x70, 0x2a, 0x8e, 0xd9, 0x7c,
-	0x1e, 0x26, 0x31, 0x39, 0x04, 0x2b, 0x9a, 0xc7, 0xca, 0xf7, 0xce, 0xb8, 0x3b, 0x4a, 0x27, 0x23,
-	0xa9, 0x9e, 0xa7, 0x19, 0x95, 0xfb, 0xc4, 0x01, 0xeb, 0x07, 0xde, 0xaa, 0x0b, 0x74, 0xa8, 0x5c,
-	0x92, 0x7d, 0x68, 0x29, 0x2b, 0xca, 0xfa, 0x36, 0xd5, 0x81, 0xff, 0xc7, 0x80, 0xed, 0x95, 0xb4,
-	0x63, 0x32, 0x00, 0xfb, 0x12, 0xc5, 0x71, 0x9e, 0xba, 0x3b, 0xde, 0x91, 0xa9, 0x4f, 0xb1, 0x00,
-	0x3e, 0x36, 0x68, 0xae, 0x4b, 0x32, 0xd3, 0xa4, 0x59, 0x91, 0xc1, 0x1d, 0x52, 0xeb, 0xe4, 0x05,
-	0x74, 0x62, 0xbc, 0x46, 0x81, 0x12, 0xb6, 0x14, 0xbc, 0x27, 0xe1, 0x0f, 0x7a, 0xb3, 0xe4, 0x2b,
-	0x4a, 0x1e, 0xd1, 0x5d, 0x97, 0x47, 0x9a, 0xd5, 0x91, 0x33, 0xbd, 0x59, 0x1d, 0x29, 0xa9, 0xf7,
-	0x2d, 0xd5, 0x11, 0xff, 0x09, 0x40, 0x65, 0xb7, 0xe8, 0x83, 0x51, 0xf6, 0xc1, 0x7f, 0x05, 0x10,
-	0x6c, 0xd0, 0xab, 0x3e, 0x99, 0xab, 0x7d, 0x3a, 0x82, 0xde, 0x1d, 0xb7, 0x6b, 0x12, 0xef, 0x42,
-	0xef, 0x8e, 0x3b, 0xff, 0xa7, 0x6e, 0x6d, 0x90, 0x84, 0x69, 0x76, 0xc5, 0x04, 0x19, 0x41, 0x33,
-	0x4b, 0xc2, 0xd4, 0x35, 0x3c, 0x6b, 0xd0, 0x1d, 0xf7, 0x8b, 0x99, 0x15, 0xfa, 0x48, 0x2e, 0x4e,
-	0x12, 0xc1, 0x6f, 0xa9, 0xe2, 0xfa, 0xaf, 0xa1, 0x53, 0x6e, 0xfd, 0xab, 0xd1, 0xb7, 0xe6, 0x1b,
-	0xc3, 0xef, 0x83, 0x7d, 0x8a, 0x82, 0xe2, 0x62, 0x8d, 0xcb, 0xcf, 0xd0, 0x56, 0x5a, 0x96, 0x92,
-	0x21, 0xb4, 0x90, 0x73, 0xc6, 0xf3, 0x8f, 0x68, 0xbf, 0x34, 0x84, 0xfc, 0x66, 0x16, 0xe1, 0x89,
-	0xd4, 0xa8, 0x46, 0x6a, 0xba, 0xf2, 0x1c, 0xec, 0xa0, 0xa6, 0x50, 0xcd, 0x89, 0x73, 0x68, 0x07,
-	0xff, 0x51, 0xde, 0x85, 0x76, 0xc4, 0x31, 0x14, 0xa8, 0x3f, 0xb6, 0x2d, 0x5a, 0x84, 0xfe, 0x21,
-	0x74, 0xf4, 0x60, 0xd6, 0x5f, 0x97, 0x02, 0x14, 0xf2, 0xc3, 0x4b, 0xea, 0xcf, 0xb1, 0x2c, 0x99,
-	0x87, 0xfe, 0x21, 0x3c, 0x7e, 0x17, 0x2d, 0x96, 0x33, 0x8e, 0xdf, 0x93, 0xd9, 0x62, 0x89, 0xc1,
-	0x15, 0xe3, 0x42, 0x8f, 0x9e, 0xe2, 0xc2, 0x9f, 0xc0, 0x41, 0xbd, 0xfc, 0x40, 0x13, 0x35, 0x4f,
-	0xd1, 0xf0, 0x1c, 0xda, 0xf9, 0xcf, 0x9d, 0xb4, 0xc1, 0x0a, 0x50, 0x38, 0x0d, 0x02, 0x60, 0xeb,
-	0xab, 0x3a, 0x06, 0xd9, 0x83, 0xde, 0x31, 0x4b, 0xb2, 0x59, 0x26, 0x30, 0x11, 0xa7, 0x28, 0x1c,
-	0x93, 0x1c, 0x80, 0x5b, 0x67, 0xcb, 0xb1, 0x86, 0x47, 0xe0, 0xdc, 0xf7, 0x40, 0x7a, 0xd0, 0x39,
-	0x63, 0xe2, 0x0b, 0x86, 0x31, 0x72, 0xa7, 0x31, 0xfe, 0x65, 0xea, 0x17, 0x28, 0x67, 0x88, 0x07,
-	0xd6, 0x25, 0x0a, 0x02, 0xf9, 0x03, 0x41, 0x71, 0xd1, 0xef, 0x96, 0xeb, 0x2c, 0xf5, 0x1b, 0x64,
-	0x08, 0xbd, 0x68, 0xd5, 0xc5, 0x26, 0xd6, 0x03, 0x2b, 0x2b, 0x88, 0x60, 0x85, 0x08, 0x4a, 0xe2,
-	0x19, 0xd8, 0x7a, 0x02, 0xa4, 0x57, 0x3d, 0x1e, 0x92, 0xdb, 0x59, 0x0d, 0x15, 0x7a, 0x01, 0x6e,
-	0x58, 0x73, 0x57, 0xf2, 0x54, 0xd2, 0x1b, 0xe6, 0xd7, 0xf7, 0x36, 0x03, 0xb2, 0xc0, 0xc4, 0x56,
-	0x7f, 0x27, 0x2f, 0xff, 0x06, 0x00, 0x00, 0xff, 0xff, 0xc6, 0x9d, 0x4b, 0x73, 0x64, 0x06, 0x00,
-	0x00,
+	// 613 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x95, 0xdf, 0x6e, 0xd3, 0x3e,
+	0x14, 0xc7, 0xd7, 0xa6, 0x4d, 0xd7, 0xd3, 0x75, 0xdb, 0xcf, 0x9a, 0xa6, 0xa8, 0x3f, 0x06, 0x59,
+	0xae, 0x4a, 0x2f, 0x22, 0x28, 0x48, 0x20, 0xee, 0x60, 0x4c, 0x03, 0x81, 0x06, 0x72, 0xe0, 0x7a,
+	0x4a, 0x93, 0xd3, 0xae, 0x62, 0x89, 0x53, 0xdb, 0x1d, 0xda, 0x23, 0xf0, 0x08, 0xbc, 0x14, 0xcf,
+	0x84, 0x6c, 0xe7, 0xcf, 0x3a, 0x9a, 0x8a, 0x71, 0xe7, 0x73, 0xbe, 0x9f, 0xe3, 0xf3, 0x2f, 0x6e,
+	0x81, 0x44, 0x57, 0x4b, 0x21, 0x91, 0x5f, 0x44, 0x2c, 0x49, 0xfc, 0x8c, 0x33, 0xc9, 0x48, 0x33,
+	0x9b, 0x78, 0x3f, 0x9b, 0xb0, 0x7d, 0xce, 0x62, 0x7c, 0x9f, 0x4e, 0x19, 0x21, 0xd0, 0xba, 0x64,
+	0x42, 0x3a, 0x0d, 0xb7, 0x31, 0xec, 0x52, 0x7d, 0x26, 0x87, 0x60, 0xa7, 0x4a, 0x8f, 0x9d, 0xa6,
+	0xdb, 0x18, 0xb6, 0x69, 0x6e, 0x91, 0x01, 0x6c, 0xf3, 0x70, 0x2a, 0x3f, 0x33, 0x2e, 0x1d, 0x4b,
+	0x2b, 0xa5, 0x4d, 0x86, 0xb0, 0x77, 0x1d, 0x5e, 0x2d, 0x31, 0x40, 0x7e, 0x8d, 0x5c, 0x23, 0x2d,
+	0x8d, 0xdc, 0x75, 0xab, 0x5b, 0x66, 0x7c, 0x1e, 0x6b, 0xa4, 0x6d, 0x6e, 0x29, 0x6c, 0xa5, 0x09,
+	0xe4, 0x53, 0xad, 0xd9, 0x46, 0x2b, 0x6c, 0x32, 0x82, 0x96, 0x0c, 0x67, 0xc2, 0xe9, 0xb8, 0xd6,
+	0xb0, 0x37, 0x3e, 0xf4, 0xb3, 0x89, 0x5f, 0x74, 0xe1, 0x7f, 0x09, 0x67, 0xe2, 0x34, 0x95, 0xfc,
+	0x86, 0x6a, 0x66, 0xf0, 0x02, 0xba, 0xa5, 0x8b, 0xec, 0x83, 0xf5, 0x0d, 0x6f, 0xf2, 0x0e, 0xd5,
+	0x91, 0x1c, 0x40, 0x5b, 0x57, 0xa5, 0xfb, 0xeb, 0x52, 0x63, 0xbc, 0x6a, 0xbe, 0x6c, 0x78, 0xbf,
+	0x1a, 0xd0, 0xa3, 0xe1, 0x54, 0x9e, 0xb0, 0x24, 0x09, 0xd3, 0x98, 0x0c, 0xc1, 0x9e, 0xa1, 0x3c,
+	0x49, 0x62, 0x1d, 0xde, 0x1b, 0xef, 0xaa, 0xb4, 0x67, 0x58, 0xe8, 0xef, 0xb6, 0x68, 0xae, 0x2b,
+	0x52, 0x18, 0xb2, 0x59, 0x91, 0xc1, 0x0a, 0x69, 0x74, 0xf2, 0x14, 0xba, 0x31, 0x5e, 0xa1, 0x44,
+	0x05, 0x5b, 0x1a, 0xfe, 0x4f, 0xc1, 0x6f, 0x8d, 0xb3, 0xe4, 0x2b, 0x4a, 0x85, 0x98, 0x1d, 0xa8,
+	0x90, 0x56, 0x15, 0x72, 0x6e, 0x9c, 0x55, 0x48, 0x49, 0xbd, 0x69, 0x83, 0x15, 0x25, 0xb1, 0xf7,
+	0x10, 0xa0, 0x2a, 0xf7, 0xcf, 0x51, 0x78, 0xcf, 0x01, 0x82, 0x0d, 0xfa, 0xea, 0xa8, 0x76, 0xf2,
+	0x51, 0x79, 0xc7, 0xd0, 0x5f, 0xa9, 0x76, 0xcd, 0xc5, 0x7b, 0xd0, 0x5f, 0xa9, 0xce, 0xfb, 0x0e,
+	0x3b, 0x6a, 0xb2, 0x41, 0x1a, 0x66, 0xe2, 0x92, 0x49, 0xe2, 0x43, 0x4b, 0xa4, 0x61, 0xe6, 0x34,
+	0xf4, 0x3e, 0x07, 0xaa, 0x9d, 0xdb, 0xba, 0xaf, 0x0e, 0xf9, 0x4e, 0x15, 0xa7, 0x76, 0x5a, 0xba,
+	0xfe, 0xb6, 0x50, 0xbd, 0xd3, 0x01, 0xd8, 0x67, 0x28, 0x29, 0x2e, 0xd6, 0x54, 0xf9, 0x01, 0x3a,
+	0x5a, 0x13, 0x19, 0x19, 0x41, 0x1b, 0x39, 0x67, 0x5c, 0xcb, 0xbb, 0xe3, 0x83, 0xb2, 0x20, 0xe4,
+	0xd7, 0xf3, 0x08, 0x4f, 0x95, 0x46, 0x0d, 0x52, 0x33, 0x95, 0x27, 0x60, 0x07, 0x35, 0x89, 0x6a,
+	0x22, 0x3e, 0x41, 0x27, 0xf8, 0x87, 0xf4, 0x0e, 0x74, 0x22, 0x8e, 0xa1, 0x44, 0xf3, 0xb1, 0x6d,
+	0xd3, 0xc2, 0xf4, 0x8e, 0xa0, 0x6b, 0x16, 0xb3, 0xbe, 0x5d, 0x0a, 0x50, 0xc8, 0xf7, 0x4f, 0x69,
+	0x3e, 0xc7, 0x32, 0x65, 0x6e, 0x7a, 0x47, 0xf0, 0xff, 0xeb, 0x68, 0xb1, 0x9c, 0x73, 0xfc, 0x9a,
+	0xce, 0x17, 0x4b, 0x0c, 0x2e, 0x19, 0x97, 0x66, 0xf5, 0x14, 0x17, 0xde, 0x04, 0x1e, 0xd4, 0xcb,
+	0xf7, 0x2c, 0xa2, 0xe6, 0x87, 0x69, 0x74, 0x0c, 0xfb, 0x77, 0x43, 0x48, 0x1f, 0xba, 0xe7, 0x4c,
+	0x7e, 0xc4, 0x30, 0x46, 0xbe, 0xbf, 0x35, 0xfe, 0xd1, 0x34, 0x0f, 0x3b, 0x67, 0x88, 0x0b, 0xd6,
+	0x0c, 0x25, 0x81, 0xfc, 0x3d, 0x53, 0x5c, 0x0c, 0x7a, 0xe5, 0x59, 0x64, 0xde, 0x16, 0x19, 0x41,
+	0x3f, 0x62, 0xa9, 0x98, 0x0b, 0x89, 0xa9, 0x3c, 0xdb, 0xcc, 0xba, 0x60, 0x89, 0x82, 0x08, 0x6e,
+	0x11, 0x41, 0x49, 0x3c, 0x06, 0xdb, 0x0c, 0x8c, 0xf4, 0xab, 0xb7, 0xae, 0xb8, 0xdd, 0xdb, 0xa6,
+	0x46, 0x2f, 0xc0, 0x09, 0x6b, 0x26, 0x46, 0x1e, 0x29, 0x7a, 0xc3, 0xb8, 0x07, 0xee, 0x66, 0x40,
+	0x25, 0x98, 0xd8, 0xfa, 0xbf, 0xe0, 0xd9, 0xef, 0x00, 0x00, 0x00, 0xff, 0xff, 0x9a, 0x2f, 0x57,
+	0xfd, 0x21, 0x06, 0x00, 0x00,
 }

@@ -31,26 +31,15 @@ message NodeInfo {
     int32 gridPort = 5;
     // the port on which serf operates
     int32 serfPort = 6;
+    // copy of the serf tags
+    map<string, string> tags = 7;
 }
 
-// This enum defines all raft operations.
-// 
-enum RaftOps {
-    Set = 0;
-    Delete = 1;
-    ConsistentGet = 2;
-    AcquireUniqueShortNodeId = 3;
-}
-
-// Generic container for raft commands.
-// All operations need to be compressed somehow into this format.
+// This is the base raft command that can be sent.
+// All actual commands need to appear in here and be part of this composition.
+// Unfortunately that means that there's multiple places where messages need to be added.
+// Here, on the sending side, and the receiving end. Well...you can't have everything in life.
 message RaftCommand {
-    RaftOps cmd = 1;
-    string key = 2;
-    bytes value = 3;
-}
-
-message RaftCommand2 {
     oneof cmd {
         GetCommand getCmd = 1;
         SetCommand setCmd = 2;
@@ -59,19 +48,26 @@ message RaftCommand2 {
     }
 }
 
+// This is "consistent get" message.
+// The advantage is: This read will be up-to-date with the strongly consistent store.
+// The bad part is: It need to travel to the leader, be processed, and replicated.
+// Pretty expensive if you can live with stale data, do that instead.
 message GetCommand {
     string key = 1;
 }
 
+// This sets a key-value-pair in the consistent store.
 message SetCommand {
     string key = 1;
     bytes value = 2;
 }
 
+// This deletes a key-value-pair from the consistent store.
 message DeleteCommand {
     string key = 1;
 }
 
+// This allocates a cluster-wide unique short node id from the consistent store.
 message NodeIdCommand {}
 
 // I decided to cheap this out and make all of this a proto

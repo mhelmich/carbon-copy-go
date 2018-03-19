@@ -183,7 +183,7 @@ func (ec *mockConsensusClient) close() error {
 // 	assert.True(t, strings.HasSuffix(nodeInfos[7].nodeAddress, "_7"))
 // }
 
-func TestCluster2Basic(t *testing.T) {
+func TestClusterBasic(t *testing.T) {
 	cfg1 := clusterConfig{
 		RaftPort:         17171,
 		RaftStoreDir:     "./db.raft1.db",

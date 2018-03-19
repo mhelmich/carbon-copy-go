@@ -239,8 +239,11 @@ func (cs *consensusStoreImpl) AcquireUniqueShortNodeId() (int, error) {
 
 func (cs *consensusStoreImpl) ConsistentGet(key string) ([]byte, error) {
 	cmd := &pb.RaftCommand{
-		Cmd: pb.RaftOps_ConsistentGet,
-		Key: key,
+		Cmd: &pb.RaftCommand_GetCmd{
+			GetCmd: &pb.GetCommand{
+				Key: key,
+			},
+		},
 	}
 
 	f := cs.raftApply(cmd)
@@ -261,9 +264,12 @@ func (cs *consensusStoreImpl) Get(key string) ([]byte, error) {
 
 func (cs *consensusStoreImpl) Set(key string, value []byte) error {
 	cmd := &pb.RaftCommand{
-		Cmd:   pb.RaftOps_Set,
-		Key:   key,
-		Value: value,
+		Cmd: &pb.RaftCommand_SetCmd{
+			SetCmd: &pb.SetCommand{
+				Key:   key,
+				Value: value,
+			},
+		},
 	}
 
 	return cs.raftApply(cmd).Error()
@@ -271,8 +277,11 @@ func (cs *consensusStoreImpl) Set(key string, value []byte) error {
 
 func (cs *consensusStoreImpl) Delete(key string) error {
 	cmd := &pb.RaftCommand{
-		Cmd: pb.RaftOps_Delete,
-		Key: key,
+		Cmd: &pb.RaftCommand_DeleteCmd{
+			DeleteCmd: &pb.DeleteCommand{
+				Key: key,
+			},
+		},
 	}
 
 	return cs.raftApply(cmd).Error()

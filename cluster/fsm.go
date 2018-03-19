@@ -46,23 +46,24 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.logger.Panicf("Shutting down as I can't apply a raft change: %s", err)
 	}
 
-	switch cmdProto.Cmd {
-	case pb.RaftOps_Set:
-		return f.applySet(cmdProto.GetKey(), cmdProto.GetValue())
-	case pb.RaftOps_Delete:
-		return f.applyDelete(cmdProto.GetKey())
-	case pb.RaftOps_ConsistentGet:
-		return f.applyConsistentGet(cmdProto.GetKey())
+	switch cmdProto.GetCmd().(type) {
+	case *pb.RaftCommand_SetCmd:
+		set := cmdProto.GetSetCmd()
+		return f.applySet(set.GetKey(), set.GetValue())
+	case *pb.RaftCommand_DeleteCmd:
+		del := cmdProto.GetDeleteCmd()
+		return f.applyDelete(del.GetKey())
+	case *pb.RaftCommand_GetCmd:
+		get := cmdProto.GetGetCmd()
+		return f.applyConsistentGet(get.GetKey())
+	case *pb.RaftCommand_NodeIdCmd:
+		// nodeIdCmd := cmdProto.GetNodeIdCmd()
+		return f.applyAcquireNodeId()
 	default:
 		return &raftApplyResponse{
 			err: fmt.Errorf("Unknown command: %v", cmdProto.Cmd),
 		}
 	}
-
-	// switch cmd := cmdProto.cmd.(type) {
-	// case *pb.GetCommand:
-	// case *pb.SetCommand:
-	// }
 }
 
 // Snapshot returns a snapshot of the key-value store.
@@ -118,6 +119,10 @@ func (f *fsm) applyDelete(key string) interface{} {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	delete(f.state, key)
+	return nil
+}
+
+func (f *fsm) applyAcquireNodeId() interface{} {
 	return nil
 }
 
