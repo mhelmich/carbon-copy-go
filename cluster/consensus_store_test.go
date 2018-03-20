@@ -19,7 +19,6 @@ package cluster
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/hashicorp/raft"
 	"github.com/oklog/ulid"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -27,7 +26,7 @@ import (
 )
 
 func TestConsensusStoreBasic(t *testing.T) {
-	cfg1 := clusterConfig{
+	cfg1 := ClusterConfig{
 		RaftPort:        9876,
 		RaftServicePort: 9877,
 		isDevMode:       true,
@@ -43,7 +42,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
-	cfg2 := clusterConfig{
+	cfg2 := ClusterConfig{
 		RaftPort:        6789,
 		RaftServicePort: 6780,
 		Peers:           peers,
@@ -76,7 +75,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 }
 
 func TestConsensusStoreHopscotch(t *testing.T) {
-	cfg1 := clusterConfig{
+	cfg1 := ClusterConfig{
 		RaftPort:        9876,
 		RaftServicePort: 9877,
 		isDevMode:       true,
@@ -92,7 +91,7 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
-	cfg2 := clusterConfig{
+	cfg2 := ClusterConfig{
 		RaftPort:        6789,
 		RaftServicePort: 6780,
 		Peers:           peers,
@@ -109,7 +108,7 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 
 	peers2 := make([]string, 1)
 	peers2[0] = fmt.Sprintf("localhost:%d", cfg2.RaftServicePort)
-	cfg3 := clusterConfig{
+	cfg3 := ClusterConfig{
 		RaftPort:        4567,
 		RaftServicePort: 7654,
 		Peers:           peers2,
@@ -122,7 +121,7 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 
 func _TestConsensusStoreConsistentGet(t *testing.T) {
 	raftDbPath1 := "./db.raft1.db"
-	cfg1 := clusterConfig{
+	cfg1 := ClusterConfig{
 		RaftPort:        9876,
 		RaftServicePort: 9877,
 		RaftStoreDir:    raftDbPath1,
@@ -139,7 +138,7 @@ func _TestConsensusStoreConsistentGet(t *testing.T) {
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
-	cfg2 := clusterConfig{
+	cfg2 := ClusterConfig{
 		RaftPort:        6789,
 		RaftServicePort: 6780,
 		Peers:           peers,

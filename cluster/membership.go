@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/serf/serf"
 	log "github.com/sirupsen/logrus"
-	// golanglog "log"
+	golanglog "log"
 	"strconv"
 )
 
@@ -41,9 +41,9 @@ const (
 	raftRoleNone     = "x"
 )
 
-func createNewMembership(config clusterConfig) (*membership, error) {
+func createNewMembership(config ClusterConfig) (*membership, error) {
 	serfConfig := serf.DefaultConfig()
-	// serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf ", 0)
+	serfConfig.Logger = golanglog.New(config.logger.Writer(), "serf ", 0)
 	// it's important that this channel never blocks
 	// if it blocks, the sender will block and therefore stop applying log entries
 	// which means we're not up to date with the current cluster state anymore
@@ -109,7 +109,7 @@ type membership struct {
 	serf            *serf.Serf
 	logger          *log.Entry
 	membershipState *membershipState
-	config          clusterConfig
+	config          ClusterConfig
 
 	memberJoined <-chan string
 	memberLeft   <-chan string

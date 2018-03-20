@@ -18,7 +18,10 @@ package cluster
 
 import (
 	"context"
+	"crypto/rand"
+	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
+	"os"
 )
 
 type NodeConnectionInfo struct {
@@ -26,7 +29,7 @@ type NodeConnectionInfo struct {
 	nodeAddress string
 }
 
-type clusterConfig struct {
+type ClusterConfig struct {
 	RaftPort         int
 	RaftStoreDir     string
 	Peers            []string
@@ -37,7 +40,7 @@ type clusterConfig struct {
 	nodeId           string
 	raftNotifyCh     chan bool
 	logger           *log.Entry
-	numRaftVoters    int
+	NumRaftVoters    int
 	isDevMode        bool
 }
 
@@ -47,9 +50,21 @@ type Cluster interface {
 	Close()
 }
 
-func NewCluster() (Cluster, error) {
-	// return createNewCluster()
-	return nil, nil
+func NewCluster(config ClusterConfig) (Cluster, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		log.Panicf("Can't get hostname: %s", err.Error())
+	}
+
+	config.logger = log.WithFields(log.Fields{
+		"host":      host,
+		"component": "cluster",
+	})
+
+	config.nodeId = ulid.MustNew(ulid.Now(), rand.Reader).String()
+	config.raftNotifyCh = make(chan bool, 16)
+
+	return createNewCluster(config)
 }
 
 type consensusClient interface {
@@ -66,7 +81,7 @@ type consensusClient interface {
 }
 
 type consensusStore interface {
-	AcquireUniqueShortNodeId() (int, error)
+	acquireUniqueShortNodeId() (int, error)
 	get(key string) (string, error)
 	set(key string, value string) error
 	delete(key string) error

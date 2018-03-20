@@ -87,10 +87,10 @@ type clusterImpl struct {
 	consensusStore *consensusStoreImpl
 	membership     *membership
 	logger         *log.Entry
-	config         clusterConfig
+	config         ClusterConfig
 }
 
-func createNewCluster(config clusterConfig) (*clusterImpl, error) {
+func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	cs, err := createNewConsensusStore(config)
 	if err != nil {
 		return nil, err
@@ -237,7 +237,7 @@ func (ci *clusterImpl) setRaftClusterState(rvsProto *pb.RaftVoterState) error {
 func (ci *clusterImpl) ensureConsensusStoreVoters(rvsProto *pb.RaftVoterState) *pb.RaftVoterState {
 	// make sure we have enough voters in our raft cluster
 	numVoters := len(rvsProto.Voters)
-	numVotersIWant := ci.config.numRaftVoters - numVoters
+	numVotersIWant := ci.config.NumRaftVoters - numVoters
 
 	//
 	// add new voters to raft cluster
@@ -276,7 +276,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	}
 
 	numVoters := len(rvsProto.Voters)
-	numVotersIWant := ci.config.numRaftVoters - numVoters
+	numVotersIWant := ci.config.NumRaftVoters - numVoters
 
 	info, _ := ci.membership.getNodeById(newMemberId)
 	nodeInfoProto, _ := ci.convertNodeIdSerfToRaft(info)

@@ -41,7 +41,7 @@ const (
 	raftLogCacheSize    = 512
 )
 
-func createNewConsensusStore(config clusterConfig) (*consensusStoreImpl, error) {
+func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) {
 	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	config.nodeId = raftNodeId
 	config.raftNotifyCh = make(chan bool, 16)
@@ -87,7 +87,7 @@ type consensusStoreImpl struct {
 	raftNotifyCh    <-chan bool
 }
 
-func createRaft(config clusterConfig) (*raft.Raft, *fsm, error) {
+func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	var err error
 
 	// setup Raft configuration
@@ -184,7 +184,7 @@ func createRaft(config clusterConfig) (*raft.Raft, *fsm, error) {
 	return newRaft, fsm, nil
 }
 
-func createRaftService(config clusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
+func createRaftService(config ClusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
 	// if config.Peers != nil && len(config.Peers) > 0 {
 	// 	joinedRaft := false
 	// 	joinReq := &pb.RaftJoinRequest{

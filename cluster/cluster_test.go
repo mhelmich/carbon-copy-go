@@ -184,9 +184,9 @@ func (ec *mockConsensusClient) close() error {
 // }
 
 func TestClusterBasic(t *testing.T) {
-	cfg1 := clusterConfig{
+	cfg1 := ClusterConfig{
 		RaftPort:        17171,
-		numRaftVoters:   3,
+		NumRaftVoters:   3,
 		Peers:           nil,
 		hostname:        "127.0.0.1",
 		RaftServicePort: 27272,
@@ -208,9 +208,9 @@ func TestClusterBasic(t *testing.T) {
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", "127.0.0.1", cfg1.SerfPort)
-	cfg2 := clusterConfig{
+	cfg2 := ClusterConfig{
 		RaftPort:        18181,
-		numRaftVoters:   3,
+		NumRaftVoters:   3,
 		Peers:           peers,
 		hostname:        "127.0.0.1",
 		RaftServicePort: 28282,
