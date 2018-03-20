@@ -64,6 +64,7 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 		raftValueServer: grpcServer,
 		logger:          config.logger,
 		raftNotifyCh:    config.raftNotifyCh,
+		config:          &config,
 	}
 
 	return consensusStore, nil
@@ -78,6 +79,7 @@ type consensusStoreImpl struct {
 	raftFsm         *fsm
 	raftValueServer *grpc.Server
 	raftNotifyCh    <-chan bool
+	config          *ClusterConfig
 }
 
 func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {

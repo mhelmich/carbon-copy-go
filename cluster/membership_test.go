@@ -17,9 +17,7 @@
 package cluster
 
 import (
-	"crypto/rand"
 	"fmt"
-	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -28,14 +26,14 @@ import (
 
 func TestMembershipBasic(t *testing.T) {
 	hn := "127.0.0.1"
-	nid1 := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	nid1 := "node111"
 	c1 := ClusterConfig{
 		Peers:      make([]string, 0),
 		hostname:   hn,
-		SerfPort:   47474,
+		SerfPort:   17111,
 		longNodeId: nid1,
 		logger: log.WithFields(log.Fields{
-			"serf_port": 47474,
+			"serf_port": 17111,
 			"node_id":   nid1,
 		}),
 	}
@@ -44,16 +42,16 @@ func TestMembershipBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, m1)
 
-	nid2 := ulid.MustNew(ulid.Now(), rand.Reader).String()
+	nid2 := "node222"
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", hn, c1.SerfPort)
 	c2 := ClusterConfig{
 		Peers:      peers,
 		hostname:   hn,
-		SerfPort:   57575,
+		SerfPort:   17222,
 		longNodeId: nid2,
 		logger: log.WithFields(log.Fields{
-			"serf_port": 57575,
+			"serf_port": 17222,
 			"node_id":   nid2,
 		}),
 	}

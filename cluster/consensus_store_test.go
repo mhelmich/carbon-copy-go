@@ -21,14 +21,21 @@ import (
 	"fmt"
 	"github.com/oklog/ulid"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 	"time"
 )
 
 func TestConsensusStoreBasic(t *testing.T) {
+	hn, err := os.Hostname()
+	assert.Nil(t, err)
+
 	cfg1 := ClusterConfig{
-		RaftPort:        9876,
-		RaftServicePort: 9877,
+		RaftPort:        15111,
+		RaftServicePort: 16111,
+		longNodeId:      "node111",
+		hostname:        hn,
+		raftNotifyCh:    make(chan bool, 16),
 		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
@@ -41,11 +48,14 @@ func TestConsensusStoreBasic(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
+	peers[0] = fmt.Sprintf("%s:%d", hn, cfg1.RaftServicePort)
 	cfg2 := ClusterConfig{
-		RaftPort:        6789,
-		RaftServicePort: 6780,
+		RaftPort:        25222,
+		RaftServicePort: 26222,
+		longNodeId:      "node222",
+		hostname:        hn,
 		Peers:           peers,
+		raftNotifyCh:    make(chan bool, 16),
 		isDevMode:       true,
 	}
 	store2, err := createNewConsensusStore(cfg2)
@@ -55,7 +65,17 @@ func TestConsensusStoreBasic(t *testing.T) {
 	// this is just to give the node some time to settle
 	// things are happening pretty much immediately
 	// I'm not waiting for anything
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
+
+	store2NodeId := store2.config.longNodeId
+	store2Addr := fmt.Sprintf("%s:%d", hn, cfg2.RaftServicePort)
+	err = store1.addVoter(store2NodeId, store2Addr)
+	assert.Nil(t, err)
+
+	// this is just to give the node some time to settle
+	// things are happening pretty much immediately
+	// I'm not waiting for anything
+	time.Sleep(2 * time.Second)
 
 	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
