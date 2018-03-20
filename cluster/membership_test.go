@@ -30,10 +30,10 @@ func TestMembershipBasic(t *testing.T) {
 	hn := "127.0.0.1"
 	nid1 := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	c1 := ClusterConfig{
-		Peers:    make([]string, 0),
-		hostname: hn,
-		SerfPort: 47474,
-		nodeId:   nid1,
+		Peers:      make([]string, 0),
+		hostname:   hn,
+		SerfPort:   47474,
+		longNodeId: nid1,
 		logger: log.WithFields(log.Fields{
 			"serf_port": 47474,
 			"node_id":   nid1,
@@ -48,10 +48,10 @@ func TestMembershipBasic(t *testing.T) {
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", hn, c1.SerfPort)
 	c2 := ClusterConfig{
-		Peers:    peers,
-		hostname: hn,
-		SerfPort: 57575,
-		nodeId:   nid2,
+		Peers:      peers,
+		hostname:   hn,
+		SerfPort:   57575,
+		longNodeId: nid2,
 		logger: log.WithFields(log.Fields{
 			"serf_port": 57575,
 			"node_id":   nid2,

@@ -21,4 +21,4 @@ Cluster:
   RaftStoreDir: "./db.raft2.db"
   SerfSnapshotPath: "./db.serf2"
   NumRaftVoters: 3
-  Peers: "marcohelmi-ltm.internal.salesforce.com:17171"
+  Peers: "127.0.0.1:17171"

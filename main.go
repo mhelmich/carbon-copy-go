@@ -97,5 +97,4 @@ func cleanup(sig os.Signal, c cluster.Cluster) {
 	log.Info("This node is going down gracefully")
 	log.Infof("Received signal: %s", sig)
 	c.Close()
-	log.Exit(0)
 }

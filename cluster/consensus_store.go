@@ -41,7 +41,7 @@ const (
 
 func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) {
 	config.logger = log.WithFields(log.Fields{
-		"raftNodeId": config.nodeId,
+		"raftNodeId": config.longNodeId,
 		"hostname":   config.hostname,
 		"raftPort":   config.RaftPort,
 	})
@@ -85,7 +85,7 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 
 	// setup Raft configuration
 	raftConfig := raft.DefaultConfig()
-	raftConfig.LocalID = raft.ServerID(config.nodeId)
+	raftConfig.LocalID = raft.ServerID(config.longNodeId)
 	raftConfig.Logger = golanglog.New(config.logger.Writer(), "raft ", 0)
 	raftConfig.NotifyCh = config.raftNotifyCh
 
@@ -186,7 +186,7 @@ func createRaftService(config ClusterConfig, r *raft.Raft) (*grpc.Server, error)
 	grpcServer := grpc.NewServer()
 	raftServer := &raftServiceImpl{
 		raft:       r,
-		raftNodeId: config.nodeId,
+		raftNodeId: config.longNodeId,
 	}
 
 	pb.RegisterRaftServiceServer(grpcServer, raftServer)

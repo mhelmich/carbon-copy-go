@@ -49,7 +49,7 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	// which means we're not up to date with the current cluster state anymore
 	serfEventCh := make(chan serf.Event, serfEventChannelBufferSize)
 	serfConfig.EventCh = serfEventCh
-	serfConfig.NodeName = config.nodeId
+	serfConfig.NodeName = config.longNodeId
 	serfConfig.EnableNameConflictResolution = false
 	serfConfig.MemberlistConfig.BindAddr = config.hostname
 	serfConfig.MemberlistConfig.BindPort = config.SerfPort
@@ -185,7 +185,7 @@ func (m *membership) updateRaftTag(newTags map[string]string) error {
 }
 
 func (m *membership) myNodeId() string {
-	return m.config.nodeId
+	return m.config.longNodeId
 }
 
 func (m *membership) getClusterSize() int {

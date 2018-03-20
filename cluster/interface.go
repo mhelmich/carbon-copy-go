@@ -37,7 +37,7 @@ type ClusterConfig struct {
 	RaftServicePort  int
 	SerfPort         int
 	SerfSnapshotPath string
-	nodeId           string
+	longNodeId       string
 	raftNotifyCh     chan bool
 	logger           *log.Entry
 	NumRaftVoters    int
@@ -61,7 +61,8 @@ func NewCluster(config ClusterConfig) (Cluster, error) {
 		"component": "cluster",
 	})
 
-	config.nodeId = ulid.MustNew(ulid.Now(), rand.Reader).String()
+	config.hostname = host
+	config.longNodeId = ulid.MustNew(ulid.Now(), rand.Reader).String()
 	config.raftNotifyCh = make(chan bool, 16)
 
 	return createNewCluster(config)
