@@ -17,13 +17,11 @@
 package cluster
 
 import (
-	"crypto/rand"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/mhelmich/carbon-copy-go/pb"
-	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	golanglog "log"
@@ -42,13 +40,8 @@ const (
 )
 
 func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) {
-	raftNodeId := ulid.MustNew(ulid.Now(), rand.Reader).String()
-	config.nodeId = raftNodeId
-	config.raftNotifyCh = make(chan bool, 16)
-	hn, _ := os.Hostname()
-	config.hostname = hn
 	config.logger = log.WithFields(log.Fields{
-		"raftNodeId": raftNodeId,
+		"raftNodeId": config.nodeId,
 		"hostname":   config.hostname,
 		"raftPort":   config.RaftPort,
 	})
@@ -60,7 +53,7 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 	}
 
 	// create the service providing non-consensus nodes with values
-	grpcServer, err := createRaftService(config, r, raftNodeId)
+	grpcServer, err := createRaftService(config, r)
 	if err != nil {
 		return nil, err
 	}
@@ -184,42 +177,7 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	return newRaft, fsm, nil
 }
 
-func createRaftService(config ClusterConfig, r *raft.Raft, raftNodeId string) (*grpc.Server, error) {
-	// if config.Peers != nil && len(config.Peers) > 0 {
-	// 	joinedRaft := false
-	// 	joinReq := &pb.RaftJoinRequest{
-	// 		Host: config.hostname,
-	// 		Port: int32(config.RaftPort),
-	// 		Id:   raftNodeId,
-	// 	}
-
-	// 	for _, peer := range config.Peers {
-	// 		config.logger.Infof("Connecting to peer %s", peer)
-	// 		conn, err := grpc.Dial(peer, grpc.WithInsecure())
-	// 		defer conn.Close()
-
-	// 		if err == nil {
-	// 			client := pb.NewRaftServiceClient(conn)
-	// 			joinResp, err := client.JoinRaftCluster(context.Background(), joinReq)
-	// 			if err == nil && joinResp.Ok {
-	// 				config.logger.Infof("Asked %s to join raft answer: %t", peer, joinResp.Ok)
-	// 				joinedRaft = true
-	// 				break
-	// 			} else {
-	// 				config.logger.Warnf("Asked %s to join raft answer: %v", peer, joinResp.Ok)
-	// 			}
-	// 		} else {
-	// 			config.logger.Warnf("Couldn't connect to %s: %s", peer, err)
-	// 		}
-	// 	}
-
-	// 	// After we looped through all peers and we're not able to connect to the master,
-	// 	// then we're dead in water.
-	// 	if !joinedRaft {
-	// 		return nil, fmt.Errorf("Wasn't able to talk to any of the peers %v", config.Peers)
-	// 	}
-	// }
-
+func createRaftService(config ClusterConfig, r *raft.Raft) (*grpc.Server, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
 	if err != nil {
 		return nil, err
@@ -228,7 +186,7 @@ func createRaftService(config ClusterConfig, r *raft.Raft, raftNodeId string) (*
 	grpcServer := grpc.NewServer()
 	raftServer := &raftServiceImpl{
 		raft:       r,
-		raftNodeId: raftNodeId,
+		raftNodeId: config.nodeId,
 	}
 
 	pb.RegisterRaftServiceServer(grpcServer, raftServer)

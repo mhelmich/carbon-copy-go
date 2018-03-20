@@ -1,3 +1,2 @@
-**/carbon-grid-go
-default.etcd
-**/*.db
+**/carbon-copy-go
+**/db*
