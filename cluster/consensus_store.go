@@ -272,6 +272,66 @@ func (cs *consensusStoreImpl) isRaftLeader() bool {
 	return cs.raft.State() == raft.Leader
 }
 
+func (cs *consensusStoreImpl) AddVoter(serverId string, serverAddress string) error {
+	raftId := raft.ServerID(serverId)
+	raftAddr := raft.ServerAddress(serverAddress)
+
+	err := cs.removeServer(raftId, raftAddr)
+	if err != nil {
+		return err
+	}
+
+	f := cs.raft.AddVoter(raftId, raftAddr, 0, 0)
+	if f.Error() == nil {
+		cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
+		return nil
+	} else {
+		cs.logger.Infof("Couldn't add (%s - %s) as raft voter: %v", serverId, serverAddress, f.Error().Error())
+		return f.Error()
+	}
+}
+
+func (cs *consensusStoreImpl) AddNonvoter(serverId string, serverAddress string) error {
+	raftId := raft.ServerID(serverId)
+	raftAddr := raft.ServerAddress(serverAddress)
+
+	err := cs.removeServer(raftId, raftAddr)
+	if err != nil {
+		return err
+	}
+
+	f := cs.raft.AddNonvoter(raftId, raftAddr, 0, 0)
+	if f.Error() == nil {
+		cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
+		return nil
+	} else {
+		cs.logger.Infof("Couldn't add (%s - %s) as raft voter: %v", serverId, serverAddress, f.Error().Error())
+		return f.Error()
+	}
+}
+
+func (cs *consensusStoreImpl) removeServer(id raft.ServerID, addr raft.ServerAddress) error {
+	cfgF := cs.raft.GetConfiguration()
+	if cfgF.Error() != nil {
+		return cfgF.Error()
+	}
+
+	for _, server := range cfgF.Configuration().Servers {
+		if server.Address == addr {
+			cs.logger.Infof("The new server has an address that exists already. Removing it out of the current config before adding it afresh. (%v - %v)", id, addr)
+			f := cs.raft.RemoveServer(server.ID, 0, 0)
+			if f.Error() != nil {
+				return f.Error()
+			}
+
+			// my job is done
+			return nil
+		}
+	}
+
+	return nil
+}
+
 func (cs *consensusStoreImpl) Close() error {
 	f := cs.raft.Shutdown()
 	cs.raftValueServer.Stop()

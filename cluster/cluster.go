@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/hashicorp/raft"
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"strconv"
@@ -248,14 +247,11 @@ func (ci *clusterImpl) ensureConsensusStoreVoters(rvsProto *pb.RaftVoterState) *
 			nodeInfo, ok := rvsProto.AllNodes[memberId]
 			if ok {
 				raftAddr := fmt.Sprintf("%s:%d", nodeInfo.Host, nodeInfo.RaftPort)
-				f := ci.consensusStore.raft.AddVoter(raft.ServerID(memberId), raft.ServerAddress(raftAddr), 0, 0)
-				if f.Error() == nil {
-					log.Infof("Added (%s - %s) as raft voter in raft index %d", memberId, raftAddr, f.Index())
+				err := ci.consensusStore.AddVoter(memberId, raftAddr)
+				if err == nil {
 					rvsProto.Voters[memberId] = rvsProto.Nonvoters[memberId]
 					delete(rvsProto.Nonvoters, memberId)
 					numVotersIWant--
-				} else {
-					log.Infof("Couldn't add (%s - %s) as raft voter -- narf narf narf: %v", memberId, raftAddr, f.Error().Error())
 				}
 
 				if numVotersIWant <= 0 {
@@ -286,24 +282,18 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	// add new voters to raft cluster
 	//
 	if numVotersIWant > 0 {
-		f := ci.consensusStore.raft.AddVoter(raft.ServerID(newMemberId), raft.ServerAddress(raftAddr), 0, 0)
-		if f.Error() == nil {
-			log.Infof("Added (%s - %s) as raft voter at index %d", newMemberId, raftAddr, f.Index())
+		err := ci.consensusStore.AddVoter(newMemberId, raftAddr)
+		if err == nil {
 			rvsProto.Voters[newMemberId] = true
 			rvsProto.AllNodes[newMemberId] = nodeInfoProto
 			delete(rvsProto.Nonvoters, newMemberId)
-		} else {
-			log.Infof("Couldn't add (%s - %s) as raft voter: %v", newMemberId, raftAddr, f.Error().Error())
 		}
 	} else {
-		err := ci.consensusStore.raft.AddNonvoter(raft.ServerID(newMemberId), raft.ServerAddress(raftAddr), 0, 0).Error()
+		err := ci.consensusStore.AddNonvoter(newMemberId, raftAddr)
 		if err == nil {
-			log.Infof("Added (%s - %s) as raft nonvoter", newMemberId, raftAddr)
 			rvsProto.Nonvoters[newMemberId] = true
 			rvsProto.AllNodes[newMemberId] = nodeInfoProto
 			delete(rvsProto.Voters, newMemberId)
-		} else {
-			log.Infof("Couldn't add (%s - %s) as raft nonvoter: %v", newMemberId, raftAddr, err.Error())
 		}
 	}
 
