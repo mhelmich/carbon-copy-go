@@ -64,6 +64,11 @@ import (
 // TODO:
 // * How to allocate a cluster-unique, short (int32) node id? -> raft - maybe even in its seperate command implementation
 // * How to pass on changes in cluster membership?            -> forwarding serf events
+//
+// I could toy around with this one day
+// "github.com/araddon/qlbridge"
+// "github.com/couchbase/blance"
+// "github.com/couchbase/moss"
 
 const (
 	nameSeparator             = "/"
