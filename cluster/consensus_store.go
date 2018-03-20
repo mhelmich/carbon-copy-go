@@ -272,7 +272,7 @@ func (cs *consensusStoreImpl) isRaftLeader() bool {
 	return cs.raft.State() == raft.Leader
 }
 
-func (cs *consensusStoreImpl) AddVoter(serverId string, serverAddress string) error {
+func (cs *consensusStoreImpl) addVoter(serverId string, serverAddress string) error {
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
 
@@ -291,7 +291,7 @@ func (cs *consensusStoreImpl) AddVoter(serverId string, serverAddress string) er
 	}
 }
 
-func (cs *consensusStoreImpl) AddNonvoter(serverId string, serverAddress string) error {
+func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string) error {
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
 

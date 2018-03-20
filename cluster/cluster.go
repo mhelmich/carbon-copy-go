@@ -247,7 +247,7 @@ func (ci *clusterImpl) ensureConsensusStoreVoters(rvsProto *pb.RaftVoterState) *
 			nodeInfo, ok := rvsProto.AllNodes[memberId]
 			if ok {
 				raftAddr := fmt.Sprintf("%s:%d", nodeInfo.Host, nodeInfo.RaftPort)
-				err := ci.consensusStore.AddVoter(memberId, raftAddr)
+				err := ci.consensusStore.addVoter(memberId, raftAddr)
 				if err == nil {
 					rvsProto.Voters[memberId] = rvsProto.Nonvoters[memberId]
 					delete(rvsProto.Nonvoters, memberId)
@@ -282,14 +282,14 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	// add new voters to raft cluster
 	//
 	if numVotersIWant > 0 {
-		err := ci.consensusStore.AddVoter(newMemberId, raftAddr)
+		err := ci.consensusStore.addVoter(newMemberId, raftAddr)
 		if err == nil {
 			rvsProto.Voters[newMemberId] = true
 			rvsProto.AllNodes[newMemberId] = nodeInfoProto
 			delete(rvsProto.Nonvoters, newMemberId)
 		}
 	} else {
-		err := ci.consensusStore.AddNonvoter(newMemberId, raftAddr)
+		err := ci.consensusStore.addNonvoter(newMemberId, raftAddr)
 		if err == nil {
 			rvsProto.Nonvoters[newMemberId] = true
 			rvsProto.AllNodes[newMemberId] = nodeInfoProto
