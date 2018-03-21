@@ -89,6 +89,11 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 		config.logger.Info("No peers defined - starting a brandnew cluster!")
 	}
 
+	//
+	// These channels are really sensitive.
+	// If they block, membership can't do any updates.
+	// No changes to memberships states will ever be processed.
+	//
 	memberJoined := make(chan string)
 	memberLeft := make(chan string)
 
@@ -111,6 +116,11 @@ type membership struct {
 	membershipState *membershipState
 	config          ClusterConfig
 
+	//
+	// These channels are really sensitive.
+	// If they block, membership can't do any updates.
+	// No changes to memberships states will ever be processed.
+	//
 	memberJoined <-chan string
 	memberLeft   <-chan string
 }
