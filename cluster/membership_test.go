@@ -41,6 +41,14 @@ func TestMembershipBasic(t *testing.T) {
 	m1, err := createNewMembership(c1)
 	assert.Nil(t, err)
 	assert.NotNil(t, m1)
+	// read out of these channels as this will block
+	// membership processing
+	go func() {
+		select {
+		case <-m1.memberJoined:
+		case <-m1.memberLeft:
+		}
+	}()
 
 	nid2 := "node222"
 	peers := make([]string, 1)
@@ -59,6 +67,14 @@ func TestMembershipBasic(t *testing.T) {
 	m2, err := createNewMembership(c2)
 	assert.Nil(t, err)
 	assert.NotNil(t, m2)
+	// read out of these channels as this will block
+	// membership processing
+	go func() {
+		select {
+		case <-m2.memberJoined:
+		case <-m2.memberLeft:
+		}
+	}()
 
 	// TODO: build better latching
 	// or rather saying: build latch at all!!
