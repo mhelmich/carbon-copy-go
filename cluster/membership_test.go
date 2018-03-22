@@ -136,11 +136,19 @@ func TestMembershipNotificationDedup(t *testing.T) {
 
 	// update tags and see how many messages come out
 	newTags := make(map[string]string)
-	newTags["key"] = "value"
+	newTags["key1"] = "value1"
 	err = m1.updateMemberTags(newTags)
 	assert.Nil(t, err)
 	assertNumMessages(t, m1.memberJoined, 1)
 	assertNumMessages(t, m2.memberJoined, 1)
+
+	m, ok := m1.getMemberById(m1.myMemberId())
+	assert.True(t, ok)
+	assert.Equal(t, "value1", m["key1"])
+
+	m, ok = m2.getMemberById(m1.myMemberId())
+	assert.True(t, ok)
+	assert.Equal(t, "value1", m["key1"])
 
 	// update the same node with the same tags
 	// see no messages being triggered
@@ -156,6 +164,14 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	assert.Nil(t, err)
 	assertNumMessages(t, m1.memberJoined, 1)
 	assertNumMessages(t, m2.memberJoined, 1)
+
+	m, ok = m2.getMemberById(m2.myMemberId())
+	assert.True(t, ok)
+	assert.Equal(t, "value1", m["key1"])
+
+	m, ok = m2.getMemberById(m1.myMemberId())
+	assert.True(t, ok)
+	assert.Equal(t, "value1", m["key1"])
 
 	m1.close()
 	assertNumMessages(t, m1.memberLeft, 1)
