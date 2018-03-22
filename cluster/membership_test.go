@@ -164,19 +164,39 @@ func TestMembershipNotificationDedup(t *testing.T) {
 }
 
 func assertNumMessages(t *testing.T, c <-chan string, num int) {
+	timeout := 1 * time.Second
 	if num > 0 {
-		for i := 0; i < num; i++ {
+		numMessagesReceived := 0
+		for {
 			select {
-			case <-c:
-			case <-time.After(3 * time.Second):
-				assert.Fail(t, "timed out waiting")
+			case s := <-c:
+				if s == "" {
+					// channel closed we're done
+					assert.Equal(t, num, numMessagesReceived)
+					return
+				}
+
+				if numMessagesReceived > num {
+					// no point in doing more work,
+					// we it's wrong already
+					assert.FailNow(t, "Received too many messages")
+				}
+
+				numMessagesReceived++
+
+			case <-time.After(timeout):
+				if numMessagesReceived != num {
+					assert.FailNow(t, "received wrong number of messages")
+				} else {
+					return
+				}
 			}
 		}
 	} else if num == 0 {
 		select {
 		case <-c:
-			assert.Fail(t, "get a message where I didn't expect one")
-		case <-time.After(1 * time.Second):
+			assert.FailNow(t, "get a message where I didn't expect one")
+		case <-time.After(timeout):
 		}
 	}
 }
