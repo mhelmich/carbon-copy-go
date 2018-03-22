@@ -173,7 +173,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 			// update my own state in serf
 			newTags := make(map[string]string)
 			newTags[serfMDKeyRaftRole] = raftRoleLeader
-			err = ci.membership.updateRaftTag(newTags)
+			err = ci.membership.updateMemberTags(newTags)
 			if err == nil {
 				ci.logger.Infof("Updated serf status to reflect me being raft leader.")
 			} else {

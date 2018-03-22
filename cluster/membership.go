@@ -93,19 +93,19 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	// If they block, membership can't do any updates.
 	// No changes to memberships states will ever be processed.
 	//
-	memberJoined := make(chan string)
+	memberJoinedOrUpdated := make(chan string)
 	memberLeft := make(chan string)
 
 	m := &membership{
 		serf:            surf,
 		logger:          config.logger,
 		membershipState: newMembershipState(config.logger),
-		memberJoined:    memberJoined,
+		memberJoined:    memberJoinedOrUpdated,
 		memberLeft:      memberLeft,
 		config:          config,
 	}
 
-	go m.handleSerfEvents(serfEventCh, memberJoined, memberLeft)
+	go m.handleSerfEvents(serfEventCh, memberJoinedOrUpdated, memberLeft)
 	return m, nil
 }
 
@@ -176,7 +176,7 @@ func (m *membership) getMemberById(memberId string) (map[string]string, bool) {
 	return m.membershipState.getMemberById(memberId)
 }
 
-func (m *membership) updateRaftTag(newTags map[string]string) error {
+func (m *membership) updateMemberTags(newTags map[string]string) error {
 	// this will update the nodes metadata and broadcast it out
 	// blocks until broadcasting was successful or timed out
 	tags, ok := m.getMemberById(m.myMemberId())

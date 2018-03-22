@@ -41,14 +41,7 @@ func TestMembershipBasic(t *testing.T) {
 	m1, err := createNewMembership(c1)
 	assert.Nil(t, err)
 	assert.NotNil(t, m1)
-	// read out of these channels as this will block
-	// membership processing
-	go func() {
-		select {
-		case <-m1.memberJoined:
-		case <-m1.memberLeft:
-		}
-	}()
+	assertNumMessages(t, m1.memberJoined, 1)
 
 	nid2 := "node222"
 	peers := make([]string, 1)
@@ -67,18 +60,8 @@ func TestMembershipBasic(t *testing.T) {
 	m2, err := createNewMembership(c2)
 	assert.Nil(t, err)
 	assert.NotNil(t, m2)
-	// read out of these channels as this will block
-	// membership processing
-	go func() {
-		select {
-		case <-m2.memberJoined:
-		case <-m2.memberLeft:
-		}
-	}()
-
-	// TODO: build better latching
-	// or rather saying: build latch at all!!
-	time.Sleep(1 * time.Second)
+	assertNumMessages(t, m1.memberJoined, 1)
+	assertNumMessages(t, m2.memberJoined, 2)
 
 	_, ok := m1.getMemberById(nid1)
 	assert.True(t, ok)
@@ -94,5 +77,106 @@ func TestMembershipBasic(t *testing.T) {
 	assert.Equal(t, 2, m2.getClusterSize())
 
 	m1.close()
+	assertNumMessages(t, m1.memberLeft, 1)
+	assertNumMessages(t, m2.memberLeft, 1)
 	m2.close()
+}
+
+func TestMembershipNotificationDedup(t *testing.T) {
+	hn := "127.0.0.1"
+	nid1 := "node111"
+	c1 := ClusterConfig{
+		Peers:        make([]string, 0),
+		hostname:     hn,
+		SerfPort:     17111,
+		longMemberId: nid1,
+		logger: log.WithFields(log.Fields{
+			"serf_port": 17111,
+			"node_id":   nid1,
+		}),
+	}
+
+	m1, err := createNewMembership(c1)
+	assert.Nil(t, err)
+	assert.NotNil(t, m1)
+	assertNumMessages(t, m1.memberJoined, 1)
+
+	nid2 := "node222"
+	peers := make([]string, 1)
+	peers[0] = fmt.Sprintf("%s:%d", hn, c1.SerfPort)
+	c2 := ClusterConfig{
+		Peers:        peers,
+		hostname:     hn,
+		SerfPort:     17222,
+		longMemberId: nid2,
+		logger: log.WithFields(log.Fields{
+			"serf_port": 17222,
+			"node_id":   nid2,
+		}),
+	}
+
+	m2, err := createNewMembership(c2)
+	assert.Nil(t, err)
+	assert.NotNil(t, m2)
+	assertNumMessages(t, m1.memberJoined, 1)
+	assertNumMessages(t, m2.memberJoined, 2)
+
+	_, ok := m1.getMemberById(nid1)
+	assert.True(t, ok)
+	_, ok = m1.getMemberById(nid2)
+	assert.True(t, ok)
+
+	_, ok = m2.getMemberById(nid1)
+	assert.True(t, ok)
+	_, ok = m2.getMemberById(nid2)
+	assert.True(t, ok)
+
+	assert.Equal(t, 2, m1.getClusterSize())
+	assert.Equal(t, 2, m2.getClusterSize())
+
+	// update tags and see how many messages come out
+	newTags := make(map[string]string)
+	newTags["key"] = "value"
+	err = m1.updateMemberTags(newTags)
+	assert.Nil(t, err)
+	assertNumMessages(t, m1.memberJoined, 1)
+	assertNumMessages(t, m2.memberJoined, 1)
+
+	// update the same node with the same tags
+	// see no messages being triggered
+	err = m1.updateMemberTags(newTags)
+	assert.Nil(t, err)
+	assertNumMessages(t, m1.memberJoined, 0)
+	assertNumMessages(t, m2.memberJoined, 0)
+
+	// update the other member with these tags
+	// see messages being triggered
+	// as these tags are new to this node
+	err = m2.updateMemberTags(newTags)
+	assert.Nil(t, err)
+	assertNumMessages(t, m1.memberJoined, 1)
+	assertNumMessages(t, m2.memberJoined, 1)
+
+	m1.close()
+	assertNumMessages(t, m1.memberLeft, 1)
+	assertNumMessages(t, m2.memberLeft, 1)
+	m2.close()
+}
+
+func assertNumMessages(t *testing.T, c <-chan string, num int) {
+	if num > 0 {
+		for i := 0; i < num; i++ {
+			select {
+			case <-c:
+			case <-time.After(3 * time.Second):
+				assert.Fail(t, "timed out waiting")
+			}
+		}
+	} else if num == 0 {
+		select {
+		case <-c:
+			assert.Fail(t, "get a message where I didn't expect one")
+		case <-time.After(1 * time.Second):
+		}
+	}
 }
