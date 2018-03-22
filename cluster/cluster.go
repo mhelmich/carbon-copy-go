@@ -185,16 +185,16 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 		rvsProto, err := ci.getRaftClusterState()
 		if err == nil {
 			// update me as leader
-			myNodeId := ci.membership.myNodeId()
+			myMemberId := ci.membership.myMemberId()
 			// set me as leader
-			rvsProto.Voters[myNodeId] = true
+			rvsProto.Voters[myMemberId] = true
 			// get my node info proto going
-			info, _ := ci.membership.getNodeById(myNodeId)
+			info, _ := ci.membership.getMemberById(myMemberId)
 			nodeInfoProto, _ := ci.convertNodeIdSerfToRaft(info)
 			// add myself to the cluster
-			rvsProto.AllNodes[myNodeId] = nodeInfoProto
+			rvsProto.AllNodes[myMemberId] = nodeInfoProto
 			// yes, I'm paranoid like this
-			delete(rvsProto.Nonvoters, myNodeId)
+			delete(rvsProto.Nonvoters, myMemberId)
 			// rebalance the cluster
 			rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
 			// set in consensus store
@@ -279,7 +279,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	numVoters := len(rvsProto.Voters)
 	numVotersIWant := ci.config.NumRaftVoters - numVoters
 
-	info, _ := ci.membership.getNodeById(newMemberId)
+	info, _ := ci.membership.getMemberById(newMemberId)
 	nodeInfoProto, _ := ci.convertNodeIdSerfToRaft(info)
 	raftAddr := fmt.Sprintf("%s:%d", nodeInfoProto.Host, nodeInfoProto.RaftPort)
 

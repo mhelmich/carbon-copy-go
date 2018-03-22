@@ -191,7 +191,7 @@ func TestClusterBasic(t *testing.T) {
 		hostname:        "127.0.0.1",
 		RaftServicePort: 27272,
 		SerfPort:        37373,
-		longNodeId:      "node1",
+		longMemberId:    "node1",
 		raftNotifyCh:    make(chan bool, 16),
 		logger: log.WithFields(log.Fields{
 			"cluster": "AAA",
@@ -215,7 +215,7 @@ func TestClusterBasic(t *testing.T) {
 		hostname:        "127.0.0.1",
 		RaftServicePort: 28282,
 		SerfPort:        38383,
-		longNodeId:      "node2",
+		longMemberId:    "node2",
 		raftNotifyCh:    make(chan bool, 16),
 		logger: log.WithFields(log.Fields{
 			"cluster": "BBB",

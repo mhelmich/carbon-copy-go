@@ -38,7 +38,6 @@ const (
 	raftRoleLeader   = "l"
 	raftRoleVoter    = "v"
 	raftRoleNonvoter = "n"
-	raftRoleNone     = "x"
 )
 
 func createNewMembership(config ClusterConfig) (*membership, error) {
@@ -49,7 +48,7 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	// which means we're not up to date with the current cluster state anymore
 	serfEventCh := make(chan serf.Event, serfEventChannelBufferSize)
 	serfConfig.EventCh = serfEventCh
-	serfConfig.NodeName = config.longNodeId
+	serfConfig.NodeName = config.longMemberId
 	serfConfig.EnableNameConflictResolution = false
 	serfConfig.MemberlistConfig.BindAddr = config.hostname
 	serfConfig.MemberlistConfig.BindPort = config.SerfPort
@@ -132,6 +131,8 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- 
 			if e == nil {
 				// seems the channel was closed
 				// let's stop this go routine
+				close(memberJoined)
+				close(memberLeft)
 				return
 			}
 
@@ -146,6 +147,8 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- 
 				m.handleMemberLeaveEvent(e.(serf.MemberEvent), memberLeft)
 			}
 		case <-m.serf.ShutdownCh():
+			close(memberJoined)
+			close(memberLeft)
 			return
 		}
 	}
@@ -169,14 +172,14 @@ func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent, memberLeft chan
 	}
 }
 
-func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
-	return m.membershipState.getMemberById(nodeId)
+func (m *membership) getMemberById(memberId string) (map[string]string, bool) {
+	return m.membershipState.getMemberById(memberId)
 }
 
 func (m *membership) updateRaftTag(newTags map[string]string) error {
 	// this will update the nodes metadata and broadcast it out
 	// blocks until broadcasting was successful or timed out
-	tags, ok := m.getNodeById(m.myNodeId())
+	tags, ok := m.getMemberById(m.myMemberId())
 	if ok {
 		for k, v := range newTags {
 			tags[k] = v
@@ -186,12 +189,12 @@ func (m *membership) updateRaftTag(newTags map[string]string) error {
 	}
 
 	err := m.serf.SetTags(tags)
-	m.membershipState.updateMember(m.myNodeId(), tags)
+	m.membershipState.updateMember(m.myMemberId(), tags)
 	return err
 }
 
-func (m *membership) myNodeId() string {
-	return m.config.longNodeId
+func (m *membership) myMemberId() string {
+	return m.config.longMemberId
 }
 
 func (m *membership) getClusterSize() int {

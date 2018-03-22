@@ -28,10 +28,10 @@ func TestMembershipBasic(t *testing.T) {
 	hn := "127.0.0.1"
 	nid1 := "node111"
 	c1 := ClusterConfig{
-		Peers:      make([]string, 0),
-		hostname:   hn,
-		SerfPort:   17111,
-		longNodeId: nid1,
+		Peers:        make([]string, 0),
+		hostname:     hn,
+		SerfPort:     17111,
+		longMemberId: nid1,
 		logger: log.WithFields(log.Fields{
 			"serf_port": 17111,
 			"node_id":   nid1,
@@ -54,10 +54,10 @@ func TestMembershipBasic(t *testing.T) {
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", hn, c1.SerfPort)
 	c2 := ClusterConfig{
-		Peers:      peers,
-		hostname:   hn,
-		SerfPort:   17222,
-		longNodeId: nid2,
+		Peers:        peers,
+		hostname:     hn,
+		SerfPort:     17222,
+		longMemberId: nid2,
 		logger: log.WithFields(log.Fields{
 			"serf_port": 17222,
 			"node_id":   nid2,
@@ -80,14 +80,14 @@ func TestMembershipBasic(t *testing.T) {
 	// or rather saying: build latch at all!!
 	time.Sleep(1 * time.Second)
 
-	_, ok := m1.getNodeById(nid1)
+	_, ok := m1.getMemberById(nid1)
 	assert.True(t, ok)
-	_, ok = m1.getNodeById(nid2)
+	_, ok = m1.getMemberById(nid2)
 	assert.True(t, ok)
 
-	_, ok = m2.getNodeById(nid1)
+	_, ok = m2.getMemberById(nid1)
 	assert.True(t, ok)
-	_, ok = m2.getNodeById(nid2)
+	_, ok = m2.getMemberById(nid2)
 	assert.True(t, ok)
 
 	assert.Equal(t, 2, m1.getClusterSize())

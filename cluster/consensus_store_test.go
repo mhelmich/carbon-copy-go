@@ -33,7 +33,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	cfg1 := ClusterConfig{
 		RaftPort:        15111,
 		RaftServicePort: 16111,
-		longNodeId:      "node111",
+		longMemberId:    "node111",
 		hostname:        hn,
 		raftNotifyCh:    make(chan bool, 16),
 		isDevMode:       true,
@@ -52,7 +52,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	cfg2 := ClusterConfig{
 		RaftPort:        25222,
 		RaftServicePort: 26222,
-		longNodeId:      "node222",
+		longMemberId:    "node222",
 		hostname:        hn,
 		Peers:           peers,
 		raftNotifyCh:    make(chan bool, 16),
@@ -67,7 +67,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	// I'm not waiting for anything
 	time.Sleep(2 * time.Second)
 
-	store2NodeId := store2.config.longNodeId
+	store2NodeId := store2.config.longMemberId
 	store2Addr := fmt.Sprintf("%s:%d", hn, cfg2.RaftServicePort)
 	err = store1.addVoter(store2NodeId, store2Addr)
 	assert.Nil(t, err)
