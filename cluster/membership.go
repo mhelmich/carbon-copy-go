@@ -169,10 +169,6 @@ func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent, memberLeft chan
 	}
 }
 
-func (m *membership) getRaftLeaderTags() (map[string]string, bool) {
-	return m.membershipState.getMemberById(m.membershipState.raftLeader)
-}
-
 func (m *membership) getNodeById(nodeId string) (map[string]string, bool) {
 	return m.membershipState.getMemberById(nodeId)
 }

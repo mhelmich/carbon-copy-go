@@ -46,8 +46,6 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.logger.Panicf("Shutting down as I can't apply a raft change: %s", err)
 	}
 
-	f.logger.Infof("Applying %d", l.Index)
-
 	switch cmdProto.GetCmd().(type) {
 	case *pb.RaftCommand_SetCmd:
 		set := cmdProto.GetSetCmd()
