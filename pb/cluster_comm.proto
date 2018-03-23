@@ -108,7 +108,9 @@ service RaftService {
 }
 
 enum RaftServiceError {
-    NotLeader = 0;
+    NoRaftError = 0;
+    NotLeaderRaftError = 1;
+    KeyDoesntExistRaftError = 2;
 }
 
 message GetReq {

@@ -33,7 +33,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	cfg1 := ClusterConfig{
 		RaftPort:        15111,
 		RaftServicePort: 16111,
-		longNodeId:      "node111",
+		longMemberId:    "node111",
 		hostname:        hn,
 		raftNotifyCh:    make(chan bool, 16),
 		isDevMode:       true,
@@ -41,18 +41,16 @@ func TestConsensusStoreBasic(t *testing.T) {
 	store1, err := createNewConsensusStore(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, store1)
-
-	// this is just to give the node some time to settle
-	// things are happening pretty much immediately
-	// I'm not waiting for anything
-	time.Sleep(2 * time.Second)
+	assert.True(t, <-cfg1.raftNotifyCh)
 
 	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("%s:%d", hn, cfg1.RaftServicePort)
+	// as long as this is not nil, we don't care what's
+	// actually written in there
+	peers[0] = "Polly wants cracker!"
 	cfg2 := ClusterConfig{
 		RaftPort:        25222,
 		RaftServicePort: 26222,
-		longNodeId:      "node222",
+		longMemberId:    "node222",
 		hostname:        hn,
 		Peers:           peers,
 		raftNotifyCh:    make(chan bool, 16),
@@ -62,58 +60,56 @@ func TestConsensusStoreBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, store2)
 
-	// this is just to give the node some time to settle
-	// things are happening pretty much immediately
-	// I'm not waiting for anything
-	time.Sleep(2 * time.Second)
-
-	store2NodeId := store2.config.longNodeId
-	store2Addr := fmt.Sprintf("%s:%d", hn, cfg2.RaftServicePort)
+	// form the cluster of two rafts
+	store2NodeId := store2.config.longMemberId
+	store2Addr := fmt.Sprintf("%s:%d", hn, cfg2.RaftPort)
 	err = store1.addVoter(store2NodeId, store2Addr)
 	assert.Nil(t, err)
 
-	// this is just to give the node some time to settle
-	// things are happening pretty much immediately
-	// I'm not waiting for anything
-	time.Sleep(2 * time.Second)
-
+	// set a value at raft 1
 	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
-	err = store1.Set(key, value)
+	err = store1.set(key, value)
 	assert.Nil(t, err)
 
+	// give it some time to replicate
 	time.Sleep(1 * time.Second)
 
-	val, err := store2.Get(key)
+	val, err := store2.get(key)
 	assert.Nil(t, err)
 	assert.Equal(t, value, val)
 
-	err = store1.Close()
+	err = store1.close()
 	assert.Nil(t, err)
-	err = store2.Close()
+	err = store2.close()
 	assert.Nil(t, err)
 }
 
-func TestConsensusStoreHopscotch(t *testing.T) {
+func TestConsensusStoreConsistentGet(t *testing.T) {
+	hn, err := os.Hostname()
+	assert.Nil(t, err)
+
 	cfg1 := ClusterConfig{
 		RaftPort:        9876,
 		RaftServicePort: 9877,
+		longMemberId:    "node111",
+		hostname:        hn,
+		raftNotifyCh:    make(chan bool, 16),
 		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, store1)
-
-	// this is just to give the node some time to settle
-	// things are happening pretty much immediately
-	// I'm not waiting for anything
-	time.Sleep(2 * time.Second)
+	assert.True(t, <-cfg1.raftNotifyCh)
 
 	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
+	peers[0] = "Polly wants cracker!"
 	cfg2 := ClusterConfig{
 		RaftPort:        6789,
 		RaftServicePort: 6780,
+		longMemberId:    "node222",
+		hostname:        hn,
+		raftNotifyCh:    make(chan bool, 16),
 		Peers:           peers,
 		isDevMode:       true,
 	}
@@ -121,69 +117,22 @@ func TestConsensusStoreHopscotch(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, store2)
 
-	// this is just to give the node some time to settle
-	// things are happening pretty much immediately
-	// I'm not waiting for anything
-	time.Sleep(2 * time.Second)
-
-	peers2 := make([]string, 1)
-	peers2[0] = fmt.Sprintf("localhost:%d", cfg2.RaftServicePort)
-	cfg3 := ClusterConfig{
-		RaftPort:        4567,
-		RaftServicePort: 7654,
-		Peers:           peers2,
-		isDevMode:       true,
-	}
-	store3, err := createNewConsensusStore(cfg3)
+	// form the cluster of two rafts
+	store2Addr := fmt.Sprintf("%s:%d", hn, cfg2.RaftPort)
+	err = store1.addVoter(store2.config.longMemberId, store2Addr)
 	assert.Nil(t, err)
-	assert.NotNil(t, store3)
-}
-
-func _TestConsensusStoreConsistentGet(t *testing.T) {
-	raftDbPath1 := "./db.raft1.db"
-	cfg1 := ClusterConfig{
-		RaftPort:        9876,
-		RaftServicePort: 9877,
-		RaftStoreDir:    raftDbPath1,
-		isDevMode:       true,
-	}
-	store1, err := createNewConsensusStore(cfg1)
-	assert.Nil(t, err)
-	assert.NotNil(t, store1)
-
-	// this is just to give the node some time to settle
-	// things are happening pretty much immediately
-	// I'm not waiting for anything
-	time.Sleep(2 * time.Second)
-
-	peers := make([]string, 1)
-	peers[0] = fmt.Sprintf("localhost:%d", cfg1.RaftServicePort)
-	cfg2 := ClusterConfig{
-		RaftPort:        6789,
-		RaftServicePort: 6780,
-		Peers:           peers,
-		isDevMode:       true,
-	}
-	store2, err := createNewConsensusStore(cfg2)
-	assert.Nil(t, err)
-	assert.NotNil(t, store2)
-
-	// this is just to give the node some time to settle
-	// things are happening pretty much immediately
-	// I'm not waiting for anything
-	time.Sleep(1 * time.Second)
 
 	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
-	err = store1.Set(key, value)
+	err = store1.set(key, value)
 	assert.Nil(t, err)
 
-	val, err := store2.ConsistentGet(key)
+	val, err := store2.consistentGet(key)
 	assert.Nil(t, err)
 	assert.Equal(t, value, val)
 
-	err = store1.Close()
+	err = store1.close()
 	assert.Nil(t, err)
-	err = store2.Close()
+	err = store2.close()
 	assert.Nil(t, err)
 }

@@ -26,10 +26,6 @@ func newMembershipState(logger *log.Entry) *membershipState {
 	return &membershipState{
 		mutex:          &sync.RWMutex{},
 		currentMembers: make(map[string]map[string]string),
-		raftLeader:     "",
-		raftVoters:     make(map[string]bool),
-		raftNonvoters:  make(map[string]bool),
-		raftNones:      make(map[string]bool),
 		logger:         logger,
 	}
 }
@@ -37,10 +33,6 @@ func newMembershipState(logger *log.Entry) *membershipState {
 type membershipState struct {
 	mutex          *sync.RWMutex
 	currentMembers map[string]map[string]string
-	raftLeader     string
-	raftVoters     map[string]bool
-	raftNonvoters  map[string]bool
-	raftNones      map[string]bool
 	logger         *log.Entry
 }
 
@@ -54,29 +46,9 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) boo
 		return false
 	}
 
-	// TODO - I might be able to rid of all of this
 	cs.mutex.Lock()
 	// carry over all tags
 	cs.currentMembers[name] = tags
-
-	// find and set raft role for this node
-	v, ok := tags[serfMDKeyRaftRole]
-	if ok {
-		switch v {
-		case raftRoleLeader:
-			cs.raftLeader = name
-			cs.raftVoters[name] = true
-		case raftRoleVoter:
-			cs.raftVoters[name] = true
-		case raftRoleNonvoter:
-			cs.raftNonvoters[name] = true
-		case raftRoleNone:
-			cs.raftNones[name] = true
-		default:
-			cs.logger.Warnf("Found serf member (%s) with unknown raft role %s", name, v)
-		}
-	}
-
 	cs.mutex.Unlock()
 
 	return true
@@ -94,9 +66,6 @@ func (cs *membershipState) removeMember(name string) bool {
 	cs.mutex.Lock()
 	delete(cs.currentMembers, name)
 	// just be sure to not leave dead bodies in our basement
-	delete(cs.raftVoters, name)
-	delete(cs.raftNonvoters, name)
-	delete(cs.raftNones, name)
 	cs.mutex.Unlock()
 
 	return true

@@ -37,7 +37,7 @@ type ClusterConfig struct {
 	RaftServicePort  int
 	SerfPort         int
 	SerfSnapshotPath string
-	longNodeId       string
+	longMemberId     string
 	raftNotifyCh     chan bool
 	logger           *log.Entry
 	NumRaftVoters    int
@@ -62,7 +62,7 @@ func NewCluster(config ClusterConfig) (Cluster, error) {
 	})
 
 	config.hostname = host
-	config.longNodeId = ulid.MustNew(ulid.Now(), rand.Reader).String()
+	config.longMemberId = ulid.MustNew(ulid.Now(), rand.Reader).String()
 	config.raftNotifyCh = make(chan bool, 16)
 
 	return createNewCluster(config)
@@ -83,8 +83,8 @@ type consensusClient interface {
 
 type consensusStore interface {
 	acquireUniqueShortNodeId() (int, error)
-	get(key string) (string, error)
-	set(key string, value string) error
+	get(key string) ([]byte, error)
+	set(key string, value []byte) error
 	delete(key string) error
 	close() error
 }

@@ -23,7 +23,6 @@ import (
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	golanglog "log"
 	"net"
 	"os"
@@ -41,7 +40,7 @@ const (
 
 func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) {
 	config.logger = log.WithFields(log.Fields{
-		"raftNodeId": config.longNodeId,
+		"raftNodeId": config.longMemberId,
 		"hostname":   config.hostname,
 		"raftPort":   config.RaftPort,
 	})
@@ -52,42 +51,46 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 		return nil, err
 	}
 
-	// create the service providing non-consensus nodes with values
-	grpcServer, err := createRaftService(config, r)
-	if err != nil {
-		return nil, err
-	}
+	// // create the service providing non-consensus nodes with values
+	// raftServer, err := createRaftService(config)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	consensusStore := &consensusStoreImpl{
-		raft:            r,
-		raftFsm:         raftFsm,
-		raftValueServer: grpcServer,
-		logger:          config.logger,
-		raftNotifyCh:    config.raftNotifyCh,
-		config:          &config,
+		raft:    r,
+		raftFsm: raftFsm,
+		// raftService:  raftServer,
+		logger:       config.logger,
+		raftNotifyCh: config.raftNotifyCh,
+		config:       config,
 	}
 
+	// this circular dependency is a little bit weird :/
+	// but the server needs to answer requests by using the local consensus store
+	// and the consensus store is supposed to be a facade for the raft server
+	// *sigh*
+	// raftServer.localConsensusStore = consensusStore
 	return consensusStore, nil
+}
+
+type consensusStoreImpl struct {
+	logger  *log.Entry
+	raft    *raft.Raft
+	raftFsm *fsm
+	// raftService  *raftServiceImpl
+	raftNotifyCh <-chan bool
+	config       ClusterConfig
 }
 
 // see this example or rather reference usage
 // https://github.com/otoolep/hraftd/blob/master/store/store.go
-
-type consensusStoreImpl struct {
-	logger          *log.Entry
-	raft            *raft.Raft
-	raftFsm         *fsm
-	raftValueServer *grpc.Server
-	raftNotifyCh    <-chan bool
-	config          *ClusterConfig
-}
-
 func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	var err error
 
 	// setup Raft configuration
 	raftConfig := raft.DefaultConfig()
-	raftConfig.LocalID = raft.ServerID(config.longNodeId)
+	raftConfig.LocalID = raft.ServerID(config.longMemberId)
 	raftConfig.Logger = golanglog.New(config.logger.Writer(), "raft ", 0)
 	raftConfig.NotifyCh = config.raftNotifyCh
 
@@ -179,28 +182,30 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	return newRaft, fsm, nil
 }
 
-func createRaftService(config ClusterConfig, r *raft.Raft) (*grpc.Server, error) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
-	if err != nil {
-		return nil, err
-	}
+// func createRaftService(config ClusterConfig) (*raftServiceImpl, error) {
+// 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	grpcServer := grpc.NewServer()
-	raftServer := &raftServiceImpl{
-		raft:       r,
-		raftNodeId: config.longNodeId,
-	}
+// 	grpcServer := grpc.NewServer()
 
-	pb.RegisterRaftServiceServer(grpcServer, raftServer)
-	go grpcServer.Serve(lis)
-	return grpcServer, nil
-}
+// 	raftServer := &raftServiceImpl{
+// 		raftNodeId: config.longMemberId,
+// 		grpcServer: grpcServer,
+// 		logger:     config.logger,
+// 	}
 
-func (cs *consensusStoreImpl) AcquireUniqueShortNodeId() (int, error) {
+// 	pb.RegisterRaftServiceServer(grpcServer, raftServer)
+// 	go grpcServer.Serve(lis)
+// 	return raftServer, nil
+// }
+
+func (cs *consensusStoreImpl) acquireUniqueShortNodeId() (int, error) {
 	return -1, nil
 }
 
-func (cs *consensusStoreImpl) ConsistentGet(key string) ([]byte, error) {
+func (cs *consensusStoreImpl) consistentGet(key string) ([]byte, error) {
 	cmd := &pb.RaftCommand{
 		Cmd: &pb.RaftCommand_GetCmd{
 			GetCmd: &pb.GetCommand{
@@ -218,14 +223,14 @@ func (cs *consensusStoreImpl) ConsistentGet(key string) ([]byte, error) {
 	}
 }
 
-func (cs *consensusStoreImpl) Get(key string) ([]byte, error) {
+func (cs *consensusStoreImpl) get(key string) ([]byte, error) {
 	cs.raftFsm.mutex.RLock()
 	defer cs.raftFsm.mutex.RUnlock()
 	// this might be a stale read :/
 	return cs.raftFsm.state[key], nil
 }
 
-func (cs *consensusStoreImpl) Set(key string, value []byte) error {
+func (cs *consensusStoreImpl) set(key string, value []byte) error {
 	cmd := &pb.RaftCommand{
 		Cmd: &pb.RaftCommand_SetCmd{
 			SetCmd: &pb.SetCommand{
@@ -238,7 +243,7 @@ func (cs *consensusStoreImpl) Set(key string, value []byte) error {
 	return cs.raftApply(cmd).Error()
 }
 
-func (cs *consensusStoreImpl) Delete(key string) error {
+func (cs *consensusStoreImpl) delete(key string) error {
 	cmd := &pb.RaftCommand{
 		Cmd: &pb.RaftCommand_DeleteCmd{
 			DeleteCmd: &pb.DeleteCommand{
@@ -334,9 +339,9 @@ func (cs *consensusStoreImpl) removeServer(id raft.ServerID, addr raft.ServerAdd
 	return nil
 }
 
-func (cs *consensusStoreImpl) Close() error {
+func (cs *consensusStoreImpl) close() error {
 	f := cs.raft.Shutdown()
-	cs.raftValueServer.Stop()
+	// cs.raftService.close()
 	return f.Error()
 }
 
