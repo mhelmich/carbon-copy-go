@@ -63,7 +63,10 @@ func TestProxyBasic(t *testing.T) {
 
 	deleted, err := proxy.delete(k)
 	assert.Nil(t, err)
-	// TODO - fix this -- should be true
+	assert.True(t, deleted)
+
+	deleted, err = proxy.delete("some_random_key")
+	assert.Nil(t, err)
 	assert.False(t, deleted)
 
 	assert.Nil(t, proxy.close())

@@ -51,12 +51,6 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 		return nil, err
 	}
 
-	// // create the service providing non-consensus nodes with values
-	// raftServer, err := createRaftService(config)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	consensusStore := &consensusStoreImpl{
 		raft:    r,
 		raftFsm: raftFsm,
@@ -66,11 +60,6 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 		config:       config,
 	}
 
-	// this circular dependency is a little bit weird :/
-	// but the server needs to answer requests by using the local consensus store
-	// and the consensus store is supposed to be a facade for the raft server
-	// *sigh*
-	// raftServer.localConsensusStore = consensusStore
 	return consensusStore, nil
 }
 
@@ -182,25 +171,6 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	return newRaft, fsm, nil
 }
 
-// func createRaftService(config ClusterConfig) (*raftServiceImpl, error) {
-// 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	grpcServer := grpc.NewServer()
-
-// 	raftServer := &raftServiceImpl{
-// 		raftNodeId: config.longMemberId,
-// 		grpcServer: grpcServer,
-// 		logger:     config.logger,
-// 	}
-
-// 	pb.RegisterRaftServiceServer(grpcServer, raftServer)
-// 	go grpcServer.Serve(lis)
-// 	return raftServer, nil
-// }
-
 func (cs *consensusStoreImpl) acquireUniqueShortNodeId() (int, error) {
 	return -1, nil
 }
@@ -218,7 +188,7 @@ func (cs *consensusStoreImpl) consistentGet(key string) ([]byte, error) {
 	if f.Error() != nil {
 		return nil, f.Error()
 	} else {
-		resp := f.Response().(raftApplyResponse)
+		resp := f.Response().(*raftApplyResponse)
 		return resp.value, resp.err
 	}
 }
@@ -243,7 +213,7 @@ func (cs *consensusStoreImpl) set(key string, value []byte) error {
 	return cs.raftApply(cmd).Error()
 }
 
-func (cs *consensusStoreImpl) delete(key string) error {
+func (cs *consensusStoreImpl) delete(key string) (bool, error) {
 	cmd := &pb.RaftCommand{
 		Cmd: &pb.RaftCommand_DeleteCmd{
 			DeleteCmd: &pb.DeleteCommand{
@@ -252,7 +222,17 @@ func (cs *consensusStoreImpl) delete(key string) error {
 		},
 	}
 
-	return cs.raftApply(cmd).Error()
+	f := cs.raftApply(cmd)
+	err := f.Error()
+	if err != nil {
+		return false, err
+	} else {
+		// the apply response contains one byte
+		// if the byte is zero it indicates false
+		// (as in there key didn't exist and couldn't be deleted)
+		resp := f.Response().(*raftApplyResponse)
+		return resp.value[0] != 0, nil
+	}
 }
 
 func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) raft.ApplyFuture {

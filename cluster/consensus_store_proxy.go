@@ -129,8 +129,8 @@ func (csp *consensusStoreProxy) set(key string, value []byte) (bool, error) {
 
 func (csp *consensusStoreProxy) delete(key string) (bool, error) {
 	if csp.store.isRaftLeader() {
-		err := csp.store.delete(key)
-		return false, err
+		deleted, err := csp.store.delete(key)
+		return deleted, err
 	} else {
 		ctx := context.Background()
 		req := &pb.DeleteReq{

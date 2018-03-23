@@ -92,14 +92,29 @@ func (rs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp
 }
 
 func (rs *raftServiceImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.DeleteResp, error) {
-	return nil, nil
+	if !rs.localConsensusStore.isRaftLeader() {
+		return &pb.DeleteResp{
+			Error:   pb.RaftServiceError_NotLeaderRaftError,
+			Deleted: false,
+		}, nil
+	}
+
+	del, err := rs.localConsensusStore.delete(req.Key)
+	if err == nil {
+		return &pb.DeleteResp{
+			Error:   pb.RaftServiceError_NoRaftError,
+			Deleted: del,
+		}, nil
+	} else {
+		return nil, err
+	}
 }
 
 func (rs *raftServiceImpl) AcquireUniqueShortNodeId(context.Context, *pb.AcquireUniqueShortNodeIdReq) (*pb.AcquireUniqueShortNodeIdResp, error) {
 	return nil, nil
 }
 
-func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, in *pb.GetReq) (*pb.GetResp, error) {
+func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
 	if !rs.localConsensusStore.isRaftLeader() {
 		return &pb.GetResp{
 			Error: pb.RaftServiceError_NotLeaderRaftError,
@@ -107,7 +122,7 @@ func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, in *pb.GetReq) (*p
 		}, nil
 	}
 
-	v, err := rs.localConsensusStore.get(in.Key)
+	v, err := rs.localConsensusStore.get(req.Key)
 	if err == nil {
 		return &pb.GetResp{
 			Error: pb.RaftServiceError_NoRaftError,

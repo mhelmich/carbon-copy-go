@@ -28,6 +28,11 @@ import (
 )
 
 // I'm sneaking this struct in here as response for a consistent read
+// this is the generic return type of an apply step
+// I hope I can press all possible responses into this format
+// at least this way I have boil type-safty problems down to casting
+// to the same thing always and then I have to deal with putting state
+// back together from a byte array
 type raftApplyResponse struct {
 	err   error
 	value []byte
@@ -115,11 +120,27 @@ func (f *fsm) applySet(key string, value []byte) interface{} {
 	return nil
 }
 
+// the apply response contains one byte
+// if the byte is zero it indicates false
+// (as in there key didn't exist and couldn't be deleted)
 func (f *fsm) applyDelete(key string) interface{} {
 	f.mutex.Lock()
+	_, ok := f.state[key]
 	delete(f.state, key)
 	f.mutex.Unlock()
-	return nil
+
+	b := make([]byte, 1)
+
+	if ok {
+		b[0] = 1
+	} else {
+		b[0] = 0
+	}
+
+	return &raftApplyResponse{
+		err:   nil,
+		value: b,
+	}
 }
 
 func (f *fsm) applyAcquireNodeId() interface{} {
