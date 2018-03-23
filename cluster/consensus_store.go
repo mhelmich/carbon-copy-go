@@ -52,9 +52,8 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 	}
 
 	consensusStore := &consensusStoreImpl{
-		raft:    r,
-		raftFsm: raftFsm,
-		// raftService:  raftServer,
+		raft:         r,
+		raftFsm:      raftFsm,
 		logger:       config.logger,
 		raftNotifyCh: config.raftNotifyCh,
 		config:       config,
@@ -64,10 +63,9 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 }
 
 type consensusStoreImpl struct {
-	logger  *log.Entry
-	raft    *raft.Raft
-	raftFsm *fsm
-	// raftService  *raftServiceImpl
+	logger       *log.Entry
+	raft         *raft.Raft
+	raftFsm      *fsm
 	raftNotifyCh <-chan bool
 	config       ClusterConfig
 }
@@ -321,7 +319,6 @@ func (cs *consensusStoreImpl) removeServer(id raft.ServerID, addr raft.ServerAdd
 
 func (cs *consensusStoreImpl) close() error {
 	f := cs.raft.Shutdown()
-	// cs.raftService.close()
 	return f.Error()
 }
 
