@@ -24,52 +24,21 @@ import (
 )
 
 type raftServiceImpl struct {
-
-	// this circular dependency is a little bit weird :/
-	// but the server needs to answer requests by using the local consensus store
-	// and the consensus store is supposed to be a facade for the raft server
-	// *sigh*
 	localConsensusStore *consensusStoreImpl
 	grpcServer          *grpc.Server
 	logger              *log.Entry
-	raftNodeId          string
 }
 
-// func (rcs *raftServiceImpl) JoinRaftCluster(ctx context.Context, req *pb.RaftJoinRequest) (*pb.RaftJoinResponse, error) {
-// 	logger := rcs.setupLogger()
-// 	if rcs.raft.State() == raft.Leader {
-// 		addr := fmt.Sprintf("%s:%d", req.Host, req.Port)
-// 		logger.Infof("Adding new peer with id: %s addr: %s", req.Id, addr)
-// 		f := rcs.raft.AddVoter(raft.ServerID(req.Id), raft.ServerAddress(addr), 0, raftTimeout)
-// 		err := f.Error()
-
-// 		if err != nil {
-// 			logger.Infof("Couldn't add peer %s: %s", addr, err)
-// 		}
-
-// 		return &pb.RaftJoinResponse{
-// 			Ok: err == nil,
-// 		}, nil
-// 	} else {
-// 		leaderAddr := rcs.raft.Leader()
-// 		logger.Infof("Leader address: %s", leaderAddr)
-// 		tokens := strings.Split(string(leaderAddr), ":")
-// 		if len(tokens) >= 1 {
-// 			host := tokens[0]
-// 			logger.Infof("Hostname: %s", host)
-// 		} else {
-// 			logger.Warnf("Leader address looks weird: %s", leaderAddr)
-// 		}
-// 	}
-
-// 	// by default we report unsuccessful processing of a join request
-// 	return &pb.RaftJoinResponse{
-// 		Ok: false,
-// 	}, nil
-// }
-
 func (rs *raftServiceImpl) Get(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
-	return nil, nil
+	v, err := rs.localConsensusStore.get(req.Key)
+	if err == nil {
+		return &pb.GetResp{
+			Error: pb.RaftServiceError_NoRaftError,
+			Value: v,
+		}, nil
+	} else {
+		return nil, err
+	}
 }
 
 func (rs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp, error) {
@@ -122,15 +91,7 @@ func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, req *pb.GetReq) (*
 		}, nil
 	}
 
-	v, err := rs.localConsensusStore.get(req.Key)
-	if err == nil {
-		return &pb.GetResp{
-			Error: pb.RaftServiceError_NoRaftError,
-			Value: v,
-		}, nil
-	} else {
-		return nil, err
-	}
+	return rs.Get(ctx, req)
 }
 
 func (rs *raftServiceImpl) close() {

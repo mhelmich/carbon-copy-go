@@ -78,7 +78,7 @@ func (csp *consensusStoreProxy) acquireUniqueShortNodeId() (int, error) {
 }
 
 func (csp *consensusStoreProxy) get(key string) ([]byte, error) {
-	return []byte(key), nil
+	return csp.store.get(key)
 }
 
 func (csp *consensusStoreProxy) consistentGet(key string) ([]byte, error) {

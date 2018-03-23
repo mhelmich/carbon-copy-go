@@ -133,7 +133,6 @@ func createRaftService(config ClusterConfig) (*raftServiceImpl, error) {
 	grpcServer := grpc.NewServer()
 
 	raftServer := &raftServiceImpl{
-		raftNodeId: config.longMemberId,
 		grpcServer: grpcServer,
 		logger:     config.logger,
 	}
@@ -431,12 +430,6 @@ func (ci *clusterImpl) printClusterState() {
 	ci.logger.Infof("AllNodes [%d]:", len(state.AllNodes))
 	for _, info := range state.AllNodes {
 		ci.logger.Infof("%s", info.String())
-	}
-
-	cf := ci.consensusStore.raft.GetConfiguration()
-	ci.logger.Infof("raft status [%d] [%d]:", cf.Index(), len(cf.Configuration().Servers))
-	for _, s := range cf.Configuration().Servers {
-		ci.logger.Infof("%v", s)
 	}
 }
 
