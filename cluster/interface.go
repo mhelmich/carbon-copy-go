@@ -83,8 +83,8 @@ type consensusClient interface {
 
 type consensusStore interface {
 	acquireUniqueShortNodeId() (int, error)
-	get(key string) (string, error)
-	set(key string, value string) error
+	get(key string) ([]byte, error)
+	set(key string, value []byte) error
 	delete(key string) error
 	close() error
 }

@@ -95,17 +95,19 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	//
 	memberJoinedOrUpdated := make(chan string)
 	memberLeft := make(chan string)
+	raftLeaderAddrChan := make(chan string, 8)
 
 	m := &membership{
-		serf:            surf,
-		logger:          config.logger,
-		membershipState: newMembershipState(config.logger),
-		memberJoined:    memberJoinedOrUpdated,
-		memberLeft:      memberLeft,
-		config:          config,
+		serf:               surf,
+		logger:             config.logger,
+		membershipState:    newMembershipState(config.logger),
+		memberJoined:       memberJoinedOrUpdated,
+		memberLeft:         memberLeft,
+		raftLeaderAddrChan: raftLeaderAddrChan,
+		config:             config,
 	}
 
-	go m.handleSerfEvents(serfEventCh, memberJoinedOrUpdated, memberLeft)
+	go m.handleSerfEvents(serfEventCh, memberJoinedOrUpdated, memberLeft, raftLeaderAddrChan)
 	return m, nil
 }
 
@@ -120,11 +122,12 @@ type membership struct {
 	// If they block, membership can't do any updates.
 	// No changes to memberships states will ever be processed.
 	//
-	memberJoined <-chan string
-	memberLeft   <-chan string
+	memberJoined       <-chan string
+	memberLeft         <-chan string
+	raftLeaderAddrChan <-chan string
 }
 
-func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- string, memberLeft chan<- string) {
+func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- string, memberLeft chan<- string, raftLeaderAddrChan chan<- string) {
 	for { // ever...
 		select {
 		case e := <-ch:
@@ -142,7 +145,7 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- 
 			//
 			switch e.EventType() {
 			case serf.EventMemberJoin, serf.EventMemberUpdate:
-				m.handleMemberJoinEvent(e.(serf.MemberEvent), memberJoined)
+				m.handleMemberJoinEvent(e.(serf.MemberEvent), memberJoined, raftLeaderAddrChan)
 			case serf.EventMemberLeave, serf.EventMemberFailed:
 				m.handleMemberLeaveEvent(e.(serf.MemberEvent), memberLeft)
 			}
@@ -154,11 +157,20 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- 
 	}
 }
 
-func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined chan<- string) {
+func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined chan<- string, raftLeaderAddrChan chan<- string) {
 	for _, item := range me.Members {
 		updated := m.membershipState.updateMember(item.Name, item.Tags)
 		if updated {
 			memberJoined <- item.Name
+
+			go func() {
+				role, roleOk := item.Tags[serfMDKeyRaftRole]
+				host, hostOk := item.Tags[serfMDKeyHost]
+				raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
+				if roleOk && hostOk && portOk && role == raftRoleLeader {
+					raftLeaderAddrChan <- host + ":" + raftPort
+				}
+			}()
 		}
 	}
 }
@@ -174,6 +186,18 @@ func (m *membership) handleMemberLeaveEvent(me serf.MemberEvent, memberLeft chan
 
 func (m *membership) getMemberById(memberId string) (map[string]string, bool) {
 	return m.membershipState.getMemberById(memberId)
+}
+
+func (m *membership) markLeader() error {
+	newTags := make(map[string]string)
+	newTags[serfMDKeyRaftRole] = raftRoleLeader
+	return m.updateMemberTags(newTags)
+}
+
+func (m *membership) unmarkLeader() error {
+	newTags := make(map[string]string)
+	newTags[serfMDKeyRaftRole] = ""
+	return m.updateMemberTags(newTags)
 }
 
 func (m *membership) updateMemberTags(newTags map[string]string) error {

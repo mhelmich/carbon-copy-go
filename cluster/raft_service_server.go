@@ -18,15 +18,21 @@ package cluster
 
 import (
 	"context"
-	"github.com/hashicorp/raft"
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
-	"os"
+	"google.golang.org/grpc"
 )
 
 type raftServiceImpl struct {
-	raft       *raft.Raft
-	raftNodeId string
+
+	// this circular dependency is a little bit weird :/
+	// but the server needs to answer requests by using the local consensus store
+	// and the consensus store is supposed to be a facade for the raft server
+	// *sigh*
+	localConsensusStore *consensusStoreImpl
+	grpcServer          *grpc.Server
+	logger              *log.Entry
+	raftNodeId          string
 }
 
 // func (rcs *raftServiceImpl) JoinRaftCluster(ctx context.Context, req *pb.RaftJoinRequest) (*pb.RaftJoinResponse, error) {
@@ -62,32 +68,57 @@ type raftServiceImpl struct {
 // 	}, nil
 // }
 
-func (rcs *raftServiceImpl) Get(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
+func (rs *raftServiceImpl) Get(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
 	return nil, nil
 }
 
-func (rcs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp, error) {
+func (rs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp, error) {
+	if !rs.localConsensusStore.isRaftLeader() {
+		return &pb.SetResp{
+			Error:   pb.RaftServiceError_NotLeaderRaftError,
+			Created: false,
+		}, nil
+	}
+
+	err := rs.localConsensusStore.set(req.Key, req.Value)
+	if err == nil {
+		return &pb.SetResp{
+			Error:   pb.RaftServiceError_NoRaftError,
+			Created: false,
+		}, nil
+	} else {
+		return nil, err
+	}
+}
+
+func (rs *raftServiceImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.DeleteResp, error) {
 	return nil, nil
 }
 
-func (rcs *raftServiceImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.DeleteResp, error) {
+func (rs *raftServiceImpl) AcquireUniqueShortNodeId(context.Context, *pb.AcquireUniqueShortNodeIdReq) (*pb.AcquireUniqueShortNodeIdResp, error) {
 	return nil, nil
 }
 
-func (rcs *raftServiceImpl) AcquireUniqueShortNodeId(context.Context, *pb.AcquireUniqueShortNodeIdReq) (*pb.AcquireUniqueShortNodeIdResp, error) {
-	return nil, nil
+func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, in *pb.GetReq) (*pb.GetResp, error) {
+	if !rs.localConsensusStore.isRaftLeader() {
+		return &pb.GetResp{
+			Error: pb.RaftServiceError_NotLeaderRaftError,
+			Value: nil,
+		}, nil
+	}
+
+	v, err := rs.localConsensusStore.get(in.Key)
+	if err == nil {
+		return &pb.GetResp{
+			Error: pb.RaftServiceError_NoRaftError,
+			Value: v,
+		}, nil
+	} else {
+		return nil, err
+	}
 }
 
-func (rcs *raftServiceImpl) ConsistentGet(ctx context.Context, in *pb.GetReq) (*pb.GetResp, error) {
-	return nil, nil
-}
-
-func (rcs *raftServiceImpl) setupLogger() *log.Entry {
-	hn, _ := os.Hostname()
-	return log.WithFields(log.Fields{
-		"hostname":   hn,
-		"raftState":  rcs.raft.State().String(),
-		"raft":       rcs.raft.String(),
-		"raftNodeId": rcs.raftNodeId,
-	})
+func (rs *raftServiceImpl) close() {
+	rs.grpcServer.Stop()
+	rs.localConsensusStore = nil
 }

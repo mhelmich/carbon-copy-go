@@ -22,6 +22,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+	"net"
 	"strconv"
 	"time"
 )
@@ -87,13 +89,6 @@ type kvBytes struct {
 	value []byte
 }
 
-type clusterImpl struct {
-	consensusStore *consensusStoreImpl
-	membership     *membership
-	logger         *log.Entry
-	config         ClusterConfig
-}
-
 func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	cs, err := createNewConsensusStore(config)
 	if err != nil {
@@ -105,15 +100,56 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
+	// create the service providing non-consensus nodes with values
+	raftServer, err := createRaftService(config)
+	if err != nil {
+		return nil, err
+	}
+
+	proxy, err := newConsensusStoreProxy(config, cs, m.raftLeaderAddrChan)
+	if err != nil {
+		return nil, err
+	}
+
 	ci := &clusterImpl{
-		membership:     m,
-		consensusStore: cs,
-		config:         config,
-		logger:         config.logger,
+		membership:          m,
+		consensusStore:      cs,
+		consensusStoreProxy: proxy,
+		raftService:         raftServer,
+		config:              config,
+		logger:              config.logger,
 	}
 
 	go ci.leaderWatch()
 	return ci, nil
+}
+
+func createRaftService(config ClusterConfig) (*raftServiceImpl, error) {
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
+	if err != nil {
+		return nil, err
+	}
+
+	grpcServer := grpc.NewServer()
+
+	raftServer := &raftServiceImpl{
+		raftNodeId: config.longMemberId,
+		grpcServer: grpcServer,
+		logger:     config.logger,
+	}
+
+	pb.RegisterRaftServiceServer(grpcServer, raftServer)
+	go grpcServer.Serve(lis)
+	return raftServer, nil
+}
+
+type clusterImpl struct {
+	consensusStore      *consensusStoreImpl
+	consensusStoreProxy *consensusStoreProxy
+	membership          *membership
+	raftService         *raftServiceImpl
+	logger              *log.Entry
+	config              ClusterConfig
 }
 
 func (ci *clusterImpl) leaderWatch() {
@@ -158,6 +194,7 @@ func (ci *clusterImpl) leaderLoop() {
 				ci.setRaftClusterState(rvsProto)
 			}
 		} else {
+			ci.membership.unmarkLeader()
 			ci.logger.Info("I'm not the leader anymore ... Goodbye cruel world!")
 			return
 		}
@@ -171,9 +208,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 		err := errors.New("No real error")
 		for err != nil {
 			// update my own state in serf
-			newTags := make(map[string]string)
-			newTags[serfMDKeyRaftRole] = raftRoleLeader
-			err = ci.membership.updateMemberTags(newTags)
+			err = ci.membership.markLeader()
 			if err == nil {
 				ci.logger.Infof("Updated serf status to reflect me being raft leader.")
 			} else {
@@ -210,7 +245,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 }
 
 func (ci *clusterImpl) getRaftClusterState() (*pb.RaftVoterState, error) {
-	bites, err := ci.consensusStore.Get(consensusNodesRaftCluster)
+	bites, err := ci.consensusStore.get(consensusNodesRaftCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +270,7 @@ func (ci *clusterImpl) setRaftClusterState(rvsProto *pb.RaftVoterState) error {
 		return err
 	}
 
-	return ci.consensusStore.Set(consensusNodesRaftCluster, bites)
+	return ci.consensusStore.set(consensusNodesRaftCluster, bites)
 }
 
 func (ci *clusterImpl) ensureConsensusStoreVoters(rvsProto *pb.RaftVoterState) *pb.RaftVoterState {
@@ -408,6 +443,8 @@ func (ci *clusterImpl) printClusterState() {
 func (ci *clusterImpl) Close() {
 	ci.membership.close()
 	time.Sleep(1 * time.Second)
-	ci.consensusStore.Close()
+	ci.raftService.close()
+	ci.consensusStore.close()
+	ci.consensusStoreProxy.close()
 	time.Sleep(1 * time.Second)
 }
