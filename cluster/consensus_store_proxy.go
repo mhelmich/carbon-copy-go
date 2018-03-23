@@ -117,7 +117,10 @@ func (csp *consensusStoreProxy) set(key string, value []byte) (bool, error) {
 		leaderClient := pb.NewRaftServiceClient(csp.leaderConnection)
 		resp, err := leaderClient.Set(ctx, req)
 
+		csp.logger.Infof("Got response %s", resp.String())
+
 		if err != nil {
+			csp.logger.Errorf("Error sending set request: %s", err.Error())
 			return false, err
 		} else if resp.Error != pb.RaftServiceError_NoRaftError {
 			return false, fmt.Errorf("set failed: %s", resp.Error.String())

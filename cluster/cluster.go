@@ -101,7 +101,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	}
 
 	// create the service providing non-consensus nodes with values
-	raftServer, err := createRaftService(config)
+	raftServer, err := createRaftService(config, cs)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	return ci, nil
 }
 
-func createRaftService(config ClusterConfig) (*raftServiceImpl, error) {
+func createRaftService(config ClusterConfig, consensusStore *consensusStoreImpl) (*raftServiceImpl, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.hostname, config.RaftServicePort))
 	if err != nil {
 		return nil, err
@@ -133,8 +133,9 @@ func createRaftService(config ClusterConfig) (*raftServiceImpl, error) {
 	grpcServer := grpc.NewServer()
 
 	raftServer := &raftServiceImpl{
-		grpcServer: grpcServer,
-		logger:     config.logger,
+		grpcServer:          grpcServer,
+		localConsensusStore: consensusStore,
+		logger:              config.logger,
 	}
 
 	pb.RegisterRaftServiceServer(grpcServer, raftServer)
@@ -224,7 +225,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 			rvsProto.Voters[myMemberId] = true
 			// get my node info proto going
 			info, _ := ci.membership.getMemberById(myMemberId)
-			nodeInfoProto, _ := ci.convertNodeIdSerfToRaft(info)
+			nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
 			// add myself to the cluster
 			rvsProto.AllNodes[myMemberId] = nodeInfoProto
 			// yes, I'm paranoid like this
@@ -314,7 +315,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	numVotersIWant := ci.config.NumRaftVoters - numVoters
 
 	info, _ := ci.membership.getMemberById(newMemberId)
-	nodeInfoProto, _ := ci.convertNodeIdSerfToRaft(info)
+	nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
 	raftAddr := fmt.Sprintf("%s:%d", nodeInfoProto.Host, nodeInfoProto.RaftPort)
 
 	//
@@ -339,7 +340,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	return rvsProto
 }
 
-func (ci *clusterImpl) convertNodeIdSerfToRaft(serfInfo map[string]string) (*pb.NodeInfo, error) {
+func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(serfInfo map[string]string) (*pb.NodeInfo, error) {
 	host := serfInfo[serfMDKeyHost]
 
 	serfPort, err := strconv.Atoi(serfInfo[serfMDKeySerfPort])
