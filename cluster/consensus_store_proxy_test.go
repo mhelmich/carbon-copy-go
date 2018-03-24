@@ -148,7 +148,7 @@ func createStoreServiceProxyProxyTest(t *testing.T, raftPort int, raftServicePor
 	assert.NotNil(t, raftServer1)
 
 	raftLeaderAddrChan1 := make(chan string, 4)
-	if leaderAddr != "" {
+	if leaderAddr == "" {
 		raftLeaderAddrChan1 <- hn + ":" + strconv.Itoa(raftServicePort)
 	} else {
 		raftLeaderAddrChan1 <- leaderAddr

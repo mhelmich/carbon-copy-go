@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

@@ -19,10 +19,11 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"sync"
 )
 
 func newConsensusStoreProxy(config ClusterConfig, store *consensusStoreImpl, raftLeaderAddrChan <-chan string) (*consensusStoreProxy, error) {
@@ -116,8 +117,6 @@ func (csp *consensusStoreProxy) set(key string, value []byte) (bool, error) {
 
 		leaderClient := pb.NewRaftServiceClient(csp.leaderConnection)
 		resp, err := leaderClient.Set(ctx, req)
-
-		csp.logger.Infof("Got response %s", resp.String())
 
 		if err != nil {
 			csp.logger.Errorf("Error sending set request: %s", err.Error())
