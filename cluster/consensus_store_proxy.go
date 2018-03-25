@@ -61,10 +61,8 @@ func (csp *consensusStoreProxy) updateLeaderConnection() error {
 		return err
 	}
 
-	var tmpConn *grpc.ClientConn
-
 	csp.connectionMutex.Lock()
-	tmpConn = csp.leaderConnection
+	tmpConn := csp.leaderConnection
 	csp.leaderConnection = leaderConnection
 	csp.connectionMutex.Unlock()
 

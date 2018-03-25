@@ -19,11 +19,12 @@ package cluster
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/oklog/ulid"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/oklog/ulid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConsensusStoreBasic(t *testing.T) {
@@ -127,7 +128,7 @@ func TestConsensusStoreConsistentGet(t *testing.T) {
 	err = store1.set(key, value)
 	assert.Nil(t, err)
 
-	val, err := store2.consistentGet(key)
+	val, err := store1.consistentGet(key)
 	assert.Nil(t, err)
 	assert.Equal(t, value, val)
 
