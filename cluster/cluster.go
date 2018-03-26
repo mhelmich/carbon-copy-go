@@ -17,15 +17,18 @@
 package cluster
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"sort"
 	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mhelmich/carbon-copy-go/pb"
+	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -91,13 +94,47 @@ type kvBytes struct {
 	value []byte
 }
 
+func defaultClusterConfig(config ClusterConfig) ClusterConfig {
+	host, err := os.Hostname()
+	if err != nil {
+		log.Panicf("Can't get hostname: %s", err.Error())
+	}
+
+	if config.hostname == "" {
+		config.hostname = host
+	}
+
+	if config.logger == nil {
+		config.logger = log.WithFields(log.Fields{
+			"host":      host,
+			"component": "cluster",
+		})
+	}
+
+	if config.longMemberId == "" {
+		config.longMemberId = ulid.MustNew(ulid.Now(), rand.Reader).String()
+	}
+
+	if config.raftNotifyCh == nil {
+		config.raftNotifyCh = make(chan bool, 16)
+	}
+
+	return config
+}
+
 func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
+	config = defaultClusterConfig(config)
+	// the consensus store comes first
 	cs, err := createNewConsensusStore(config)
 	if err != nil {
 		return nil, err
 	}
 
+	// then we need membership to announce our presence to others (or not)
 	m, err := createNewMembership(config)
+	// FIXME   the problem with membership is that
+	// FIXME   in case this member is not the raft leader,
+	// FIXME   nobody is there to consume the serf change events *sigh*
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +145,8 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
+	// here we create the cluster object
+	// it's odd I know but we need the partial object to create the leader loop
 	ci := &clusterImpl{
 		membership:     m,
 		consensusStore: cs,
@@ -118,16 +157,14 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	}
 	go ci.leaderWatch()
 
-	proxy, err := newConsensusStoreProxy(config, cs, m.raftLeaderAddrChan)
+	// at last create the proxy
+	proxy, err := newConsensusStoreProxy(config, cs, m.raftLeaderServiceAddrChan)
 	if err != nil {
 		return nil, err
 	}
 
+	// don't forget to set the proxy
 	ci.consensusStoreProxy = proxy
-
-	config.logger.Info("Created raft proxy")
-
-	config.logger.Info("Cluster up and running.")
 	return ci, nil
 }
 
@@ -167,17 +204,50 @@ func (ci *clusterImpl) leaderWatch() {
 			go ci.leaderLoop()
 		} else {
 			ci.logger.Info("I'm not the leader ... cruel world!")
+			go ci.followerLoop()
+		}
+	}
+}
+
+// small loop that keeps the channels clear of message
+// you could argue that I shouldn't have these channels in the first place
+// and you're maybe right :)
+func (ci *clusterImpl) followerLoop() {
+	err := ci.membership.unmarkLeader()
+	if err != nil {
+		ci.logger.Errorf("Couldn't unmark myself (%s) as leader: %s", ci.config.longMemberId, err.Error())
+	}
+
+	for { // ever...
+		if !ci.consensusStore.isRaftLeader() {
+			select {
+			case newMemberId := <-ci.membership.memberJoinedOrUpdatedChan:
+				if newMemberId == "" {
+					break
+				}
+
+				ci.logger.Infof("Member joined or updated %s", newMemberId)
+			case memberId := <-ci.membership.memberLeftChan:
+				if memberId == "" {
+					break
+				}
+
+				ci.logger.Infof("Member left us %s", memberId)
+			}
 		}
 	}
 }
 
 func (ci *clusterImpl) leaderLoop() {
-	ci.logger.Info("Entering leader loop.")
 	// initial house keeping work for the raft leader
 	// 1. get the current cluster state according to raft
 	// 2. reconcile serf and raft state
 	// 3. put yourself into the driver seat as leader
-	rvsProto, _ := ci.newLeaderHouseKeeping()
+	rvsProto, err := ci.newLeaderHouseKeeping()
+	if err != nil {
+		ci.logger.Errorf("Can't do my housekeeping: %s", err.Error())
+		ci.logger.Errorf("Proceeding anyways though with %v", rvsProto)
+	}
 
 	for { // ever...
 		if ci.consensusStore.isRaftLeader() {
@@ -187,12 +257,22 @@ func (ci *clusterImpl) leaderLoop() {
 			// or after every so and so seconds for good measure
 			//
 			select {
-			case newMemberId := <-ci.membership.memberJoined:
+			case newMemberId := <-ci.membership.memberJoinedOrUpdatedChan:
+				if newMemberId == "" {
+					// the channel was closed and we're done
+					return
+				}
+
 				// if we see a new node come up, add it to the raft cluster if necessary
 				rvsProto = ci.addNewMemberToRaftCluster(newMemberId, rvsProto)
 				ci.setRaftClusterState(rvsProto)
 
-			case memberId := <-ci.membership.memberLeft:
+			case memberId := <-ci.membership.memberLeftChan:
+				if memberId == "" {
+					// the channel was closed and we're done
+					return
+				}
+
 				delete(rvsProto.Voters, memberId)
 				delete(rvsProto.Nonvoters, memberId)
 				delete(rvsProto.AllNodes, memberId)
@@ -228,26 +308,27 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 
 	// get the current cluster state
 	rvsProto, err := ci.getRaftClusterState()
-	if err == nil {
-		// update me as leader
-		myMemberId := ci.membership.myMemberId()
-		// set me as leader
-		rvsProto.Voters[myMemberId] = true
-		// get my node info proto going
-		info, _ := ci.membership.getMemberById(myMemberId)
-		nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
-		// add myself to the cluster
-		rvsProto.Voters[myMemberId] = true
-		rvsProto.AllNodes[myMemberId] = nodeInfoProto
-		// yes, I'm paranoid like this
-		delete(rvsProto.Nonvoters, myMemberId)
-		// rebalance the cluster
-		rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
-		// set in consensus store
-		ci.setRaftClusterState(rvsProto)
-	} else {
+	if err != nil {
 		log.Warnf("Can't get %s from consensus store: %s", consensusNodesRaftCluster, err.Error())
+		return rvsProto, err
 	}
+
+	// update me as leader
+	myMemberId := ci.membership.myMemberId()
+	// set me as leader
+	rvsProto.Voters[myMemberId] = true
+	// get my node info proto going
+	info, _ := ci.membership.getMemberById(myMemberId)
+	nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
+	// add myself to the cluster
+	rvsProto.Voters[myMemberId] = true
+	rvsProto.AllNodes[myMemberId] = nodeInfoProto
+	// yes, I'm paranoid like this
+	delete(rvsProto.Nonvoters, myMemberId)
+	// rebalance the cluster
+	rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
+	// set in consensus store
+	ci.setRaftClusterState(rvsProto)
 
 	return rvsProto, nil
 }
@@ -319,9 +400,6 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 		return rvsProto
 	}
 
-	numVoters := len(rvsProto.Voters)
-	numVotersIWant := ci.config.NumRaftVoters - numVoters
-
 	info, infoOk := ci.membership.getMemberById(newMemberId)
 	if !infoOk {
 		ci.logger.Errorf("Node info for node %s is not present!?!?!?", newMemberId)
@@ -340,6 +418,8 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	//
 	// add new voters to raft cluster
 	//
+	numVoters := len(rvsProto.Voters)
+	numVotersIWant := ci.config.NumRaftVoters - numVoters
 	if numVotersIWant > 0 {
 		err := ci.consensusStore.addVoter(newMemberId, raftAddr)
 		if err == nil {

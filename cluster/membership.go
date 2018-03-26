@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	serfEventChannelBufferSize = 256
+	serfEventChannelBufferSize = 64
 
 	serfMDKeyHost            = "host"
 	serfMDKeySerfPort        = "serf_port"
@@ -96,19 +96,19 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	//
 	memberJoinedOrUpdated := make(chan string)
 	memberLeft := make(chan string)
-	raftLeaderAddrChan := make(chan string, 8)
+	raftLeaderServiceAddrChan := make(chan string)
 
 	m := &membership{
-		serf:               surf,
-		logger:             config.logger,
-		membershipState:    newMembershipState(config.logger),
-		memberJoined:       memberJoinedOrUpdated,
-		memberLeft:         memberLeft,
-		raftLeaderAddrChan: raftLeaderAddrChan,
-		config:             config,
+		serf:                      surf,
+		logger:                    config.logger,
+		membershipState:           newMembershipState(config.logger),
+		memberJoinedOrUpdatedChan: memberJoinedOrUpdated,
+		memberLeftChan:            memberLeft,
+		raftLeaderServiceAddrChan: raftLeaderServiceAddrChan,
+		config: config,
 	}
 
-	go m.handleSerfEvents(serfEventCh, memberJoinedOrUpdated, memberLeft, raftLeaderAddrChan)
+	go m.handleSerfEvents(serfEventCh, memberJoinedOrUpdated, memberLeft, raftLeaderServiceAddrChan)
 	return m, nil
 }
 
@@ -123,20 +123,21 @@ type membership struct {
 	// If they block, membership can't do any updates.
 	// No changes to memberships states will ever be processed.
 	//
-	memberJoined       <-chan string
-	memberLeft         <-chan string
-	raftLeaderAddrChan <-chan string
+	memberJoinedOrUpdatedChan <-chan string
+	memberLeftChan            <-chan string
+	raftLeaderServiceAddrChan <-chan string
 }
 
-func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- string, memberLeft chan<- string, raftLeaderAddrChan chan<- string) {
+func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, memberJoined chan<- string, memberLeft chan<- string, raftLeaderServiceAddrChan chan<- string) {
 	for { // ever...
 		select {
-		case e := <-ch:
-			if e == nil {
+		case serfEvent := <-serfEventChannel:
+			if serfEvent == nil {
 				// seems the channel was closed
 				// let's stop this go routine
 				close(memberJoined)
 				close(memberLeft)
+				close(raftLeaderServiceAddrChan)
 				return
 			}
 
@@ -144,32 +145,38 @@ func (m *membership) handleSerfEvents(ch <-chan serf.Event, memberJoined chan<- 
 			// Obviously we receive these events multiple times per actual event.
 			// That means we need to do some sort of diffing.
 			//
-			switch e.EventType() {
+			switch serfEvent.EventType() {
 			case serf.EventMemberJoin, serf.EventMemberUpdate:
-				m.handleMemberJoinEvent(e.(serf.MemberEvent), memberJoined, raftLeaderAddrChan)
+				m.handleMemberJoinEvent(serfEvent.(serf.MemberEvent), memberJoined, raftLeaderServiceAddrChan)
 			case serf.EventMemberLeave, serf.EventMemberFailed:
-				m.handleMemberLeaveEvent(e.(serf.MemberEvent), memberLeft)
+				m.handleMemberLeaveEvent(serfEvent.(serf.MemberEvent), memberLeft)
 			}
 		case <-m.serf.ShutdownCh():
 			close(memberJoined)
 			close(memberLeft)
+			close(raftLeaderServiceAddrChan)
 			return
 		}
 	}
 }
 
-func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined chan<- string, raftLeaderAddrChan chan<- string) {
+func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined chan<- string, raftLeaderServiceAddrChan chan<- string) {
+	m.logger.Infof("Processing change event %v %v at cluster size %d", me, me.Members, m.getClusterSize())
 	for _, item := range me.Members {
 		updated := m.membershipState.updateMember(item.Name, item.Tags)
+		m.logger.Infof("Received update (%t) for %s with tags %v", updated, item.Name, item.Tags)
 		if updated {
 			memberJoined <- item.Name
+			m.logger.Infof("Sent %s into joined channel", item.Name)
 
 			go func() {
 				role, roleOk := item.Tags[serfMDKeyRaftRole]
 				host, hostOk := item.Tags[serfMDKeyHost]
 				raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
+				m.logger.Infof("Updated222 node name %s roleOk %t hostOk %t portOk %t role %s", item.Name, roleOk, hostOk, portOk, role)
 				if roleOk && hostOk && portOk && role == raftRoleLeader {
-					raftLeaderAddrChan <- host + ":" + raftPort
+					m.logger.Infof("That's what I wrote into the raft service channel %s", host+":"+raftPort)
+					raftLeaderServiceAddrChan <- host + ":" + raftPort
 				}
 			}()
 		}

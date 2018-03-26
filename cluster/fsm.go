@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strings"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -39,10 +40,23 @@ type raftApplyResponse struct {
 	value []byte
 }
 
+type keyChangeWatcher struct {
+	prefix     string
+	notifyChan chan<- *watcherEvent
+}
+
+type watcherEvent struct {
+	key   string
+	value []byte
+}
+
+// the state machine implementation
 type fsm struct {
-	state  map[string][]byte
-	mutex  sync.RWMutex
-	logger *log.Entry
+	state        map[string][]byte
+	mutex        sync.RWMutex
+	logger       *log.Entry
+	watcherMutex sync.RWMutex
+	watchers     []keyChangeWatcher
 }
 
 // Apply applies a Raft log entry to the key-value store.
@@ -124,6 +138,20 @@ func (f *fsm) applySet(key string, value []byte) interface{} {
 	f.state[key] = value
 	f.mutex.Unlock()
 
+	// meh, this is consistent enough
+	// I don't want to block the apply mutex too long
+	// and I don't want to put in the work to improve locking now
+	if f.watchers != nil {
+		for _, watcher := range f.watchers {
+			if strings.HasPrefix(key, watcher.prefix) {
+				watcher.notifyChan <- &watcherEvent{
+					key:   key,
+					value: value,
+				}
+			}
+		}
+	}
+
 	b := make([]byte, 1)
 
 	if ok {
@@ -146,6 +174,20 @@ func (f *fsm) applyDelete(key string) interface{} {
 	_, ok := f.state[key]
 	delete(f.state, key)
 	f.mutex.Unlock()
+
+	// meh, this is consistent enough
+	// I don't want to block the apply mutex too long
+	// and I don't want to put in the work to improve locking now
+	if f.watchers != nil {
+		for _, watcher := range f.watchers {
+			if strings.HasPrefix(key, watcher.prefix) {
+				watcher.notifyChan <- &watcherEvent{
+					key:   key,
+					value: nil,
+				}
+			}
+		}
+	}
 
 	b := make([]byte, 1)
 

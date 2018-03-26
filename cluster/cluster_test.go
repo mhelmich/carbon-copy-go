@@ -238,15 +238,17 @@ func _TestClusterBasic(t *testing.T) {
 }
 
 func TestClusterBasic(t *testing.T) {
+	hn := "127.0.0.1"
+
 	cfg1 := ClusterConfig{
-		RaftPort:        17171,
+		RaftPort:        17111,
 		NumRaftVoters:   3,
 		Peers:           nil,
-		hostname:        "127.0.0.1",
-		RaftServicePort: 27272,
-		SerfPort:        37373,
+		hostname:        hn,
+		RaftServicePort: 27111,
+		SerfPort:        37111,
 		longMemberId:    "node1",
-		raftNotifyCh:    make(chan bool, 16),
+		// raftNotifyCh:    make(chan bool, 16),
 		logger: log.WithFields(log.Fields{
 			"cluster": "AAA",
 		}),
@@ -256,5 +258,26 @@ func TestClusterBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
 
+	peers := make([]string, 1)
+	peers[0] = fmt.Sprintf("%s:%d", hn, 37111)
+	cfg2 := ClusterConfig{
+		RaftPort:        17222,
+		NumRaftVoters:   3,
+		Peers:           peers,
+		hostname:        hn,
+		RaftServicePort: 27222,
+		SerfPort:        37222,
+		longMemberId:    "node2",
+		// raftNotifyCh:    make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "BBB",
+		}),
+		isDevMode: true,
+	}
+	c2, err := createNewCluster(cfg2)
+	assert.Nil(t, err)
+	assert.NotNil(t, c2)
+
 	assert.Nil(t, c1.Close())
+	assert.Nil(t, c2.Close())
 }

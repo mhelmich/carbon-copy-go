@@ -26,18 +26,18 @@ import (
 	"google.golang.org/grpc"
 )
 
-func newConsensusStoreProxy(config ClusterConfig, store *consensusStoreImpl, raftLeaderAddrChan <-chan string) (*consensusStoreProxy, error) {
+func newConsensusStoreProxy(config ClusterConfig, store *consensusStoreImpl, raftLeaderServiceAddrChan <-chan string) (*consensusStoreProxy, error) {
 	proxy := &consensusStoreProxy{
-		store:              store,
-		connectionMutex:    sync.RWMutex{},
-		raftLeaderAddrChan: raftLeaderAddrChan,
-		logger:             config.logger,
+		store:                     store,
+		connectionMutex:           sync.RWMutex{},
+		raftLeaderServiceAddrChan: raftLeaderServiceAddrChan,
+		logger: config.logger,
 		// these two are being set in updateLeaderConnection()
 		// leaderClient:       leaderClient,
 		// leaderConnection:   leaderConnection,
 	}
 
-	// we do it once to complete setting up the object
+	// we do it once to complete setting up the proxy
 	proxy.updateLeaderConnection()
 	// then we spin up a co routine to keep the connection
 	// to the leader up to date
@@ -47,16 +47,18 @@ func newConsensusStoreProxy(config ClusterConfig, store *consensusStoreImpl, raf
 }
 
 type consensusStoreProxy struct {
-	store              *consensusStoreImpl
-	leaderConnection   *grpc.ClientConn
-	connectionMutex    sync.RWMutex
-	raftLeaderAddrChan <-chan string
-	logger             *log.Entry
+	store                     *consensusStoreImpl
+	leaderConnection          *grpc.ClientConn
+	connectionMutex           sync.RWMutex
+	raftLeaderServiceAddrChan <-chan string
+	logger                    *log.Entry
 }
 
 func (csp *consensusStoreProxy) updateLeaderConnection() error {
-	leaderAddr := <-csp.raftLeaderAddrChan
-	leaderConnection, err := grpc.Dial(leaderAddr, grpc.WithInsecure())
+	csp.logger.Info("Waiting for leader service addr...")
+	leaderServiceAddr := <-csp.raftLeaderServiceAddrChan
+	csp.logger.Infof("Found leader! %s", leaderServiceAddr)
+	leaderConnection, err := grpc.Dial(leaderServiceAddr, grpc.WithInsecure())
 	if err != nil {
 		return err
 	}
@@ -72,10 +74,6 @@ func (csp *consensusStoreProxy) updateLeaderConnection() error {
 	return nil
 }
 
-func (csp *consensusStoreProxy) acquireUniqueShortNodeId() (int, error) {
-	return 0, nil
-}
-
 func (csp *consensusStoreProxy) get(key string) ([]byte, error) {
 	return csp.store.get(key)
 }
@@ -89,8 +87,10 @@ func (csp *consensusStoreProxy) consistentGet(key string) ([]byte, error) {
 			Key: key,
 		}
 
+		csp.connectionMutex.RLock()
 		leaderClient := pb.NewRaftServiceClient(csp.leaderConnection)
 		resp, err := leaderClient.ConsistentGet(ctx, req)
+		csp.connectionMutex.RUnlock()
 
 		if err != nil {
 			return nil, err
@@ -113,8 +113,10 @@ func (csp *consensusStoreProxy) set(key string, value []byte) (bool, error) {
 			Value: value,
 		}
 
+		csp.connectionMutex.RLock()
 		leaderClient := pb.NewRaftServiceClient(csp.leaderConnection)
 		resp, err := leaderClient.Set(ctx, req)
+		csp.connectionMutex.RUnlock()
 
 		csp.logger.Infof("Got response %s", resp.String())
 
@@ -139,8 +141,10 @@ func (csp *consensusStoreProxy) delete(key string) (bool, error) {
 			Key: key,
 		}
 
+		csp.connectionMutex.RLock()
 		leaderClient := pb.NewRaftServiceClient(csp.leaderConnection)
 		resp, err := leaderClient.Delete(ctx, req)
+		csp.connectionMutex.RUnlock()
 
 		if err != nil {
 			return false, err
@@ -153,5 +157,7 @@ func (csp *consensusStoreProxy) delete(key string) (bool, error) {
 }
 
 func (csp *consensusStoreProxy) close() error {
+	csp.connectionMutex.Lock()
+	defer csp.connectionMutex.Unlock()
 	return csp.leaderConnection.Close()
 }

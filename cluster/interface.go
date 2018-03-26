@@ -18,10 +18,7 @@ package cluster
 
 import (
 	"context"
-	"crypto/rand"
-	"os"
 
-	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -52,20 +49,6 @@ type Cluster interface {
 }
 
 func NewCluster(config ClusterConfig) (Cluster, error) {
-	host, err := os.Hostname()
-	if err != nil {
-		log.Panicf("Can't get hostname: %s", err.Error())
-	}
-
-	config.logger = log.WithFields(log.Fields{
-		"host":      host,
-		"component": "cluster",
-	})
-
-	config.hostname = host
-	config.longMemberId = ulid.MustNew(ulid.Now(), rand.Reader).String()
-	config.raftNotifyCh = make(chan bool, 16)
-
 	return createNewCluster(config)
 }
 

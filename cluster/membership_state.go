@@ -43,7 +43,10 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) boo
 	equal := reflect.DeepEqual(cs.currentMembers[name], tags)
 	cs.mutex.RUnlock()
 
+	cs.logger.Infof("name: %s existing %t equal %t role %s", name, existing, equal, tags[serfMDKeyRaftRole])
+
 	if existing && equal {
+		// it seems we have seen this member event already
 		return false
 	}
 
@@ -51,6 +54,8 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) boo
 	// carry over all tags
 	cs.currentMembers[name] = tags
 	cs.mutex.Unlock()
+
+	cs.logger.Infof("My tags %v", cs.currentMembers[name])
 
 	return true
 }
@@ -65,8 +70,8 @@ func (cs *membershipState) removeMember(name string) bool {
 	}
 
 	cs.mutex.Lock()
-	delete(cs.currentMembers, name)
 	// just be sure to not leave dead bodies in our basement
+	delete(cs.currentMembers, name)
 	cs.mutex.Unlock()
 
 	return true
