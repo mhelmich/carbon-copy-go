@@ -18,10 +18,11 @@ package cluster
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMembershipBasic(t *testing.T) {
@@ -80,6 +81,37 @@ func TestMembershipBasic(t *testing.T) {
 	assertNumMessages(t, m1.memberLeft, 1)
 	assertNumMessages(t, m2.memberLeft, 1)
 	m2.close()
+}
+
+func TestMembershipMarkAsLeader(t *testing.T) {
+	hn := "127.0.0.1"
+	nid1 := "node111"
+	c1 := ClusterConfig{
+		Peers:        make([]string, 0),
+		hostname:     hn,
+		SerfPort:     17111,
+		longMemberId: nid1,
+		logger: log.WithFields(log.Fields{
+			"serf_port": 17111,
+			"node_id":   nid1,
+		}),
+	}
+
+	m1, err := createNewMembership(c1)
+	assert.Nil(t, err)
+	assert.NotNil(t, m1)
+	assertNumMessages(t, m1.memberJoined, 1)
+
+	err = m1.markLeader()
+	assert.Nil(t, err)
+	time.Sleep(1 * time.Second)
+	tags, ok := m1.getMemberById(m1.myMemberId())
+	assert.True(t, ok)
+	v, ok := tags[serfMDKeyRaftRole]
+	assert.True(t, ok)
+	assert.Equal(t, raftRoleLeader, v)
+
+	m1.close()
 }
 
 func TestMembershipNotificationDedup(t *testing.T) {
@@ -202,7 +234,8 @@ func assertNumMessages(t *testing.T, c <-chan string, num int) {
 
 			case <-time.After(timeout):
 				if numMessagesReceived != num {
-					assert.FailNow(t, "received wrong number of messages")
+					msg := fmt.Sprintf("received wrong number of messages want [%d] have [%d]", num, numMessagesReceived)
+					assert.FailNow(t, msg)
 				} else {
 					return
 				}

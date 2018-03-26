@@ -18,13 +18,14 @@ package cluster
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
+	"sync"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"io/ioutil"
-	"sync"
 )
 
 // I'm sneaking this struct in here as response for a consistent read
@@ -61,9 +62,6 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	case *pb.RaftCommand_GetCmd:
 		get := cmdProto.GetGetCmd()
 		return f.applyConsistentGet(get.GetKey())
-	case *pb.RaftCommand_NodeIdCmd:
-		// nodeIdCmd := cmdProto.GetNodeIdCmd()
-		return f.applyAcquireNodeId()
 	default:
 		return &raftApplyResponse{
 			err: fmt.Errorf("Unknown command: %v", cmdProto.Cmd),
@@ -106,7 +104,14 @@ func (f *fsm) applyConsistentGet(key string) interface{} {
 	f.mutex.RLock()
 	buf, ok := f.state[key]
 	f.mutex.RUnlock()
-	f.logger.Infof("applyConsistentGet -- key: %s - ok: %t - buf: %v", key, ok, buf)
+
+	if !ok {
+		return &raftApplyResponse{
+			err:   fmt.Errorf("Key doesn't exist: %s", key),
+			value: nil,
+		}
+	}
+
 	return &raftApplyResponse{
 		err:   nil,
 		value: buf,
@@ -115,9 +120,22 @@ func (f *fsm) applyConsistentGet(key string) interface{} {
 
 func (f *fsm) applySet(key string, value []byte) interface{} {
 	f.mutex.Lock()
+	_, ok := f.state[key]
 	f.state[key] = value
 	f.mutex.Unlock()
-	return nil
+
+	b := make([]byte, 1)
+
+	if ok {
+		b[0] = 1
+	} else {
+		b[0] = 0
+	}
+
+	return &raftApplyResponse{
+		err:   nil,
+		value: b,
+	}
 }
 
 // the apply response contains one byte
@@ -141,10 +159,6 @@ func (f *fsm) applyDelete(key string) interface{} {
 		err:   nil,
 		value: b,
 	}
-}
-
-func (f *fsm) applyAcquireNodeId() interface{} {
-	return nil
 }
 
 type fsmSnapshot struct {

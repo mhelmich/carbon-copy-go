@@ -37,6 +37,7 @@ func TestProxyBasic(t *testing.T) {
 		longMemberId:    "node111",
 		hostname:        hn,
 		raftNotifyCh:    make(chan bool, 16),
+		logger:          log.WithFields(log.Fields{}),
 		isDevMode:       true,
 	}
 	store1, err := createNewConsensusStore(config1)

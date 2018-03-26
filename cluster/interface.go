@@ -19,9 +19,10 @@ package cluster
 import (
 	"context"
 	"crypto/rand"
+	"os"
+
 	"github.com/oklog/ulid"
 	log "github.com/sirupsen/logrus"
-	"os"
 )
 
 type NodeConnectionInfo struct {
@@ -47,7 +48,7 @@ type ClusterConfig struct {
 type Cluster interface {
 	GetMyNodeId() int
 	GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error)
-	Close()
+	Close() error
 }
 
 func NewCluster(config ClusterConfig) (Cluster, error) {

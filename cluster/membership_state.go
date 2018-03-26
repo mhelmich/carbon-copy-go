@@ -17,9 +17,10 @@
 package cluster
 
 import (
-	log "github.com/sirupsen/logrus"
 	"reflect"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func newMembershipState(logger *log.Entry) *membershipState {

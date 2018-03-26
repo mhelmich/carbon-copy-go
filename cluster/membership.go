@@ -18,10 +18,11 @@ package cluster
 
 import (
 	"fmt"
-	"github.com/hashicorp/serf/serf"
-	log "github.com/sirupsen/logrus"
 	golanglog "log"
 	"strconv"
+
+	"github.com/hashicorp/serf/serf"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -212,9 +213,8 @@ func (m *membership) updateMemberTags(newTags map[string]string) error {
 		tags = newTags
 	}
 
-	err := m.serf.SetTags(tags)
-	m.membershipState.updateMember(m.myMemberId(), tags)
-	return err
+	// this update will be processed via the regular membership event processing
+	return m.serf.SetTags(tags)
 }
 
 func (m *membership) myMemberId() string {

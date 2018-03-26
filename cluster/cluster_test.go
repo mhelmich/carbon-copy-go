@@ -236,3 +236,25 @@ func _TestClusterBasic(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	c2.Close()
 }
+
+func TestClusterBasic(t *testing.T) {
+	cfg1 := ClusterConfig{
+		RaftPort:        17171,
+		NumRaftVoters:   3,
+		Peers:           nil,
+		hostname:        "127.0.0.1",
+		RaftServicePort: 27272,
+		SerfPort:        37373,
+		longMemberId:    "node1",
+		raftNotifyCh:    make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "AAA",
+		}),
+		isDevMode: true,
+	}
+	c1, err := createNewCluster(cfg1)
+	assert.Nil(t, err)
+	assert.NotNil(t, c1)
+
+	assert.Nil(t, c1.Close())
+}

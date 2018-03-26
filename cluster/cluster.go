@@ -108,21 +108,26 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
+	ci := &clusterImpl{
+		membership:     m,
+		consensusStore: cs,
+		// consensusStoreProxy: proxy,
+		raftService: raftServer,
+		config:      config,
+		logger:      config.logger,
+	}
+	go ci.leaderWatch()
+
 	proxy, err := newConsensusStoreProxy(config, cs, m.raftLeaderAddrChan)
 	if err != nil {
 		return nil, err
 	}
 
-	ci := &clusterImpl{
-		membership:          m,
-		consensusStore:      cs,
-		consensusStoreProxy: proxy,
-		raftService:         raftServer,
-		config:              config,
-		logger:              config.logger,
-	}
+	ci.consensusStoreProxy = proxy
 
-	go ci.leaderWatch()
+	config.logger.Info("Created raft proxy")
+
+	config.logger.Info("Cluster up and running.")
 	return ci, nil
 }
 
@@ -158,7 +163,7 @@ func (ci *clusterImpl) leaderWatch() {
 	for { // ever...
 		isLeader := <-ci.consensusStore.raftNotifyCh
 		if isLeader {
-			// ci.logger.Info("I'm the leader ... wheeee!")
+			ci.logger.Info("I'm the leader ... wheeee!")
 			go ci.leaderLoop()
 		} else {
 			ci.logger.Info("I'm not the leader ... cruel world!")
@@ -167,11 +172,11 @@ func (ci *clusterImpl) leaderWatch() {
 }
 
 func (ci *clusterImpl) leaderLoop() {
+	ci.logger.Info("Entering leader loop.")
 	// initial house keeping work for the raft leader
 	// 1. get the current cluster state according to raft
 	// 2. reconcile serf and raft state
 	// 3. put yourself into the driver seat as leader
-
 	rvsProto, _ := ci.newLeaderHouseKeeping()
 
 	for { // ever...
@@ -317,8 +322,18 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	numVoters := len(rvsProto.Voters)
 	numVotersIWant := ci.config.NumRaftVoters - numVoters
 
-	info, _ := ci.membership.getMemberById(newMemberId)
-	nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
+	info, infoOk := ci.membership.getMemberById(newMemberId)
+	if !infoOk {
+		ci.logger.Errorf("Node info for node %s is not present!?!?!?", newMemberId)
+		return rvsProto
+	}
+
+	nodeInfoProto, err := ci.convertNodeInfoFromSerfToRaft(info)
+	if err != nil {
+		ci.logger.Errorf("Can't create node info proto: %s", err.Error())
+		return rvsProto
+	}
+
 	nodeInfoProto = ci.findShortNodeId(newMemberId, nodeInfoProto, rvsProto)
 	raftAddr := fmt.Sprintf("%s:%d", nodeInfoProto.Host, nodeInfoProto.RaftPort)
 
@@ -468,13 +483,14 @@ func (ci *clusterImpl) printClusterState() {
 	}
 }
 
-func (ci *clusterImpl) Close() {
+func (ci *clusterImpl) Close() error {
 	ci.membership.close()
 	time.Sleep(1 * time.Second)
 	ci.raftService.close()
 	ci.consensusStore.close()
 	ci.consensusStoreProxy.close()
 	time.Sleep(1 * time.Second)
+	return nil
 }
 
 // boiler plate code to implement go sort interface
