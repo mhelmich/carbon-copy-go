@@ -19,11 +19,12 @@ package cluster
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/oklog/ulid"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/oklog/ulid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConsensusStoreBasic(t *testing.T) {
@@ -127,12 +128,41 @@ func TestConsensusStoreConsistentGet(t *testing.T) {
 	err = store1.set(key, value)
 	assert.Nil(t, err)
 
-	val, err := store2.consistentGet(key)
+	val, err := store1.consistentGet(key)
 	assert.Nil(t, err)
 	assert.Equal(t, value, val)
 
 	err = store1.close()
 	assert.Nil(t, err)
 	err = store2.close()
+	assert.Nil(t, err)
+}
+
+func TestConsensusStorePersistentStorage(t *testing.T) {
+	hn, err := os.Hostname()
+	assert.Nil(t, err)
+	path := "./db.raft.db1"
+
+	cfg1 := ClusterConfig{
+		RaftPort:        9876,
+		RaftServicePort: 9877,
+		RaftStoreDir:    path,
+		longMemberId:    "node111",
+		hostname:        hn,
+		raftNotifyCh:    make(chan bool, 16),
+		isDevMode:       false,
+	}
+	store1, err := createNewConsensusStore(cfg1)
+	assert.Nil(t, err)
+	assert.NotNil(t, store1)
+	assert.True(t, <-cfg1.raftNotifyCh)
+
+	_, err = os.Stat(path)
+	assert.Nil(t, err)
+
+	err = store1.close()
+	assert.Nil(t, err)
+
+	err = os.RemoveAll(path)
 	assert.Nil(t, err)
 }

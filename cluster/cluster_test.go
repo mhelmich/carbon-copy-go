@@ -19,11 +19,12 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"testing"
-	"time"
 )
 
 ////////////////////////////////////////////////////////////////////////
@@ -183,7 +184,7 @@ func (ec *mockConsensusClient) close() error {
 // 	assert.True(t, strings.HasSuffix(nodeInfos[7].nodeAddress, "_7"))
 // }
 
-func TestClusterBasic(t *testing.T) {
+func _TestClusterBasic(t *testing.T) {
 	cfg1 := ClusterConfig{
 		RaftPort:        17171,
 		NumRaftVoters:   3,

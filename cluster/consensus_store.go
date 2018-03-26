@@ -18,17 +18,18 @@ package cluster
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/hashicorp/raft"
-	raftboltdb "github.com/hashicorp/raft-boltdb"
-	"github.com/mhelmich/carbon-copy-go/pb"
-	log "github.com/sirupsen/logrus"
 	golanglog "log"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/hashicorp/raft"
+	raftboltdb "github.com/hashicorp/raft-boltdb"
+	"github.com/mhelmich/carbon-copy-go/pb"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -169,10 +170,6 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	return newRaft, fsm, nil
 }
 
-func (cs *consensusStoreImpl) acquireUniqueShortNodeId() (int, error) {
-	return -1, nil
-}
-
 func (cs *consensusStoreImpl) consistentGet(key string) ([]byte, error) {
 	cmd := &pb.RaftCommand{
 		Cmd: &pb.RaftCommand_GetCmd{
@@ -183,8 +180,9 @@ func (cs *consensusStoreImpl) consistentGet(key string) ([]byte, error) {
 	}
 
 	f := cs.raftApply(cmd)
-	if f.Error() != nil {
-		return nil, f.Error()
+	err := f.Error()
+	if err != nil {
+		return nil, err
 	} else {
 		resp := f.Response().(*raftApplyResponse)
 		return resp.value, resp.err
@@ -243,11 +241,11 @@ func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) raft.ApplyFuture {
 		return localApplyFuture{fmt.Errorf("Can't marshall proto: %s", err)}
 	}
 
-	f := cs.raft.Apply(buf, raftTimeout)
+	future := cs.raft.Apply(buf, raftTimeout)
 
-	switch v := f.(type) {
+	switch value := future.(type) {
 	case raft.ApplyFuture:
-		return v
+		return value
 	default:
 		return localApplyFuture{}
 	}
@@ -285,28 +283,31 @@ func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string)
 		return err
 	}
 
-	f := cs.raft.AddNonvoter(raftId, raftAddr, 0, 0)
-	if f.Error() == nil {
+	future := cs.raft.AddNonvoter(raftId, raftAddr, 0, 0)
+	err = future.Error()
+	if err == nil {
 		cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
 		return nil
 	} else {
-		cs.logger.Infof("Couldn't add (%s - %s) as raft voter: %v", serverId, serverAddress, f.Error().Error())
-		return f.Error()
+		cs.logger.Infof("Couldn't add (%s - %s) as raft voter: %v", serverId, serverAddress, err.Error())
+		return err
 	}
 }
 
 func (cs *consensusStoreImpl) removeServer(id raft.ServerID, addr raft.ServerAddress) error {
-	cfgF := cs.raft.GetConfiguration()
-	if cfgF.Error() != nil {
-		return cfgF.Error()
+	configFuture := cs.raft.GetConfiguration()
+	err := configFuture.Error()
+	if err != nil {
+		return err
 	}
 
-	for _, server := range cfgF.Configuration().Servers {
+	for _, server := range configFuture.Configuration().Servers {
 		if server.Address == addr {
 			cs.logger.Infof("The new server has an address that exists already. Removing it out of the current config before adding it afresh. (%v - %v)", id, addr)
-			f := cs.raft.RemoveServer(server.ID, 0, 0)
-			if f.Error() != nil {
-				return f.Error()
+			future := cs.raft.RemoveServer(server.ID, 0, 0)
+			err = future.Error()
+			if err != nil {
+				return err
 			}
 
 			// my job is done

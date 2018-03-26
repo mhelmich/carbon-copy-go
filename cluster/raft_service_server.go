@@ -31,15 +31,15 @@ type raftServiceImpl struct {
 }
 
 func (rs *raftServiceImpl) Get(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
-	v, err := rs.localConsensusStore.get(req.Key)
-	if err == nil {
-		return &pb.GetResp{
-			Error: pb.RaftServiceError_NoRaftError,
-			Value: v,
-		}, nil
-	} else {
+	bites, err := rs.localConsensusStore.get(req.Key)
+	if err != nil {
 		return nil, err
 	}
+
+	return &pb.GetResp{
+		Error: pb.RaftServiceError_NoRaftError,
+		Value: bites,
+	}, nil
 }
 
 func (rs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp, error) {
@@ -51,14 +51,14 @@ func (rs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp
 	}
 
 	err := rs.localConsensusStore.set(req.Key, req.Value)
-	if err == nil {
-		return &pb.SetResp{
-			Error:   pb.RaftServiceError_NoRaftError,
-			Created: false,
-		}, nil
-	} else {
+	if err != nil {
 		return nil, err
 	}
+
+	return &pb.SetResp{
+		Error:   pb.RaftServiceError_NoRaftError,
+		Created: false,
+	}, nil
 }
 
 func (rs *raftServiceImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.DeleteResp, error) {
@@ -70,18 +70,14 @@ func (rs *raftServiceImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.D
 	}
 
 	del, err := rs.localConsensusStore.delete(req.Key)
-	if err == nil {
-		return &pb.DeleteResp{
-			Error:   pb.RaftServiceError_NoRaftError,
-			Deleted: del,
-		}, nil
-	} else {
+	if err != nil {
 		return nil, err
 	}
-}
 
-func (rs *raftServiceImpl) AcquireUniqueShortNodeId(context.Context, *pb.AcquireUniqueShortNodeIdReq) (*pb.AcquireUniqueShortNodeIdResp, error) {
-	return nil, nil
+	return &pb.DeleteResp{
+		Error:   pb.RaftServiceError_NoRaftError,
+		Deleted: del,
+	}, nil
 }
 
 func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {

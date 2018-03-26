@@ -19,13 +19,15 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"net"
+	"sort"
+	"strconv"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"net"
-	"strconv"
-	"time"
 )
 
 // The cluster construct consists of a few components taking over different tasks.
@@ -202,46 +204,47 @@ func (ci *clusterImpl) leaderLoop() {
 }
 
 func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
-	if ci.consensusStore.isRaftLeader() {
-		// update my serf status
-		// a bit hacky but gets the job done
-		err := errors.New("No real error")
-		for err != nil {
-			// update my own state in serf
-			err = ci.membership.markLeader()
-			if err == nil {
-				ci.logger.Infof("Updated serf status to reflect me being raft leader.")
-			} else {
-				ci.logger.Infof("Updating serf failed: %s", err.Error())
-			}
-		}
-
-		// get the current cluster state
-		rvsProto, err := ci.getRaftClusterState()
-		if err == nil {
-			// update me as leader
-			myMemberId := ci.membership.myMemberId()
-			// set me as leader
-			rvsProto.Voters[myMemberId] = true
-			// get my node info proto going
-			info, _ := ci.membership.getMemberById(myMemberId)
-			nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
-			// add myself to the cluster
-			rvsProto.AllNodes[myMemberId] = nodeInfoProto
-			// yes, I'm paranoid like this
-			delete(rvsProto.Nonvoters, myMemberId)
-			// rebalance the cluster
-			rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
-			// set in consensus store
-			ci.setRaftClusterState(rvsProto)
-		} else {
-			log.Warnf("Can't get %s from consensus store: %s", consensusNodesRaftCluster, err.Error())
-		}
-
-		return rvsProto, nil
-	} else {
+	if !ci.consensusStore.isRaftLeader() {
 		return &pb.RaftVoterState{}, nil
 	}
+
+	// update my serf status
+	// a bit hacky but gets the job done
+	err := errors.New("No real error")
+	for err != nil {
+		// update my own state in serf
+		err = ci.membership.markLeader()
+		if err == nil {
+			ci.logger.Infof("Updated serf status to reflect me being raft leader.")
+		} else {
+			ci.logger.Infof("Updating serf failed: %s", err.Error())
+		}
+	}
+
+	// get the current cluster state
+	rvsProto, err := ci.getRaftClusterState()
+	if err == nil {
+		// update me as leader
+		myMemberId := ci.membership.myMemberId()
+		// set me as leader
+		rvsProto.Voters[myMemberId] = true
+		// get my node info proto going
+		info, _ := ci.membership.getMemberById(myMemberId)
+		nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
+		// add myself to the cluster
+		rvsProto.Voters[myMemberId] = true
+		rvsProto.AllNodes[myMemberId] = nodeInfoProto
+		// yes, I'm paranoid like this
+		delete(rvsProto.Nonvoters, myMemberId)
+		// rebalance the cluster
+		rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
+		// set in consensus store
+		ci.setRaftClusterState(rvsProto)
+	} else {
+		log.Warnf("Can't get %s from consensus store: %s", consensusNodesRaftCluster, err.Error())
+	}
+
+	return rvsProto, nil
 }
 
 func (ci *clusterImpl) getRaftClusterState() (*pb.RaftVoterState, error) {
@@ -283,7 +286,7 @@ func (ci *clusterImpl) ensureConsensusStoreVoters(rvsProto *pb.RaftVoterState) *
 	//
 	if numVotersIWant > 0 {
 		// recruit more nodes to be voters
-		for memberId, _ := range rvsProto.Nonvoters {
+		for memberId := range rvsProto.Nonvoters {
 			nodeInfo, ok := rvsProto.AllNodes[memberId]
 			if ok {
 				raftAddr := fmt.Sprintf("%s:%d", nodeInfo.Host, nodeInfo.RaftPort)
@@ -316,6 +319,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 
 	info, _ := ci.membership.getMemberById(newMemberId)
 	nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
+	nodeInfoProto = ci.findShortNodeId(newMemberId, nodeInfoProto, rvsProto)
 	raftAddr := fmt.Sprintf("%s:%d", nodeInfoProto.Host, nodeInfoProto.RaftPort)
 
 	//
@@ -338,6 +342,36 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	}
 
 	return rvsProto
+}
+
+func (ci *clusterImpl) findShortNodeId(memberId string, nodeInfo *pb.NodeInfo, rvsProto *pb.RaftVoterState) *pb.NodeInfo {
+	// collect all node infos
+	a := make([]*pb.NodeInfo, len(rvsProto.AllNodes))
+	idx := 0
+	for _, info := range rvsProto.AllNodes {
+		a[idx] = info
+		idx++
+	}
+
+	// sort the node infos by short id
+	sort.Sort(byShortNodeId(a))
+
+	// count the sorted node infos up until you find a gap
+	newShortNodeId := -1
+	for idx = 0; idx < len(a); idx++ {
+		if a[idx].ShortNodeId != int32(idx+1) {
+			newShortNodeId = idx + 1
+			break
+		}
+	}
+
+	// or take the next node id available
+	if newShortNodeId == -1 {
+		newShortNodeId = len(a) + 2
+	}
+
+	nodeInfo.ShortNodeId = int32(newShortNodeId)
+	return nodeInfo
 }
 
 func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(serfInfo map[string]string) (*pb.NodeInfo, error) {
@@ -419,12 +453,12 @@ func (ci *clusterImpl) printClusterState() {
 
 	ci.logger.Info("CLUSTER STATE:")
 	ci.logger.Infof("Voters [%d]:", len(state.Voters))
-	for id, _ := range state.Voters {
+	for id := range state.Voters {
 		ci.logger.Infof("%s", id)
 	}
 
 	ci.logger.Infof("Nonvoters [%d]:", len(state.Nonvoters))
-	for id, _ := range state.Nonvoters {
+	for id := range state.Nonvoters {
 		ci.logger.Infof("%s", id)
 	}
 
@@ -441,4 +475,18 @@ func (ci *clusterImpl) Close() {
 	ci.consensusStore.close()
 	ci.consensusStoreProxy.close()
 	time.Sleep(1 * time.Second)
+}
+
+// boiler plate code to implement go sort interface
+type byShortNodeId []*pb.NodeInfo
+
+func (a byShortNodeId) Len() int {
+	return len(a)
+}
+func (a byShortNodeId) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a byShortNodeId) Less(i, j int) bool {
+	return a[i].ShortNodeId < a[j].ShortNodeId
 }

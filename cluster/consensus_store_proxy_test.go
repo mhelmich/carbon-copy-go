@@ -89,7 +89,6 @@ func TestProxyProxy(t *testing.T) {
 	raftPeerAddr := fmt.Sprintf("%s:%d", hn, 15222)
 	err = store1.addVoter("node222", raftPeerAddr)
 	assert.Nil(t, err)
-	// assert.False(t, <-config2.raftNotifyCh)
 
 	// allowing raft to settle
 	time.Sleep(1 * time.Second)
@@ -104,6 +103,48 @@ func TestProxyProxy(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, v, bites)
 	log.Infof("The string is read: %s", string(bites))
+
+	close(raftLeaderAddrChan1)
+	assert.Nil(t, proxy1.close())
+	raftServer1.close()
+	assert.Nil(t, store1.close())
+
+	close(raftLeaderAddrChan2)
+	assert.Nil(t, proxy2.close())
+	raftServer2.close()
+	assert.Nil(t, store2.close())
+}
+
+func TestProxyProxyFailover(t *testing.T) {
+	hn, err := os.Hostname()
+	assert.Nil(t, err)
+
+	config1, store1, raftServer1, proxy1, raftLeaderAddrChan1 := createStoreServiceProxyProxyTest(t, 15111, 16111, "node111", "")
+	assert.True(t, <-config1.raftNotifyCh)
+	raftLeaderAddr := fmt.Sprintf("%s:%d", hn, 16111)
+
+	_, store2, raftServer2, proxy2, raftLeaderAddrChan2 := createStoreServiceProxyProxyTest(t, 15222, 16222, "node222", raftLeaderAddr)
+	raftPeerAddr := fmt.Sprintf("%s:%d", hn, 15222)
+	err = store1.addVoter("node222", raftPeerAddr)
+	assert.Nil(t, err)
+
+	// allowing raft to settle
+	time.Sleep(1 * time.Second)
+
+	k := "keykeykey"
+	v := []byte("value_value_value")
+	existed, err := proxy2.set(k, v)
+	assert.Nil(t, err)
+	assert.False(t, existed)
+
+	bites, err := proxy2.consistentGet(k)
+	assert.Nil(t, err)
+	assert.Equal(t, v, bites)
+	log.Infof("The string is read: %s", string(bites))
+
+	deleted, err := proxy2.delete(k)
+	assert.Nil(t, err)
+	assert.True(t, deleted)
 
 	close(raftLeaderAddrChan1)
 	assert.Nil(t, proxy1.close())

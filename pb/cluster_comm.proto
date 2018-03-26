@@ -26,22 +26,24 @@ enum RaftState {
 }
 
 message NodeInfo {
+    // the long node id is also used as serf and raft node id
+    string longNodeId = 1;
     // contains hostname
-    string host = 1;
+    string host = 2;
     // the unique id of a node
-    int32 nodeId = 2;
+    int32 shortNodeId = 3;
     // the port on which the raft library operates
-    int32 raftPort = 3;
+    int32 raftPort = 4;
     // the port on which the grpc consensus protocol operates
-    int32 valueServerPort = 4;
+    int32 valueServerPort = 5;
     // the port on which the grid protocol operates
-    int32 gridPort = 5;
+    int32 gridPort = 6;
     // the port on which serf operates
-    int32 serfPort = 6;
+    int32 serfPort = 7;
     // the state of a particular node
-    RaftState raftState = 7;
+    RaftState raftState = 8;
     // copy of the serf tags
-    map<string, string> tags = 8;
+    map<string, string> tags = 9;
 }
 
 // This is the base raft command that can be sent.
@@ -104,7 +106,6 @@ service RaftService {
     rpc consistentGet(GetReq) returns (GetResp) {}
     rpc set(SetReq) returns (SetResp) {}
     rpc delete(DeleteReq) returns (DeleteResp) {}
-    rpc acquireUniqueShortNodeId(AcquireUniqueShortNodeIdReq) returns (AcquireUniqueShortNodeIdResp) {}
 }
 
 enum RaftServiceError {
