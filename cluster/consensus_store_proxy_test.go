@@ -18,12 +18,13 @@ package cluster
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strconv"
 	"testing"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestProxyBasic(t *testing.T) {
@@ -148,7 +149,7 @@ func createStoreServiceProxyProxyTest(t *testing.T, raftPort int, raftServicePor
 	assert.NotNil(t, raftServer1)
 
 	raftLeaderAddrChan1 := make(chan string, 4)
-	if leaderAddr != "" {
+	if leaderAddr == "" {
 		raftLeaderAddrChan1 <- hn + ":" + strconv.Itoa(raftServicePort)
 	} else {
 		raftLeaderAddrChan1 <- leaderAddr

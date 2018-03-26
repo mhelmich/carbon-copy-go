@@ -19,10 +19,11 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"sync"
 )
 
 func newConsensusStoreProxy(config ClusterConfig, store *consensusStoreImpl, raftLeaderAddrChan <-chan string) (*consensusStoreProxy, error) {
