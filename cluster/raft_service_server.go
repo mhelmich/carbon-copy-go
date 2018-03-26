@@ -80,10 +80,6 @@ func (rs *raftServiceImpl) Delete(ctx context.Context, req *pb.DeleteReq) (*pb.D
 	}, nil
 }
 
-func (rs *raftServiceImpl) AcquireUniqueShortNodeId(context.Context, *pb.AcquireUniqueShortNodeIdReq) (*pb.AcquireUniqueShortNodeIdResp, error) {
-	return nil, nil
-}
-
 func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {
 	if !rs.localConsensusStore.isRaftLeader() {
 		return &pb.GetResp{

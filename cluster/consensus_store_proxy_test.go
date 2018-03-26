@@ -142,6 +142,10 @@ func TestProxyProxyFailover(t *testing.T) {
 	assert.Equal(t, v, bites)
 	log.Infof("The string is read: %s", string(bites))
 
+	deleted, err := proxy2.delete(k)
+	assert.Nil(t, err)
+	assert.True(t, deleted)
+
 	close(raftLeaderAddrChan1)
 	assert.Nil(t, proxy1.close())
 	raftServer1.close()

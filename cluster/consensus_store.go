@@ -170,10 +170,6 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	return newRaft, fsm, nil
 }
 
-func (cs *consensusStoreImpl) acquireUniqueShortNodeId() (int, error) {
-	return -1, nil
-}
-
 func (cs *consensusStoreImpl) consistentGet(key string) ([]byte, error) {
 	cmd := &pb.RaftCommand{
 		Cmd: &pb.RaftCommand_GetCmd{
