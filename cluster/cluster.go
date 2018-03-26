@@ -204,47 +204,47 @@ func (ci *clusterImpl) leaderLoop() {
 }
 
 func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
-	if ci.consensusStore.isRaftLeader() {
-		// update my serf status
-		// a bit hacky but gets the job done
-		err := errors.New("No real error")
-		for err != nil {
-			// update my own state in serf
-			err = ci.membership.markLeader()
-			if err == nil {
-				ci.logger.Infof("Updated serf status to reflect me being raft leader.")
-			} else {
-				ci.logger.Infof("Updating serf failed: %s", err.Error())
-			}
-		}
-
-		// get the current cluster state
-		rvsProto, err := ci.getRaftClusterState()
-		if err == nil {
-			// update me as leader
-			myMemberId := ci.membership.myMemberId()
-			// set me as leader
-			rvsProto.Voters[myMemberId] = true
-			// get my node info proto going
-			info, _ := ci.membership.getMemberById(myMemberId)
-			nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
-			// add myself to the cluster
-			rvsProto.Voters[myMemberId] = true
-			rvsProto.AllNodes[myMemberId] = nodeInfoProto
-			// yes, I'm paranoid like this
-			delete(rvsProto.Nonvoters, myMemberId)
-			// rebalance the cluster
-			rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
-			// set in consensus store
-			ci.setRaftClusterState(rvsProto)
-		} else {
-			log.Warnf("Can't get %s from consensus store: %s", consensusNodesRaftCluster, err.Error())
-		}
-
-		return rvsProto, nil
-	} else {
+	if !ci.consensusStore.isRaftLeader() {
 		return &pb.RaftVoterState{}, nil
 	}
+
+	// update my serf status
+	// a bit hacky but gets the job done
+	err := errors.New("No real error")
+	for err != nil {
+		// update my own state in serf
+		err = ci.membership.markLeader()
+		if err == nil {
+			ci.logger.Infof("Updated serf status to reflect me being raft leader.")
+		} else {
+			ci.logger.Infof("Updating serf failed: %s", err.Error())
+		}
+	}
+
+	// get the current cluster state
+	rvsProto, err := ci.getRaftClusterState()
+	if err == nil {
+		// update me as leader
+		myMemberId := ci.membership.myMemberId()
+		// set me as leader
+		rvsProto.Voters[myMemberId] = true
+		// get my node info proto going
+		info, _ := ci.membership.getMemberById(myMemberId)
+		nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
+		// add myself to the cluster
+		rvsProto.Voters[myMemberId] = true
+		rvsProto.AllNodes[myMemberId] = nodeInfoProto
+		// yes, I'm paranoid like this
+		delete(rvsProto.Nonvoters, myMemberId)
+		// rebalance the cluster
+		rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
+		// set in consensus store
+		ci.setRaftClusterState(rvsProto)
+	} else {
+		log.Warnf("Can't get %s from consensus store: %s", consensusNodesRaftCluster, err.Error())
+	}
+
+	return rvsProto, nil
 }
 
 func (ci *clusterImpl) getRaftClusterState() (*pb.RaftVoterState, error) {
