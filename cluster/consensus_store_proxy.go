@@ -55,9 +55,7 @@ type consensusStoreProxy struct {
 }
 
 func (csp *consensusStoreProxy) updateLeaderConnection() error {
-	csp.logger.Info("Waiting for leader service addr...")
 	leaderServiceAddr := <-csp.raftLeaderServiceAddrChan
-	csp.logger.Infof("Found leader! %s", leaderServiceAddr)
 	leaderConnection, err := grpc.Dial(leaderServiceAddr, grpc.WithInsecure())
 	if err != nil {
 		return err

@@ -129,17 +129,6 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
-	fn := func(key string, bites []byte) {
-		rvsProto := &pb.RaftVoterState{}
-		err = proto.Unmarshal(bites, rvsProto)
-		if err != nil {
-			config.logger.Errorf("Can't deserialize raft state: %s", err.Error())
-		}
-
-		config.logger.Infof("Me: %v", rvsProto.AllNodes)
-	}
-	cs.addWatcher(consensusNodesRaftCluster, fn)
-
 	// then we need membership to announce our presence to others (or not)
 	m, err := createNewMembership(config)
 	// FIXME   the problem with membership is that
@@ -155,26 +144,24 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
-	// here we create the cluster object
-	// it's odd I know but we need the partial object to create the leader loop
-	ci := &clusterImpl{
-		membership:     m,
-		consensusStore: cs,
-		// consensusStoreProxy: proxy,
-		raftService: raftServer,
-		config:      config,
-		logger:      config.logger,
-	}
-	go ci.leaderWatch(ci.consensusStore.raftNotifyCh)
-
 	// at last create the proxy
 	proxy, err := newConsensusStoreProxy(config, cs, m.raftLeaderServiceAddrChan)
 	if err != nil {
 		return nil, err
 	}
 
+	// now we create the cluster object
+	ci := &clusterImpl{
+		membership:          m,
+		consensusStore:      cs,
+		consensusStoreProxy: proxy,
+		raftService:         raftServer,
+		config:              config,
+		logger:              config.logger,
+	}
+	go ci.leaderWatch(ci.consensusStore.raftNotifyCh)
+
 	// don't forget to set the proxy
-	ci.consensusStoreProxy = proxy
 	return ci, nil
 }
 

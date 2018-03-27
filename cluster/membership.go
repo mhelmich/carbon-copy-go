@@ -94,8 +94,8 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	// If they block, membership can't do any updates.
 	// No changes to memberships states will ever be processed.
 	//
-	memberJoinedOrUpdated := make(chan string)
-	memberLeft := make(chan string)
+	memberJoinedOrUpdated := make(chan string, 16)
+	memberLeft := make(chan string, 16)
 	raftLeaderServiceAddrChan := make(chan string)
 
 	m := &membership{
@@ -163,18 +163,14 @@ func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, member
 func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined chan<- string, raftLeaderServiceAddrChan chan<- string) {
 	for _, item := range me.Members {
 		updated := m.membershipState.updateMember(item.Name, item.Tags)
-		m.logger.Infof("Received update (%t) for %s with tags %v", updated, item.Name, item.Tags)
 		if updated {
 			memberJoined <- item.Name
-			m.logger.Infof("Sent %s into joined channel", item.Name)
 
 			go func() {
 				role, roleOk := item.Tags[serfMDKeyRaftRole]
 				host, hostOk := item.Tags[serfMDKeyHost]
 				raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
-				m.logger.Infof("Updated222 node name %s roleOk %t hostOk %t portOk %t role %s", item.Name, roleOk, hostOk, portOk, role)
 				if roleOk && hostOk && portOk && role == raftRoleLeader {
-					m.logger.Infof("That's what I wrote into the raft service channel %s", host+":"+raftPort)
 					raftLeaderServiceAddrChan <- host + ":" + raftPort
 				}
 			}()
