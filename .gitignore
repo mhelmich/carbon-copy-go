@@ -1,4 +1,8 @@
+# the binary
 **/carbon-copy-go
+# any raft / serf db directories that might leave behind
 **/db*
+# the local vendor directory
 **/vendor/*
+# atom debugger files
 **/debug.test
