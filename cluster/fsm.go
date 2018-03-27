@@ -132,9 +132,9 @@ func (f *fsm) applySet(key string, value []byte) interface{} {
 	// I don't want to block the apply mutex too long
 	// and I don't want to put in the work to improve locking now
 	if f.watchers != nil {
-		for prefix, f := range f.watchers {
+		for prefix, fn := range f.watchers {
 			if strings.HasPrefix(key, prefix) {
-				go f(key, value)
+				go fn(key, value)
 			}
 		}
 	}
@@ -166,9 +166,9 @@ func (f *fsm) applyDelete(key string) interface{} {
 	// I don't want to block the apply mutex too long
 	// and I don't want to put in the work to improve locking now
 	if f.watchers != nil {
-		for prefix, f := range f.watchers {
+		for prefix, fn := range f.watchers {
 			if strings.HasPrefix(key, prefix) {
-				go f(key, nil)
+				go fn(key, nil)
 			}
 		}
 	}

@@ -19,19 +19,18 @@ syntax = "proto3";
 package pb;
 
 enum RaftState {
-    Leader = 0;
+    Nonvoter = 0;
     Voter = 1;
-    Nonvoter = 2;
-    None = 3;
+    Leader = 2;
 }
 
-message NodeInfo {
+message MemberInfo {
     // the long node id is also used as serf and raft node id
-    string longNodeId = 1;
+    string longMemberId = 1;
     // contains hostname
     string host = 2;
     // the unique id of a node
-    int32 shortNodeId = 3;
+    int32 shortMemberId = 3;
     // the port on which the raft library operates
     int32 raftPort = 4;
     // the port on which the grpc consensus protocol operates
@@ -90,7 +89,7 @@ message RaftVoterState {
     // This is not the most efficient implementation. But as long as we don't rely
     // on these updates to ship together through raft, we are free to make this better
     // as soon as this actually becomes a big problem.
-    map<string, NodeInfo> allNodes = 4;
+    map<string, MemberInfo> allNodes = 4;
 }
 
 // This service definition fulfills two different purposes:

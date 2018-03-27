@@ -18,7 +18,6 @@ package cluster
 
 import (
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -80,7 +79,7 @@ import (
 const (
 	nameSeparator             = "/"
 	consensusNamespaceName    = "carbon-copy"
-	consensusNodesRaftCluster = consensusNamespaceName + nameSeparator + "raftCluster" + nameSeparator
+	consensusNodesRaftCluster = consensusNamespaceName + nameSeparator + "raftCluster"
 	consensusNodesRootName    = consensusNamespaceName + nameSeparator + "nodes" + nameSeparator
 )
 
@@ -130,6 +129,17 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
+	fn := func(key string, bites []byte) {
+		rvsProto := &pb.RaftVoterState{}
+		err = proto.Unmarshal(bites, rvsProto)
+		if err != nil {
+			config.logger.Errorf("Can't deserialize raft state: %s", err.Error())
+		}
+
+		config.logger.Infof("Me: %v", rvsProto.AllNodes)
+	}
+	cs.addWatcher(consensusNodesRaftCluster, fn)
+
 	// then we need membership to announce our presence to others (or not)
 	m, err := createNewMembership(config)
 	// FIXME   the problem with membership is that
@@ -155,7 +165,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		config:      config,
 		logger:      config.logger,
 	}
-	go ci.leaderWatch()
+	go ci.leaderWatch(ci.consensusStore.raftNotifyCh)
 
 	// at last create the proxy
 	proxy, err := newConsensusStoreProxy(config, cs, m.raftLeaderServiceAddrChan)
@@ -196,9 +206,9 @@ type clusterImpl struct {
 	config              ClusterConfig
 }
 
-func (ci *clusterImpl) leaderWatch() {
+func (ci *clusterImpl) leaderWatch(ch <-chan bool) {
 	for { // ever...
-		isLeader := <-ci.consensusStore.raftNotifyCh
+		isLeader := <-ch
 		if isLeader {
 			ci.logger.Info("I'm the leader ... wheeee!")
 			go ci.leaderLoop()
@@ -290,12 +300,12 @@ func (ci *clusterImpl) leaderLoop() {
 
 func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 	if !ci.consensusStore.isRaftLeader() {
-		return &pb.RaftVoterState{}, nil
+		return &pb.RaftVoterState{}, fmt.Errorf("Not leader")
 	}
 
 	// update my serf status
 	// a bit hacky but gets the job done
-	err := errors.New("No real error")
+	err := fmt.Errorf("No real error")
 	for err != nil {
 		// update my own state in serf
 		err = ci.membership.markLeader()
@@ -319,7 +329,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 	rvsProto.Voters[myMemberId] = true
 	// get my node info proto going
 	info, _ := ci.membership.getMemberById(myMemberId)
-	nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(info)
+	nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(myMemberId, info)
 	// add myself to the cluster
 	rvsProto.Voters[myMemberId] = true
 	rvsProto.AllNodes[myMemberId] = nodeInfoProto
@@ -343,7 +353,7 @@ func (ci *clusterImpl) getRaftClusterState() (*pb.RaftVoterState, error) {
 		rvsProto := &pb.RaftVoterState{
 			Voters:    make(map[string]bool),
 			Nonvoters: make(map[string]bool),
-			AllNodes:  make(map[string]*pb.NodeInfo),
+			AllNodes:  make(map[string]*pb.MemberInfo),
 		}
 		return rvsProto, nil
 	} else {
@@ -406,13 +416,13 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 		return rvsProto
 	}
 
-	nodeInfoProto, err := ci.convertNodeInfoFromSerfToRaft(info)
+	nodeInfoProto, err := ci.convertNodeInfoFromSerfToRaft(newMemberId, info)
 	if err != nil {
 		ci.logger.Errorf("Can't create node info proto: %s", err.Error())
 		return rvsProto
 	}
 
-	nodeInfoProto = ci.findShortNodeId(newMemberId, nodeInfoProto, rvsProto)
+	nodeInfoProto = ci.findShortMemberId(newMemberId, nodeInfoProto, rvsProto)
 	raftAddr := fmt.Sprintf("%s:%d", nodeInfoProto.Host, nodeInfoProto.RaftPort)
 
 	//
@@ -439,9 +449,9 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string, rvsProto *p
 	return rvsProto
 }
 
-func (ci *clusterImpl) findShortNodeId(memberId string, nodeInfo *pb.NodeInfo, rvsProto *pb.RaftVoterState) *pb.NodeInfo {
+func (ci *clusterImpl) findShortMemberId(memberId string, nodeInfo *pb.MemberInfo, rvsProto *pb.RaftVoterState) *pb.MemberInfo {
 	// collect all node infos
-	a := make([]*pb.NodeInfo, len(rvsProto.AllNodes))
+	a := make([]*pb.MemberInfo, len(rvsProto.AllNodes))
 	idx := 0
 	for _, info := range rvsProto.AllNodes {
 		a[idx] = info
@@ -449,12 +459,12 @@ func (ci *clusterImpl) findShortNodeId(memberId string, nodeInfo *pb.NodeInfo, r
 	}
 
 	// sort the node infos by short id
-	sort.Sort(byShortNodeId(a))
+	sort.Sort(byShortMemberId(a))
 
 	// count the sorted node infos up until you find a gap
 	newShortNodeId := -1
 	for idx = 0; idx < len(a); idx++ {
-		if a[idx].ShortNodeId != int32(idx+1) {
+		if a[idx].ShortMemberId != int32(idx+1) {
 			newShortNodeId = idx + 1
 			break
 		}
@@ -465,11 +475,11 @@ func (ci *clusterImpl) findShortNodeId(memberId string, nodeInfo *pb.NodeInfo, r
 		newShortNodeId = len(a) + 2
 	}
 
-	nodeInfo.ShortNodeId = int32(newShortNodeId)
+	nodeInfo.ShortMemberId = int32(newShortNodeId)
 	return nodeInfo
 }
 
-func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(serfInfo map[string]string) (*pb.NodeInfo, error) {
+func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo map[string]string) (*pb.MemberInfo, error) {
 	host := serfInfo[serfMDKeyHost]
 
 	serfPort, err := strconv.Atoi(serfInfo[serfMDKeySerfPort])
@@ -492,8 +502,9 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(serfInfo map[string]string)
 		return nil, err
 	}
 
-	return &pb.NodeInfo{
+	return &pb.MemberInfo{
 		Host:            host,
+		LongMemberId:    myMemberId,
 		SerfPort:        int32(serfPort),
 		RaftPort:        int32(raftPort),
 		ValueServerPort: int32(raftServicePort),
@@ -574,15 +585,15 @@ func (ci *clusterImpl) Close() error {
 }
 
 // boiler plate code to implement go sort interface
-type byShortNodeId []*pb.NodeInfo
+type byShortMemberId []*pb.MemberInfo
 
-func (a byShortNodeId) Len() int {
+func (a byShortMemberId) Len() int {
 	return len(a)
 }
-func (a byShortNodeId) Swap(i, j int) {
+func (a byShortMemberId) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 
-func (a byShortNodeId) Less(i, j int) bool {
-	return a[i].ShortNodeId < a[j].ShortNodeId
+func (a byShortMemberId) Less(i, j int) bool {
+	return a[i].ShortMemberId < a[j].ShortMemberId
 }

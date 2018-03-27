@@ -25,7 +25,7 @@ It has these top-level messages:
 	InvAck
 	ChangeOwner
 	OwnerChanged
-	NodeInfo
+	MemberInfo
 	RaftCommand
 	GetCommand
 	SetCommand

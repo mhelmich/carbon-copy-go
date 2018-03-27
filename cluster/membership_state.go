@@ -37,13 +37,11 @@ type membershipState struct {
 	logger         *log.Entry
 }
 
-func (cs *membershipState) updateMember(name string, tags map[string]string) bool {
+func (cs *membershipState) updateMember(memberId string, tags map[string]string) bool {
 	cs.mutex.RLock()
-	_, existing := cs.currentMembers[name]
-	equal := reflect.DeepEqual(cs.currentMembers[name], tags)
+	_, existing := cs.currentMembers[memberId]
+	equal := reflect.DeepEqual(cs.currentMembers[memberId], tags)
 	cs.mutex.RUnlock()
-
-	cs.logger.Infof("name: %s existing %t equal %t role %s", name, existing, equal, tags[serfMDKeyRaftRole])
 
 	if existing && equal {
 		// it seems we have seen this member event already
@@ -52,17 +50,15 @@ func (cs *membershipState) updateMember(name string, tags map[string]string) boo
 
 	cs.mutex.Lock()
 	// carry over all tags
-	cs.currentMembers[name] = tags
+	cs.currentMembers[memberId] = tags
 	cs.mutex.Unlock()
-
-	cs.logger.Infof("My tags %v", cs.currentMembers[name])
 
 	return true
 }
 
-func (cs *membershipState) removeMember(name string) bool {
+func (cs *membershipState) removeMember(memberId string) bool {
 	cs.mutex.RLock()
-	_, existing := cs.currentMembers[name]
+	_, existing := cs.currentMembers[memberId]
 	cs.mutex.RUnlock()
 
 	if !existing {
@@ -71,16 +67,16 @@ func (cs *membershipState) removeMember(name string) bool {
 
 	cs.mutex.Lock()
 	// just be sure to not leave dead bodies in our basement
-	delete(cs.currentMembers, name)
+	delete(cs.currentMembers, memberId)
 	cs.mutex.Unlock()
 
 	return true
 }
 
-func (cs *membershipState) getMemberById(nodeId string) (map[string]string, bool) {
+func (cs *membershipState) getMemberById(memberId string) (map[string]string, bool) {
 	newMap := make(map[string]string)
 	cs.mutex.RLock()
-	m, ok := cs.currentMembers[nodeId]
+	m, ok := cs.currentMembers[memberId]
 	if ok {
 		for k, v := range m {
 			newMap[k] = v
