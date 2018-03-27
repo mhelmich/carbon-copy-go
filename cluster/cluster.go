@@ -131,9 +131,6 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 
 	// then we need membership to announce our presence to others (or not)
 	m, err := createNewMembership(config)
-	// FIXME   the problem with membership is that
-	// FIXME   in case this member is not the raft leader,
-	// FIXME   nobody is there to consume the serf change events *sigh*
 	if err != nil {
 		return nil, err
 	}
@@ -144,24 +141,30 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
+	// now we create the cluster object
+	// the reason is that the consensusStoreProxy needs to know where the raft leader lives
+	// this information though needs to be parsed out of the serf event stream in our membership object
+	// therefore I need to create the cluster object now, start the processor loop
+	// and have things go their merry way
+	ci := &clusterImpl{
+		membership:     m,
+		consensusStore: cs,
+		raftService:    raftServer,
+		config:         config,
+		logger:         config.logger,
+	}
+	go ci.eventProcessorLoop()
+
 	// at last create the proxy
 	proxy, err := newConsensusStoreProxy(config, cs, m.raftLeaderServiceAddrChan)
 	if err != nil {
 		return nil, err
 	}
 
-	// now we create the cluster object
-	ci := &clusterImpl{
-		membership:          m,
-		consensusStore:      cs,
-		consensusStoreProxy: proxy,
-		raftService:         raftServer,
-		config:              config,
-		logger:              config.logger,
-	}
-	go ci.leaderWatch(ci.consensusStore.raftNotifyCh)
-
 	// don't forget to set the proxy
+	// I know this is a little brittle and I don't like partial objects myself
+	// but a shortcut is a shortcut :)
+	ci.consensusStoreProxy = proxy
 	return ci, nil
 }
 
@@ -193,94 +196,83 @@ type clusterImpl struct {
 	config              ClusterConfig
 }
 
-func (ci *clusterImpl) leaderWatch(ch <-chan bool) {
+// this function keeps all notification channels empty and clean
+func (ci *clusterImpl) eventProcessorLoop() {
 	for { // ever...
-		isLeader := <-ch
-		if isLeader {
-			ci.logger.Info("I'm the leader ... wheeee!")
-			go ci.leaderLoop()
-		} else {
-			ci.logger.Info("I'm not the leader ... cruel world!")
-			go ci.followerLoop()
-		}
-	}
-}
-
-// small loop that keeps the channels clear of message
-// you could argue that I shouldn't have these channels in the first place
-// and you're maybe right :)
-func (ci *clusterImpl) followerLoop() {
-	err := ci.membership.unmarkLeader()
-	if err != nil {
-		ci.logger.Errorf("Couldn't unmark myself (%s) as leader: %s", ci.config.longMemberId, err.Error())
-	}
-
-	for { // ever...
-		if !ci.consensusStore.isRaftLeader() {
-			select {
-			case newMemberId := <-ci.membership.memberJoinedOrUpdatedChan:
-				if newMemberId == "" {
-					break
+		// big select over all channels I need to coordinate
+		select {
+		// this channel fires in case raft leadership changes
+		// it can be true if the local node becomes the new leader
+		// and false if some other member becomes the new leader
+		case isLeader := <-ci.consensusStore.raftNotifyCh:
+			if isLeader {
+				// initial house keeping work for the raft leader
+				// 1. get the current cluster state according to raft
+				// 2. reconcile serf and raft state
+				// 3. put yourself into the driver seat as leader
+				rvsProto, err := ci.newLeaderHouseKeeping()
+				if err != nil {
+					ci.logger.Errorf("Can't do my housekeeping: %s", err.Error())
+					ci.logger.Errorf("Proceeding anyways though with %v", rvsProto)
 				}
-
-				ci.logger.Infof("Member joined or updated %s", newMemberId)
-			case memberId := <-ci.membership.memberLeftChan:
-				if memberId == "" {
-					break
+			} else {
+				// just unmark myself from being the leader
+				// this might be unnecessary but I'm paranoid like that
+				err := ci.membership.unmarkLeader()
+				if err != nil {
+					ci.logger.Errorf("Can't unmark myself as leader: %s", err.Error())
 				}
-
-				ci.logger.Infof("Member left us %s", memberId)
 			}
-		}
-	}
-}
+		case memberJoined := <-ci.membership.memberJoinedOrUpdatedChan:
+			if memberJoined == "" {
+				// the channel was closed and we're done
+				ci.logger.Warnf("Member joined is closed stopping processor loop [%s]", memberJoined)
+				return
+			}
 
-func (ci *clusterImpl) leaderLoop() {
-	// initial house keeping work for the raft leader
-	// 1. get the current cluster state according to raft
-	// 2. reconcile serf and raft state
-	// 3. put yourself into the driver seat as leader
-	rvsProto, err := ci.newLeaderHouseKeeping()
-	if err != nil {
-		ci.logger.Errorf("Can't do my housekeeping: %s", err.Error())
-		ci.logger.Errorf("Proceeding anyways though with %v", rvsProto)
-	}
-
-	for { // ever...
-		if ci.consensusStore.isRaftLeader() {
-			//
-			// wait until the cluster topology changes
-			// then go through the same loop again
-			// or after every so and so seconds for good measure
-			//
-			select {
-			case newMemberId := <-ci.membership.memberJoinedOrUpdatedChan:
-				if newMemberId == "" {
-					// the channel was closed and we're done
-					return
+			// if I'm the leader, I need to do all sorts of housekeeping
+			// These things include:
+			// 1. add the new member(s) to the list of all members
+			// 2. add the new member(s) to the raft cluster
+			// 3. find a short member id for the new members
+			// if I'm NOT the leader, I just discard the message out of the channel
+			if ci.consensusStore.isRaftLeader() {
+				// get the current cluster state
+				rvsProto, err := ci.getRaftClusterState()
+				if err != nil {
+					ci.logger.Warnf("Can't get %s from consensus store: %s", consensusNodesRaftCluster, err.Error())
 				}
 
 				// if we see a new node come up, add it to the raft cluster if necessary
-				rvsProto = ci.addNewMemberToRaftCluster(newMemberId, rvsProto)
+				rvsProto = ci.addNewMemberToRaftCluster(memberJoined, rvsProto)
 				ci.setRaftClusterState(rvsProto)
+			}
+		case memberLeft := <-ci.membership.memberLeftChan:
+			if memberLeft == "" {
+				// the channel was closed and we're done
+				ci.logger.Warnf("Member joined is closed stopping processor loop [%s]", memberLeft)
+				return
+			}
 
-			case memberId := <-ci.membership.memberLeftChan:
-				if memberId == "" {
-					// the channel was closed and we're done
-					return
+			// if I'm the leader, I need to do all sorts of housekeeping
+			// the tasks I need to do include:
+			// 1. delete the old member out of all maps
+			// 2. ensure that the raft cluster is still operational (and if necessary add new members to the voter pool)
+			// if I'm NOT the leader, I just discard the message out of the channel
+			if ci.consensusStore.isRaftLeader() {
+				// get the current cluster state
+				rvsProto, err := ci.getRaftClusterState()
+				if err != nil {
+					ci.logger.Warnf("Can't get %s from consensus store: %s", consensusNodesRaftCluster, err.Error())
 				}
 
-				delete(rvsProto.Voters, memberId)
-				delete(rvsProto.Nonvoters, memberId)
-				delete(rvsProto.AllNodes, memberId)
+				delete(rvsProto.Voters, memberLeft)
+				delete(rvsProto.Nonvoters, memberLeft)
+				delete(rvsProto.AllNodes, memberLeft)
 
 				rvsProto = ci.ensureConsensusStoreVoters(rvsProto)
 				ci.setRaftClusterState(rvsProto)
 			}
-		} else {
-			ci.membership.unmarkLeader()
-			ci.logger.Info("I'm not the leader anymore ... Goodbye cruel world!")
-			return
 		}
 	}
 }

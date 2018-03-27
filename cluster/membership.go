@@ -94,8 +94,8 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	// If they block, membership can't do any updates.
 	// No changes to memberships states will ever be processed.
 	//
-	memberJoinedOrUpdated := make(chan string, 16)
-	memberLeft := make(chan string, 16)
+	memberJoinedOrUpdated := make(chan string)
+	memberLeft := make(chan string)
 	raftLeaderServiceAddrChan := make(chan string)
 
 	m := &membership{
