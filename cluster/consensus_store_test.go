@@ -70,8 +70,9 @@ func TestConsensusStoreBasic(t *testing.T) {
 	// set a value at raft 1
 	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
-	err = store1.set(key, value)
+	created, err := store1.set(key, value)
 	assert.Nil(t, err)
+	assert.True(t, created)
 
 	// give it some time to replicate
 	time.Sleep(1 * time.Second)
@@ -125,8 +126,9 @@ func TestConsensusStoreConsistentGet(t *testing.T) {
 
 	key := ulid.MustNew(ulid.Now(), rand.Reader).String()
 	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
-	err = store1.set(key, value)
+	created, err := store1.set(key, value)
 	assert.Nil(t, err)
+	assert.True(t, created)
 
 	val, err := store1.consistentGet(key)
 	assert.Nil(t, err)
@@ -214,8 +216,9 @@ func TestConsensusStoreWatcher(t *testing.T) {
 	// the test goes here
 	key := "prefix___aaa"
 	value := []byte(ulid.MustNew(ulid.Now(), rand.Reader).String())
-	err = store1.set(key, value)
+	created, err := store1.set(key, value)
 	assert.Nil(t, err)
+	assert.True(t, created)
 	assert.Equal(t, key, <-watcherFired)
 
 	err = store1.close()

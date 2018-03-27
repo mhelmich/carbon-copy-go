@@ -56,9 +56,9 @@ func TestProxyBasic(t *testing.T) {
 
 	k := "keykeykey"
 	v := []byte("value_value_value")
-	existed, err := proxy.set(k, v)
+	created, err := proxy.set(k, v)
 	assert.Nil(t, err)
-	assert.False(t, existed)
+	assert.True(t, created)
 
 	bites, err := proxy.consistentGet(k)
 	assert.Nil(t, err)
@@ -96,9 +96,9 @@ func TestProxyProxy(t *testing.T) {
 
 	k := "keykeykey"
 	v := []byte("value_value_value")
-	existed, err := proxy2.set(k, v)
+	created, err := proxy2.set(k, v)
 	assert.Nil(t, err)
-	assert.False(t, existed)
+	assert.False(t, created)
 
 	bites, err := proxy2.consistentGet(k)
 	assert.Nil(t, err)
@@ -134,9 +134,9 @@ func TestProxyProxyFailover(t *testing.T) {
 
 	k := "keykeykey"
 	v := []byte("value_value_value")
-	existed, err := proxy2.set(k, v)
+	created, err := proxy2.set(k, v)
 	assert.Nil(t, err)
-	assert.False(t, existed)
+	assert.False(t, created)
 
 	bites, err := proxy2.consistentGet(k)
 	assert.Nil(t, err)

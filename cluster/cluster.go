@@ -353,7 +353,8 @@ func (ci *clusterImpl) setRaftClusterState(rvsProto *pb.RaftVoterState) error {
 		return err
 	}
 
-	return ci.consensusStore.set(consensusNodesRaftCluster, bites)
+	_, err = ci.consensusStore.set(consensusNodesRaftCluster, bites)
+	return err
 }
 
 func (ci *clusterImpl) ensureConsensusStoreVoters(rvsProto *pb.RaftVoterState) *pb.RaftVoterState {

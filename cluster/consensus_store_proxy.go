@@ -102,8 +102,8 @@ func (csp *consensusStoreProxy) consistentGet(key string) ([]byte, error) {
 
 func (csp *consensusStoreProxy) set(key string, value []byte) (bool, error) {
 	if csp.store.isRaftLeader() {
-		err := csp.store.set(key, value)
-		return false, err
+		existed, err := csp.store.set(key, value)
+		return existed, err
 	} else {
 		ctx := context.Background()
 		req := &pb.SetReq{

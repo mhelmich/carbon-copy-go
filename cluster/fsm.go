@@ -139,12 +139,15 @@ func (f *fsm) applySet(key string, value []byte) interface{} {
 		}
 	}
 
+	// this byte has a "created" semantic
+	// 1 means the key didn't exist before and was created
+	// 0 means the key did exist before and was NOT created
 	b := make([]byte, 1)
 
 	if ok {
-		b[0] = 1
-	} else {
 		b[0] = 0
+	} else {
+		b[0] = 1
 	}
 
 	return &raftApplyResponse{

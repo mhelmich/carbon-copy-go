@@ -50,14 +50,14 @@ func (rs *raftServiceImpl) Set(ctx context.Context, req *pb.SetReq) (*pb.SetResp
 		}, nil
 	}
 
-	err := rs.localConsensusStore.set(req.Key, req.Value)
+	existed, err := rs.localConsensusStore.set(req.Key, req.Value)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pb.SetResp{
 		Error:   pb.RaftServiceError_NoRaftError,
-		Created: false,
+		Created: !existed,
 	}, nil
 }
 

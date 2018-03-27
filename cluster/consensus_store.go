@@ -196,7 +196,9 @@ func (cs *consensusStoreImpl) get(key string) ([]byte, error) {
 	return cs.raftFsm.state[key], nil
 }
 
-func (cs *consensusStoreImpl) set(key string, value []byte) error {
+// takes a key and a value and stashes both in a strongly consistent manner
+// this function returns whether the key was created and potential errors
+func (cs *consensusStoreImpl) set(key string, value []byte) (bool, error) {
 	cmd := &pb.RaftCommand{
 		Cmd: &pb.RaftCommand_SetCmd{
 			SetCmd: &pb.SetCommand{
@@ -206,7 +208,17 @@ func (cs *consensusStoreImpl) set(key string, value []byte) error {
 		},
 	}
 
-	return cs.raftApply(cmd).Error()
+	f := cs.raftApply(cmd)
+	err := f.Error()
+	if err != nil {
+		return false, err
+	}
+
+	// the apply response contains one byte
+	// if the byte is zero it indicates false
+	// (as in the key did exist before and was not created)
+	resp := f.Response().(*raftApplyResponse)
+	return resp.value[0] != 0, nil
 }
 
 func (cs *consensusStoreImpl) delete(key string) (bool, error) {
@@ -222,13 +234,13 @@ func (cs *consensusStoreImpl) delete(key string) (bool, error) {
 	err := f.Error()
 	if err != nil {
 		return false, err
-	} else {
-		// the apply response contains one byte
-		// if the byte is zero it indicates false
-		// (as in there key didn't exist and couldn't be deleted)
-		resp := f.Response().(*raftApplyResponse)
-		return resp.value[0] != 0, nil
 	}
+
+	// the apply response contains one byte
+	// if the byte is zero it indicates false
+	// (as in the key didn't exist and couldn't be deleted)
+	resp := f.Response().(*raftApplyResponse)
+	return resp.value[0] != 0, nil
 }
 
 func (cs *consensusStoreImpl) raftApply(cmd *pb.RaftCommand) raft.ApplyFuture {
