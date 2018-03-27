@@ -66,7 +66,7 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	serfConfig.Tags[serfMDKeySerfPort] = strconv.Itoa(config.SerfPort)
 	serfConfig.Tags[serfMDKeyRaftPort] = strconv.Itoa(config.RaftPort)
 	serfConfig.Tags[serfMDKeyRaftServicePort] = strconv.Itoa(config.RaftServicePort)
-	serfConfig.Tags[serfMDKeyGridPort] = strconv.Itoa(0)
+	serfConfig.Tags[serfMDKeyGridPort] = strconv.Itoa(config.GridPort)
 
 	surf, err := serf.Create(serfConfig)
 	if err != nil {

@@ -183,6 +183,7 @@ func createRaftService(config ClusterConfig, consensusStore *consensusStoreImpl)
 	}
 
 	pb.RegisterRaftServiceServer(grpcServer, raftServer)
+	// fire up the server
 	go grpcServer.Serve(lis)
 	return raftServer, nil
 }
@@ -329,6 +330,10 @@ func (ci *clusterImpl) getRaftClusterState() (*pb.RaftVoterState, error) {
 	}
 
 	if bites == nil {
+		// this should only happen when you're a brand new cluster
+		// otherwise this will override your entire cluster state
+		ci.logger.Warn("Not finding existing cluster state. Creating completely new cluster state.")
+		ci.logger.Warn("Warning! Existing cluster state will be overridden!")
 		rvsProto := &pb.RaftVoterState{
 			Voters:    make(map[string]bool),
 			Nonvoters: make(map[string]bool),

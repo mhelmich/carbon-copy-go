@@ -34,6 +34,7 @@ type ClusterConfig struct {
 	hostname         string
 	RaftServicePort  int
 	SerfPort         int
+	GridPort         int
 	SerfSnapshotPath string
 	longMemberId     string
 	raftNotifyCh     chan bool
