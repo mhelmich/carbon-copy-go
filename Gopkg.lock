@@ -68,12 +68,6 @@
   version = "v1.0.0"
 
 [[projects]]
-  name = "github.com/google/uuid"
-  packages = ["."]
-  revision = "064e2069ce9c359c118179501254f67d7d37ba24"
-  version = "0.2"
-
-[[projects]]
   branch = "master"
   name = "github.com/hashicorp/errwrap"
   packages = ["."]
@@ -367,6 +361,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "67462b8023478088b45b094cdbb683b3db431ee00fb805f7c6e98cdb05204957"
+  inputs-digest = "caf89e94d0afab910facefbc1c5f5d1f9a424fc3b4ebe451391a9cb6771dfe33"
   solver-name = "gps-cdcl"
   solver-version = 1
