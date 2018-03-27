@@ -161,7 +161,6 @@ func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, member
 }
 
 func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined chan<- string, raftLeaderServiceAddrChan chan<- string) {
-	m.logger.Infof("Processing change event %v %v at cluster size %d", me, me.Members, m.getClusterSize())
 	for _, item := range me.Members {
 		updated := m.membershipState.updateMember(item.Name, item.Tags)
 		m.logger.Infof("Received update (%t) for %s with tags %v", updated, item.Name, item.Tags)

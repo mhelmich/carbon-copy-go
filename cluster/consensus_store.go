@@ -318,6 +318,14 @@ func (cs *consensusStoreImpl) removeServer(id raft.ServerID, addr raft.ServerAdd
 	return nil
 }
 
+func (cs *consensusStoreImpl) addWatcher(prefix string, fn func(string, []byte)) {
+	cs.raftFsm.addWatcher(prefix, fn)
+}
+
+func (cs *consensusStoreImpl) removeWatcher(prefix string) {
+	cs.raftFsm.removeWatcher(prefix)
+}
+
 func (cs *consensusStoreImpl) close() error {
 	f := cs.raft.Shutdown()
 	return f.Error()
