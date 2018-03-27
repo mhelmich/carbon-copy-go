@@ -18,9 +18,129 @@ syntax = "proto3";
 
 package pb;
 
-message NodeInfo {
-    // contains hostname and port
-    string addr = 1;
+enum RaftState {
+    Nonvoter = 0;
+    Voter = 1;
+    Leader = 2;
+}
+
+message MemberInfo {
+    // the long node id is also used as serf and raft node id
+    string longMemberId = 1;
+    // contains hostname
+    string host = 2;
     // the unique id of a node
+    int32 shortMemberId = 3;
+    // the port on which the raft library operates
+    int32 raftPort = 4;
+    // the port on which the grpc consensus protocol operates
+    int32 valueServerPort = 5;
+    // the port on which the grid protocol operates
+    int32 gridPort = 6;
+    // the port on which serf operates
+    int32 serfPort = 7;
+    // the state of a particular node
+    RaftState raftState = 8;
+    // copy of the serf tags
+    map<string, string> tags = 9;
+}
+
+// This is the base raft command that can be sent.
+// All actual commands need to appear in here and be part of this composition.
+// Unfortunately that means that there's multiple places where messages need to be added.
+// Here, on the sending side, and the receiving end. Well...you can't have everything in life.
+message RaftCommand {
+    oneof cmd {
+        GetCommand getCmd = 1;
+        SetCommand setCmd = 2;
+        DeleteCommand deleteCmd = 3;
+    }
+}
+
+// This is "consistent get" message.
+// The advantage is: This read will be up-to-date with the strongly consistent store.
+// The bad part is: It need to travel to the leader, be processed, and replicated.
+// Pretty expensive if you can live with stale data, do that instead.
+message GetCommand {
+    string key = 1;
+}
+
+// This sets a key-value-pair in the consistent store.
+message SetCommand {
+    string key = 1;
+    bytes value = 2;
+}
+
+// This deletes a key-value-pair from the consistent store.
+message DeleteCommand {
+    string key = 1;
+}
+
+// I decided to cheap this out and make all of this a proto
+message RaftSnapshot {
+    map<string, bytes> snap = 1;
+}
+
+message RaftVoterState {
+    map<string, bool> voters = 1;
+    map<string, bool> nonvoters = 2;
+    map<string, bool> nones = 3;
+
+    // This is not the most efficient implementation. But as long as we don't rely
+    // on these updates to ship together through raft, we are free to make this better
+    // as soon as this actually becomes a big problem.
+    map<string, MemberInfo> allNodes = 4;
+}
+
+// This service definition fulfills two different purposes:
+// 1. It provides the ability for every node to join the raft cluster.
+//    It does that by providing the joinRaftCluster RPC.
+// 2. It provides the ability to access consensus values even though you're not part of the cluster.
+service RaftService {
+    rpc get(GetReq) returns (GetResp) {}
+    rpc consistentGet(GetReq) returns (GetResp) {}
+    rpc set(SetReq) returns (SetResp) {}
+    rpc delete(DeleteReq) returns (DeleteResp) {}
+}
+
+enum RaftServiceError {
+    NoRaftError = 0;
+    NotLeaderRaftError = 1;
+    KeyDoesntExistRaftError = 2;
+}
+
+message GetReq {
+    string key = 1;
+}
+
+message GetResp {
+    RaftServiceError error = 1;
+    bytes value = 2;
+
+}
+
+message SetReq {
+    string key = 1;
+    bytes value = 2;
+}
+
+message SetResp {
+    RaftServiceError error = 1;
+    bool created = 2;
+}
+
+message DeleteReq {
+    string key = 1;
+}
+
+message DeleteResp {
+    RaftServiceError error = 1;
+    bool deleted = 2;
+}
+
+message AcquireUniqueShortNodeIdReq {}
+
+message AcquireUniqueShortNodeIdResp {
+    RaftServiceError error = 1;
     int32 nodeId = 2;
 }

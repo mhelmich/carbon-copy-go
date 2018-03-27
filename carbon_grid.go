@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cc
+package main
 
 import (
 	"errors"
@@ -26,7 +26,7 @@ import (
 )
 
 func createNewGrid() (*carbonGridImpl, error) {
-	clustr, err := cluster.NewCluster()
+	clustr, err := cluster.NewCluster(cluster.ClusterConfig{})
 	if err != nil {
 		return nil, err
 	}

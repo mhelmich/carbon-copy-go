@@ -74,7 +74,6 @@ func (cc *cacheClientImpl) handleGetResponse(getResp *pb.GetResponse, err error)
 		// I don't like the way I'm (mis-)using the error for this non-error case
 		return nil, nil, errors.New("response was ack")
 	case getResp.GetPut() != nil:
-		log.Infof("put: %s", getResp.GetPut().String())
 		return getResp.GetPut(), nil, nil
 	case getResp.GetOwnerChanged() != nil:
 		return nil, getResp.GetOwnerChanged(), nil
@@ -93,7 +92,6 @@ func (cc *cacheClientImpl) handleGetsResponse(getsResp *pb.GetsResponse, err err
 		// I don't like the way I'm (mis-)using the error for this non-error case
 		return nil, nil, errors.New("response was ack")
 	case getsResp.GetPuts() != nil:
-		log.Infof("puts: %s", getsResp.GetPuts().String())
 		return getsResp.GetPuts(), nil, nil
 	case getsResp.GetOwnerChanged() != nil:
 		return nil, getsResp.GetOwnerChanged(), nil

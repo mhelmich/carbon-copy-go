@@ -18,22 +18,39 @@ package cluster
 
 import (
 	"context"
+
+	log "github.com/sirupsen/logrus"
 )
 
-type NodeInfo struct {
+type NodeConnectionInfo struct {
 	nodeId      int
 	nodeAddress string
 }
 
-type Cluster interface {
-	GetMyNodeId() int
-	GetIdAllocator() <-chan int
-	GetNodeInfoUpdates() (<-chan []*NodeInfo, error)
-	Close()
+type ClusterConfig struct {
+	RaftPort         int
+	RaftStoreDir     string
+	Peers            []string
+	hostname         string
+	RaftServicePort  int
+	SerfPort         int
+	GridPort         int
+	SerfSnapshotPath string
+	longMemberId     string
+	raftNotifyCh     chan bool
+	logger           *log.Entry
+	NumRaftVoters    int
+	isDevMode        bool
 }
 
-func NewCluster() (Cluster, error) {
-	return createNewCluster()
+type Cluster interface {
+	GetMyNodeId() int
+	GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error)
+	Close() error
+}
+
+func NewCluster(config ClusterConfig) (Cluster, error) {
+	return createNewCluster(config)
 }
 
 type consensusClient interface {
@@ -46,5 +63,13 @@ type consensusClient interface {
 	watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvBytes, error)
 	watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error)
 	isClosed() bool
+	close() error
+}
+
+type consensusStore interface {
+	acquireUniqueShortNodeId() (int, error)
+	get(key string) ([]byte, error)
+	set(key string, value []byte) error
+	delete(key string) error
 	close() error
 }
