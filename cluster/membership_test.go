@@ -241,7 +241,7 @@ func TestMembershipNotificationDedup(t *testing.T) {
 }
 
 func assertNumMessages(t *testing.T, c <-chan string, num int) {
-	timeout := 1 * time.Second
+	timeout := 500 * time.Millisecond
 	if num > 0 {
 		numMessagesReceived := 0
 		for {
