@@ -32,7 +32,7 @@ import (
 // I'm sneaking this struct in here as response for a consistent read
 // this is the generic return type of an apply step
 // I hope I can press all possible responses into this format
-// at least this way I have boil type-safty problems down to casting
+// at least this way I have boil type-safety problems down to casting
 // to the same thing always and then I have to deal with putting state
 // back together from a byte array
 type raftApplyResponse struct {
