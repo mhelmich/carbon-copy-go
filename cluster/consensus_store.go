@@ -271,7 +271,7 @@ func (cs *consensusStoreImpl) addVoter(serverId string, serverAddress string) er
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
 
-	err := cs.removeServer(raftId, raftAddr)
+	err := cs.removeMember(raftId, raftAddr)
 	if err != nil {
 		return err
 	}
@@ -290,7 +290,7 @@ func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string)
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
 
-	err := cs.removeServer(raftId, raftAddr)
+	err := cs.removeMember(raftId, raftAddr)
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string)
 	}
 }
 
-func (cs *consensusStoreImpl) removeServer(id raft.ServerID, addr raft.ServerAddress) error {
+func (cs *consensusStoreImpl) removeMember(id raft.ServerID, addr raft.ServerAddress) error {
 	configFuture := cs.raft.GetConfiguration()
 	err := configFuture.Error()
 	if err != nil {

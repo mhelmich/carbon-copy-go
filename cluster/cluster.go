@@ -102,19 +102,20 @@ func defaultClusterConfig(config ClusterConfig) ClusterConfig {
 		config.hostname = host
 	}
 
-	if config.logger == nil {
-		config.logger = log.WithFields(log.Fields{
-			"host":      host,
-			"component": "cluster",
-		})
-	}
-
 	if config.longMemberId == "" {
 		config.longMemberId = ulid.MustNew(ulid.Now(), rand.Reader).String()
 	}
 
 	if config.raftNotifyCh == nil {
 		config.raftNotifyCh = make(chan bool, 16)
+	}
+
+	if config.logger == nil {
+		config.logger = log.WithFields(log.Fields{
+			"host":         host,
+			"component":    "cluster",
+			"longMemberId": config.longMemberId,
+		})
 	}
 
 	return config
@@ -146,12 +147,13 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	// therefore I need to create the cluster object now, start the processor loop
 	// and have things go their merry way
 	ci := &clusterImpl{
-		membership:     m,
-		consensusStore: cs,
-		raftService:    raftServer,
-		config:         config,
-		logger:         config.logger,
-		shortMemberId:  -1,
+		membership:         m,
+		consensusStore:     cs,
+		raftService:        raftServer,
+		config:             config,
+		logger:             config.logger,
+		shortMemberId:      -1,
+		gridMemberInfoChan: make(chan *GridMemberConnectionEvent, 2),
 	}
 	go ci.eventProcessorLoop()
 
@@ -196,6 +198,7 @@ type clusterImpl struct {
 	logger              *log.Entry
 	config              ClusterConfig
 	shortMemberId       int
+	gridMemberInfoChan  chan *GridMemberConnectionEvent
 }
 
 // this function keeps all notification channels empty and clean
@@ -226,7 +229,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		case memberJoined := <-ci.membership.memberJoinedOrUpdatedChan:
 			if memberJoined == "" {
 				// the channel was closed and we're done
-				ci.logger.Warnf("Member joined channel is closed stopping processor loop [%s]", memberJoined)
+				ci.logger.Warnf("Member joined channel is closed stopping event processor loop [%s]", memberJoined)
 				return
 			}
 
@@ -250,7 +253,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		case memberLeft := <-ci.membership.memberLeftChan:
 			if memberLeft == "" {
 				// the channel was closed and we're done
-				ci.logger.Warnf("Member left channel is closed stopping processor loop [%s]", memberLeft)
+				ci.logger.Warnf("Member left channel is closed stopping event processor loop [%s]", memberLeft)
 				return
 			}
 
@@ -533,38 +536,8 @@ func (ci *clusterImpl) GetMyShortMemberId() int {
 	return ci.shortMemberId
 }
 
-func (ci *clusterImpl) GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error) {
-	// kvBytesChan, err := ci.consensus.watchKeyPrefix(context.Background(), consensusNodesRootName)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// nodeConnInfoChan := make(chan []*NodeConnectionInfo)
-	// go func() {
-	// 	for kvBatchBytes := range kvBytesChan {
-	// 		if len(kvBatchBytes) <= 0 {
-	// 			close(nodeConnInfoChan)
-	// 			return
-	// 		}
-
-	// 		nodeInfos := make([]*NodeConnectionInfo, len(kvBatchBytes))
-	// 		for idx, kvBytes := range kvBatchBytes {
-	// 			nodeInfoProto := &pb.NodeInfo{}
-	// 			err = proto.Unmarshal(kvBytes.value, nodeInfoProto)
-	// 			if err == nil {
-	// 				nodeInfos[idx] = &NodeConnectionInfo{
-	// 					nodeId:      int(nodeInfoProto.NodeId),
-	// 					nodeAddress: nodeInfoProto.Host,
-	// 				}
-	// 			}
-	// 		}
-
-	// 		nodeConnInfoChan <- nodeInfos
-	// 	}
-	// }()
-
-	// return nodeConnInfoChan, nil
-	return nil, nil
+func (ci *clusterImpl) GetGridMemberChangeEvents() <-chan *GridMemberConnectionEvent {
+	return ci.gridMemberInfoChan
 }
 
 func (ci *clusterImpl) printClusterState() {

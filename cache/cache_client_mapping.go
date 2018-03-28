@@ -19,11 +19,12 @@ package cache
 import (
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	mc "github.com/goburrow/cache"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"sync"
-	"time"
 )
 
 func newCacheClientMapping() *cacheClientMappingImpl {
@@ -77,6 +78,10 @@ func (ccm *cacheClientMappingImpl) getClientForNodeId(nodeId int) (cacheClient, 
 
 func (ccm *cacheClientMappingImpl) addClientWithNodeId(nodeId int, addr string) {
 	ccm.nodeIdToAddr.Store(nodeId, addr)
+}
+
+func (ccm *cacheClientMappingImpl) removeClientWithNodeId(nodeId int) {
+	ccm.nodeIdToAddr.Delete(nodeId)
 }
 
 func (ccm *cacheClientMappingImpl) forEachParallel(f func(cacheClient)) {

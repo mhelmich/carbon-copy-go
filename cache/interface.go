@@ -67,6 +67,13 @@ type Cache interface {
 	Stop()
 }
 
+type InternalCache interface {
+	Cache
+
+	AddPeerNode(nodeId int, addr string)
+	RemovePeerNode(nodeId int)
+}
+
 type CacheLineId interface {
 	String() string
 	// This function serializes a cache line id into wire format.
@@ -85,7 +92,7 @@ type NodeId interface {
 }
 
 // Constructor-type function creating a cache instance.
-func NewCache(myNodeId int, serverPort int) (Cache, error) {
+func NewCache(myNodeId int, serverPort int) (InternalCache, error) {
 	return createNewCache(myNodeId, serverPort)
 }
 
@@ -111,6 +118,7 @@ type cacheServer interface {
 type cacheClientMapping interface {
 	getClientForNodeId(nodeId int) (cacheClient, error)
 	addClientWithNodeId(nodeId int, addr string)
+	removeClientWithNodeId(nodeId int)
 	forEachParallel(f func(c cacheClient))
 	printStats()
 	clear()

@@ -62,8 +62,8 @@ func TestGetPutInTwoCaches(t *testing.T) {
 	}
 	assert.NotNil(t, cache2, "There is no client")
 
-	cache1.addPeerNode(999, "localhost:7777")
-	cache2.addPeerNode(111, "localhost:6666")
+	cache1.AddPeerNode(999, "localhost:7777")
+	cache2.AddPeerNode(111, "localhost:6666")
 
 	value := "lalalalalala"
 	txn := cache1.NewTransaction()
@@ -219,14 +219,14 @@ func threeCaches(t *testing.T) (*cacheImpl, *cacheImpl, *cacheImpl, error) {
 	assert.Nil(t, err, "Can't create cache")
 	assert.NotNil(t, cache3, "There is no cache3")
 
-	cache1.addPeerNode(222, "localhost:7777")
-	cache1.addPeerNode(333, "localhost:8888")
+	cache1.AddPeerNode(222, "localhost:7777")
+	cache1.AddPeerNode(333, "localhost:8888")
 
-	cache2.addPeerNode(111, "localhost:6666")
-	cache2.addPeerNode(333, "localhost:8888")
+	cache2.AddPeerNode(111, "localhost:6666")
+	cache2.AddPeerNode(333, "localhost:8888")
 
-	cache3.addPeerNode(111, "localhost:6666")
-	cache3.addPeerNode(222, "localhost:7777")
+	cache3.AddPeerNode(111, "localhost:6666")
+	cache3.AddPeerNode(222, "localhost:7777")
 
 	return cache1, cache2, cache3, nil
 }

@@ -20,10 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/mhelmich/carbon-copy-go/pb"
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
+
+	"github.com/mhelmich/carbon-copy-go/pb"
+	log "github.com/sirupsen/logrus"
 )
 
 func createNewCache(myNodeId int, serverPort int) (*cacheImpl, error) {
@@ -308,8 +309,12 @@ func (c *cacheImpl) elevateOwnedToExclusive(line *cacheLine) error {
 	}
 }
 
-func (c *cacheImpl) addPeerNode(nodeId int, addr string) {
+func (c *cacheImpl) AddPeerNode(nodeId int, addr string) {
 	c.clientMapping.addClientWithNodeId(nodeId, addr)
+}
+
+func (c *cacheImpl) RemovePeerNode(nodeId int) {
+	c.clientMapping.removeClientWithNodeId(nodeId)
 }
 
 func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *pb.Get) (*pb.Put, error) {

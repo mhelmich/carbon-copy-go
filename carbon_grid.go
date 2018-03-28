@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"sync"
@@ -30,17 +29,17 @@ import (
 )
 
 func createNewGrid(configFileName string) (*carbonGridImpl, error) {
-	gridConfig := loadConfig(configFileName)
+	gridConfig, err := loadConfig(configFileName)
 
 	clustr, err := cluster.NewCluster(gridConfig.cluster)
 	if err != nil {
 		return nil, err
 	}
 
-	// blocks until cluster becomes available
+	// blocks until cluster becomes available...somewhat
 	myMemberId := clustr.GetMyShortMemberId()
 	if myMemberId <= 0 {
-		return nil, errors.New(fmt.Sprintf("My member id can't be %d", myMemberId))
+		return nil, fmt.Errorf("My member id can't be %d", myMemberId)
 	}
 
 	cache, err := cache.NewCache(myMemberId, gridConfig.cluster.GridPort)
@@ -48,13 +47,27 @@ func createNewGrid(configFileName string) (*carbonGridImpl, error) {
 		return nil, err
 	}
 
+	// spin up a goroutine that constantly listens to changes in the cluster
+	// and adds (or removes) peer nodes in the connection cache
+	go func() {
+		ch := clustr.GetGridMemberChangeEvents()
+		for {
+			switch event := <-ch; event.Type {
+			case cluster.MemberJoined:
+				cache.AddPeerNode(event.ShortMemberId, event.MemberGridAddress)
+			case cluster.MemberLeft:
+				cache.RemovePeerNode(event.ShortMemberId)
+			}
+		}
+	}()
+
 	return &carbonGridImpl{
 		cache:   cache,
 		cluster: clustr,
 	}, nil
 }
 
-func loadConfig(configFileName string) CarbonGridConfig {
+func loadConfig(configFileName string) (*CarbonGridConfig, error) {
 	b, err := ioutil.ReadFile(configFileName)
 	if err != nil {
 		log.Panicf("Can't read config file: %s", err)
@@ -65,25 +78,26 @@ func loadConfig(configFileName string) CarbonGridConfig {
 	setConfigDefaults(cfg)
 	err = cfg.ReadConfig(bytes.NewBuffer(b))
 	if err != nil {
-		log.Panicf("Couldn't read config file %s", err)
+		return nil, fmt.Errorf("Couldn't read config file %s", err)
 	}
 
 	var clusterConfig cluster.ClusterConfig
 	err = cfg.UnmarshalKey("carbongrid.cluster", &clusterConfig)
 	if err != nil {
-		log.Panicf("Couldn't unmarshall cluster config %s", err)
+		return nil, fmt.Errorf("Couldn't unmarshall cluster config %s", err)
 	}
 
 	var cacheConfig cache.CacheConfig
 	err = cfg.UnmarshalKey("carbongrid.cache", &cacheConfig)
 	if err != nil {
-		log.Panicf("Couldn't unmarshall cache config %s", err)
+		return nil, fmt.Errorf("Couldn't unmarshall cache config %s", err)
 	}
 
-	return CarbonGridConfig{
+	return &CarbonGridConfig{
 		cluster: clusterConfig,
 		cache:   cacheConfig,
-	}
+		logger:  log.WithFields(log.Fields{}),
+	}, nil
 }
 
 func setConfigDefaults(cfg *viper.Viper) {

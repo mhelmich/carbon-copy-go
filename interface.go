@@ -19,6 +19,7 @@ package main
 import (
 	"github.com/mhelmich/carbon-copy-go/cache"
 	"github.com/mhelmich/carbon-copy-go/cluster"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -28,6 +29,8 @@ const (
 type CarbonGridConfig struct {
 	cluster cluster.ClusterConfig
 	cache   cache.CacheConfig
+
+	logger *log.Entry
 }
 
 type Grid interface {

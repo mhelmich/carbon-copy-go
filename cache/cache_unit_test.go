@@ -135,6 +135,9 @@ func (ccm *mockCacheClientMapping) getClientForNodeId(nodeId int) (cacheClient, 
 func (ccm *mockCacheClientMapping) addClientWithNodeId(nodeId int, addr string) {
 }
 
+func (ccm *mockCacheClientMapping) removeClientWithNodeId(nodeId int) {
+}
+
 func (ccm *mockCacheClientMapping) forEachParallel(f func(c cacheClient)) {
 }
 

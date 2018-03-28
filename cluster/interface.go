@@ -17,10 +17,19 @@
 package cluster
 
 import (
+	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
 )
 
-type NodeConnectionInfo struct {
+type EventType int
+
+const (
+	MemberJoined EventType = iota
+	MemberLeft
+)
+
+type GridMemberConnectionEvent struct {
+	Type              EventType
 	ShortMemberId     int
 	MemberGridAddress string
 }
@@ -63,7 +72,7 @@ type Cluster interface {
 	// This method will return this members short id.
 	// This id is guaranteed to be unique in the cluster.
 	GetMyShortMemberId() int
-	GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error)
+	GetGridMemberChangeEvents() <-chan *GridMemberConnectionEvent
 	// Closes this cluster.
 	Close() error
 }
@@ -75,7 +84,13 @@ func NewCluster(config ClusterConfig) (Cluster, error) {
 
 type consensusStore interface {
 	get(key string) ([]byte, error)
+	consistentGet(key string) ([]byte, error)
 	set(key string, value []byte) (bool, error)
 	delete(key string) (bool, error)
+	addVoter(serverId string, serverAddress string) error
+	addNonvoter(serverId string, serverAddress string) error
+	removeMember(id raft.ServerID, addr raft.ServerAddress) error
+	addWatcher(prefix string, fn func(string, []byte))
+	removeWatcher(prefix string)
 	close() error
 }
