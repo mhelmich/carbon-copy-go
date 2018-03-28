@@ -32,7 +32,7 @@ func createNewGrid() (*carbonGridImpl, error) {
 	}
 
 	// blocks until cluster becomes available
-	myNodeId := clustr.GetMyNodeId()
+	myNodeId := clustr.GetMyShortMemberId()
 	if myNodeId <= 0 {
 		return nil, errors.New(fmt.Sprintf("My node id can't be %d", myNodeId))
 	}

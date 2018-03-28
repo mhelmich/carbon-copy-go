@@ -17,8 +17,6 @@
 package cluster
 
 import (
-	"context"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -44,7 +42,7 @@ type ClusterConfig struct {
 }
 
 type Cluster interface {
-	GetMyNodeId() int
+	GetMyShortMemberId() int
 	GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error)
 	Close() error
 }
@@ -53,21 +51,7 @@ func NewCluster(config ClusterConfig) (Cluster, error) {
 	return createNewCluster(config)
 }
 
-type consensusClient interface {
-	get(ctx context.Context, key string) (string, error)
-	getSortedRange(ctx context.Context, keyPrefix string) ([]kvStr, error)
-	put(ctx context.Context, key string, value string) error
-	putIfAbsent(ctx context.Context, key string, value string) (bool, error)
-	compareAndPut(ctx context.Context, key string, oldValue string, newValue string) (bool, error)
-	watchKey(ctx context.Context, key string) (<-chan *kvStr, error)
-	watchKeyPrefix(ctx context.Context, prefix string) (<-chan []*kvBytes, error)
-	watchKeyPrefixStr(ctx context.Context, prefix string) (<-chan []*kvStr, error)
-	isClosed() bool
-	close() error
-}
-
 type consensusStore interface {
-	acquireUniqueShortNodeId() (int, error)
 	get(key string) ([]byte, error)
 	set(key string, value []byte) error
 	delete(key string) error

@@ -152,6 +152,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		raftService:    raftServer,
 		config:         config,
 		logger:         config.logger,
+		shortMemberId:  -1,
 	}
 	go ci.eventProcessorLoop()
 
@@ -195,6 +196,7 @@ type clusterImpl struct {
 	raftService         *raftServiceImpl
 	logger              *log.Entry
 	config              ClusterConfig
+	shortMemberId       int
 }
 
 // this function keeps all notification channels empty and clean
@@ -310,6 +312,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 	// get my node info proto going
 	info, _ := ci.membership.getMemberById(myMemberId)
 	nodeInfoProto, _ := ci.convertNodeInfoFromSerfToRaft(myMemberId, info)
+	nodeInfoProto = ci.findShortMemberId(myMemberId, nodeInfoProto, rvsProto)
 	// add myself to the cluster
 	rvsProto.Voters[myMemberId] = true
 	rvsProto.AllNodes[myMemberId] = nodeInfoProto
@@ -447,20 +450,21 @@ func (ci *clusterImpl) findShortMemberId(memberId string, nodeInfo *pb.MemberInf
 	sort.Sort(byShortMemberId(a))
 
 	// count the sorted node infos up until you find a gap
-	newShortNodeId := -1
+	newShortMemberId := -1
 	for idx = 0; idx < len(a); idx++ {
 		if a[idx].ShortMemberId != int32(idx+1) {
-			newShortNodeId = idx + 1
+			newShortMemberId = idx + 1
 			break
 		}
 	}
 
 	// or take the next node id available
-	if newShortNodeId == -1 {
-		newShortNodeId = len(a) + 2
+	if newShortMemberId == -1 {
+		newShortMemberId = len(a) + 2
 	}
 
-	nodeInfo.ShortMemberId = int32(newShortNodeId)
+	ci.logger.Infof("Assinged short id %d to long id %s", newShortMemberId, memberId)
+	nodeInfo.ShortMemberId = int32(newShortMemberId)
 	return nodeInfo
 }
 
@@ -497,12 +501,37 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 	}, nil
 }
 
-func (ci *clusterImpl) GetMyNodeId() int {
-	// if ci.myNodeId == -1 {
-	// 	ci.myNodeId = <-ci.myNodeIdCh
-	// }
-	// return ci.myNodeId
-	return -1
+func (ci *clusterImpl) GetMyShortMemberId() int {
+	if ci.shortMemberId <= 0 {
+		ok := false
+		var memberInfo *pb.MemberInfo
+		for i := 1; i < 4 && !ok; i++ {
+			bites, err := ci.consensusStore.get(consensusNodesRaftCluster)
+			if err != nil {
+				// this also shouldn't happen unless the leader is down
+				ci.logger.Errorf("Can't get cluster state: %s", err.Error())
+				time.Sleep(time.Duration(i) * time.Second)
+			} else if bites == nil {
+				// this can happen on any follower when the leader made the change
+				// but the change is slow to replicate
+				ci.logger.Errorf("Cluster state doesn't exist yet")
+				time.Sleep(time.Duration(i) * time.Second)
+			}
+
+			rvsProto := &pb.RaftVoterState{}
+			err = proto.Unmarshal(bites, rvsProto)
+			if err != nil {
+				// this should never happen
+				ci.logger.Errorf("Can't get cluster state: %s", err.Error())
+				time.Sleep(time.Duration(i) * time.Second)
+			}
+			memberInfo, ok = rvsProto.AllNodes[ci.config.longMemberId]
+		}
+
+		ci.shortMemberId = int(memberInfo.ShortMemberId)
+	}
+
+	return ci.shortMemberId
 }
 
 func (ci *clusterImpl) GetNodeConnectionInfoUpdates() (<-chan []*NodeConnectionInfo, error) {
