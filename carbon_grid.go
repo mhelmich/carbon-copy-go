@@ -54,7 +54,7 @@ func createNewGrid(configFileName string) (*carbonGridImpl, error) {
 	}, nil
 }
 
-func loadConfig(configFileName string) carbonGridConfig {
+func loadConfig(configFileName string) CarbonGridConfig {
 	b, err := ioutil.ReadFile(configFileName)
 	if err != nil {
 		log.Panicf("Can't read config file: %s", err)
@@ -62,33 +62,33 @@ func loadConfig(configFileName string) carbonGridConfig {
 
 	cfg := viper.New()
 	cfg.SetConfigType("yaml")
+	setConfigDefaults(cfg)
 	err = cfg.ReadConfig(bytes.NewBuffer(b))
 	if err != nil {
 		log.Panicf("Couldn't read config file %s", err)
 	}
 
 	var clusterConfig cluster.ClusterConfig
-	err = cfg.UnmarshalKey("cluster", &clusterConfig)
+	err = cfg.UnmarshalKey("carbongrid.cluster", &clusterConfig)
 	if err != nil {
 		log.Panicf("Couldn't unmarshall cluster config %s", err)
 	}
 
 	var cacheConfig cache.CacheConfig
-	err = cfg.UnmarshalKey("cache", &cacheConfig)
+	err = cfg.UnmarshalKey("carbongrid.cache", &cacheConfig)
 	if err != nil {
 		log.Panicf("Couldn't unmarshall cache config %s", err)
 	}
 
-	gridConfig := carbonGridConfig{
+	return CarbonGridConfig{
 		cluster: clusterConfig,
 		cache:   cacheConfig,
 	}
-
-	return defaultConfig(gridConfig)
 }
 
-func defaultConfig(config carbonGridConfig) carbonGridConfig {
-	return config
+func setConfigDefaults(cfg *viper.Viper) {
+	cfg.SetDefault("carbongrid.cluster.SerfSnapshotPath", clusterDefaultDir+"/serf")
+	cfg.SetDefault("carbongrid.cluster.RaftStoreDir", clusterDefaultDir+"/raft")
 }
 
 type carbonGridImpl struct {

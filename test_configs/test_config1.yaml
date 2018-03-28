@@ -14,13 +14,14 @@
 ## limitations under the License.
 ##
 
-Cluster:
-  RaftPort: 19191
-  RaftServicePort: 18181
-  SerfPort: 17171
-  RaftStoreDir: "./db.raft.db"
-  SerfSnapshotPath: "./db.serf"
-  NumRaftVoters: 3
+CarbonGrid:
+  Cluster:
+    RaftPort: 19191
+    RaftServicePort: 18181
+    SerfPort: 17171
+    RaftStoreDir: "./db.carbon.grid/raft"
+    SerfSnapshotPath: "./db.carbon.grid/serf"
+    NumRaftVoters: 3
 
-Cache:
-  maxCacheLineSizeBytes: 1024
+  Cache:
+    MaxCacheLineSizeBytes: 1024

@@ -18,7 +18,17 @@ package main
 
 import (
 	"github.com/mhelmich/carbon-copy-go/cache"
+	"github.com/mhelmich/carbon-copy-go/cluster"
 )
+
+const (
+	clusterDefaultDir = "./db.carbon.grid"
+)
+
+type CarbonGridConfig struct {
+	cluster cluster.ClusterConfig
+	cache   cache.CacheConfig
+}
 
 type Grid interface {
 	GetCache() cache.Cache

@@ -32,6 +32,5 @@ func TestGridBasic(t *testing.T) {
 	assert.NotNil(t, c)
 	g.Close()
 
-	assert.Nil(t, os.RemoveAll("./db.raft.db"))
-	assert.Nil(t, os.RemoveAll("./db.serf"))
+	assert.Nil(t, os.RemoveAll(clusterDefaultDir))
 }
