@@ -213,16 +213,14 @@ func (ci *clusterImpl) eventProcessorLoop() {
 				// 1. get the current cluster state according to raft
 				// 2. reconcile serf and raft state
 				// 3. put yourself into the driver seat as leader
-				rvsProto, err := ci.newLeaderHouseKeeping()
-				if err != nil {
+				if rvsProto, err := ci.newLeaderHouseKeeping(); err != nil {
 					ci.logger.Errorf("Can't do my housekeeping: %s", err.Error())
 					ci.logger.Errorf("Proceeding anyways though with %v", rvsProto)
 				}
 			} else {
 				// just unmark myself from being the leader
 				// this might be unnecessary but I'm paranoid like that
-				err := ci.membership.unmarkLeader()
-				if err != nil {
+				if err := ci.membership.unmarkLeader(); err != nil {
 					ci.logger.Errorf("Can't unmark myself as leader: %s", err.Error())
 				}
 			}
@@ -290,8 +288,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 	err := fmt.Errorf("No real error")
 	for err != nil {
 		// update my own state in serf
-		err = ci.membership.markLeader()
-		if err == nil {
+		if err = ci.membership.markLeader(); err == nil {
 			ci.logger.Infof("Updated serf status to reflect me being raft leader.")
 		} else {
 			ci.logger.Infof("Updating serf failed: %s", err.Error())

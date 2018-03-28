@@ -65,9 +65,16 @@ func TestClusterBasic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c2)
 
-	// FIXME -- com'on you can do this better
-	assert.Equal(t, 2, c1.GetMyShortMemberId())
-	assert.Equal(t, 1, c2.GetMyShortMemberId())
+	ids := make(map[int]bool)
+	ids[1] = true
+	ids[2] = true
+	_, ok := ids[c1.GetMyShortMemberId()]
+	assert.True(t, ok)
+	delete(ids, c1.GetMyShortMemberId())
+	_, ok = ids[c2.GetMyShortMemberId()]
+	assert.True(t, ok)
+	delete(ids, c2.GetMyShortMemberId())
+	assert.Equal(t, 0, len(ids))
 
 	assert.Nil(t, c1.Close())
 	assert.Nil(t, c2.Close())
