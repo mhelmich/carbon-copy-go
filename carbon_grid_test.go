@@ -17,16 +17,21 @@
 package main
 
 import (
-	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGridBasic(t *testing.T) {
-	g, err := NewGrid()
+	g, err := NewGrid("./test_configs/test_config1.yaml")
 	assert.Nil(t, err)
 	assert.NotNil(t, g)
 
 	c := g.GetCache()
 	assert.NotNil(t, c)
 	g.Close()
+
+	assert.Nil(t, os.RemoveAll("./db.raft.db"))
+	assert.Nil(t, os.RemoveAll("./db.serf"))
 }

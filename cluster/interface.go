@@ -21,8 +21,8 @@ import (
 )
 
 type NodeConnectionInfo struct {
-	nodeId      int
-	nodeAddress string
+	ShortMemberId     int
+	MemberGridAddress string
 }
 
 type ClusterConfig struct {

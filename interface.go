@@ -25,6 +25,6 @@ type Grid interface {
 	Close()
 }
 
-func NewGrid() (Grid, error) {
-	return createNewGrid()
+func NewGrid(configFileName string) (Grid, error) {
+	return createNewGrid(configFileName)
 }

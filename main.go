@@ -19,15 +19,19 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/mhelmich/carbon-copy-go/cluster"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
-	_ "github.com/spf13/viper/remote"
 	"io/ioutil"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/mhelmich/carbon-copy-go/cache"
+	"github.com/mhelmich/carbon-copy-go/cluster"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
+	_ "github.com/spf13/viper/remote"
 )
 
 func main() {
@@ -40,7 +44,10 @@ func main() {
 		log.Panic("Config file name is empty")
 	}
 
-	cfg := loadConfig(configFileName)
+	cfg := loadConfigStandalone(configFileName)
+
+	startPprofServer(cfg.pprofPort)
+
 	cluster, err := cluster.NewCluster(cfg.cluster)
 	if err != nil {
 		log.Panicf("Can't start cluster: %s", err.Error())
@@ -61,15 +68,28 @@ func main() {
 	wg.Wait()
 }
 
-type carbonCopyConfig struct {
+func startPprofServer(port int) {
+	go func() {
+		pprofAddr := fmt.Sprintf("localhost:%d", port)
+		err := http.ListenAndServe(pprofAddr, nil)
+		if err != nil {
+			log.Warnf("Can't start pprof endpoint: %s", err.Error())
+		}
+	}()
+}
+
+type carbonGridConfig struct {
 	cluster cluster.ClusterConfig
+	cache   cache.CacheConfig
+
+	pprofPort int
 }
 
 func printUsage() {
 	fmt.Println("Usage: ./carbon-copy-go server <path_to_config>")
 }
 
-func loadConfig(configFileName string) carbonCopyConfig {
+func loadConfigStandalone(configFileName string) carbonGridConfig {
 	b, err := ioutil.ReadFile(configFileName)
 	if err != nil {
 		log.Panicf("Can't read config file: %s", err)
@@ -88,7 +108,7 @@ func loadConfig(configFileName string) carbonCopyConfig {
 		log.Panicf("Couldn't unmarshall struct %s", err)
 	}
 
-	return carbonCopyConfig{
+	return carbonGridConfig{
 		cluster: clusterConfig,
 	}
 }

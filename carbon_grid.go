@@ -17,27 +17,33 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"sync"
+
 	"github.com/mhelmich/carbon-copy-go/cache"
 	"github.com/mhelmich/carbon-copy-go/cluster"
 	log "github.com/sirupsen/logrus"
-	"sync"
+	"github.com/spf13/viper"
 )
 
-func createNewGrid() (*carbonGridImpl, error) {
-	clustr, err := cluster.NewCluster(cluster.ClusterConfig{})
+func createNewGrid(configFileName string) (*carbonGridImpl, error) {
+	gridConfig := loadConfig(configFileName)
+
+	clustr, err := cluster.NewCluster(gridConfig.cluster)
 	if err != nil {
 		return nil, err
 	}
 
 	// blocks until cluster becomes available
-	myNodeId := clustr.GetMyShortMemberId()
-	if myNodeId <= 0 {
-		return nil, errors.New(fmt.Sprintf("My node id can't be %d", myNodeId))
+	myMemberId := clustr.GetMyShortMemberId()
+	if myMemberId <= 0 {
+		return nil, errors.New(fmt.Sprintf("My member id can't be %d", myMemberId))
 	}
 
-	cache, err := cache.NewCache(myNodeId, 9876)
+	cache, err := cache.NewCache(myMemberId, gridConfig.cluster.GridPort)
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +52,43 @@ func createNewGrid() (*carbonGridImpl, error) {
 		cache:   cache,
 		cluster: clustr,
 	}, nil
+}
+
+func loadConfig(configFileName string) carbonGridConfig {
+	b, err := ioutil.ReadFile(configFileName)
+	if err != nil {
+		log.Panicf("Can't read config file: %s", err)
+	}
+
+	cfg := viper.New()
+	cfg.SetConfigType("yaml")
+	err = cfg.ReadConfig(bytes.NewBuffer(b))
+	if err != nil {
+		log.Panicf("Couldn't read config file %s", err)
+	}
+
+	var clusterConfig cluster.ClusterConfig
+	err = cfg.UnmarshalKey("cluster", &clusterConfig)
+	if err != nil {
+		log.Panicf("Couldn't unmarshall cluster config %s", err)
+	}
+
+	var cacheConfig cache.CacheConfig
+	err = cfg.UnmarshalKey("cache", &cacheConfig)
+	if err != nil {
+		log.Panicf("Couldn't unmarshall cache config %s", err)
+	}
+
+	gridConfig := carbonGridConfig{
+		cluster: clusterConfig,
+		cache:   cacheConfig,
+	}
+
+	return defaultConfig(gridConfig)
+}
+
+func defaultConfig(config carbonGridConfig) carbonGridConfig {
+	return config
 }
 
 type carbonGridImpl struct {

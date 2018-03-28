@@ -68,7 +68,6 @@ import (
 // grid_addr: <hostname>:<port> - the addres on which the grid messages are being exchanged
 //
 // TODO:
-// * How to allocate a cluster-unique, short (int32) node id? -> raft - maybe even in its seperate command implementation
 // * How to pass on changes in cluster membership?            -> forwarding serf events
 //
 // I could toy around with this one day
@@ -227,7 +226,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		case memberJoined := <-ci.membership.memberJoinedOrUpdatedChan:
 			if memberJoined == "" {
 				// the channel was closed and we're done
-				ci.logger.Warnf("Member joined is closed stopping processor loop [%s]", memberJoined)
+				ci.logger.Warnf("Member joined channel is closed stopping processor loop [%s]", memberJoined)
 				return
 			}
 
@@ -251,7 +250,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		case memberLeft := <-ci.membership.memberLeftChan:
 			if memberLeft == "" {
 				// the channel was closed and we're done
-				ci.logger.Warnf("Member joined is closed stopping processor loop [%s]", memberLeft)
+				ci.logger.Warnf("Member left channel is closed stopping processor loop [%s]", memberLeft)
 				return
 			}
 
@@ -457,7 +456,7 @@ func (ci *clusterImpl) findShortMemberId(memberId string, nodeInfo *pb.MemberInf
 
 	// or take the next node id available
 	if newShortMemberId == -1 {
-		newShortMemberId = len(a) + 2
+		newShortMemberId = len(a) + 1
 	}
 
 	ci.logger.Infof("Assinged short id %d to long id %s", newShortMemberId, memberId)
@@ -502,7 +501,8 @@ func (ci *clusterImpl) GetMyShortMemberId() int {
 	if ci.shortMemberId <= 0 {
 		ok := false
 		var memberInfo *pb.MemberInfo
-		for i := 1; i < 4 && !ok; i++ {
+		retries := 4
+		for i := 1; i < retries && !ok; i++ {
 			bites, err := ci.consensusStore.get(consensusNodesRaftCluster)
 			if err != nil {
 				// this also shouldn't happen unless the leader is down
@@ -511,21 +511,23 @@ func (ci *clusterImpl) GetMyShortMemberId() int {
 			} else if bites == nil {
 				// this can happen on any follower when the leader made the change
 				// but the change is slow to replicate
-				ci.logger.Errorf("Cluster state doesn't exist yet")
+				ci.logger.Warnf("Cluster state doesn't exist yet. Sleeping %d seconds and trying %d times more...", i, retries-i)
 				time.Sleep(time.Duration(i) * time.Second)
+			} else {
+				rvsProto := &pb.RaftVoterState{}
+				err = proto.Unmarshal(bites, rvsProto)
+				if err != nil {
+					// this should never happen
+					ci.logger.Errorf("Can't get cluster state: %s", err.Error())
+					time.Sleep(time.Duration(i) * time.Second)
+				}
+				memberInfo, ok = rvsProto.AllNodes[ci.config.longMemberId]
 			}
-
-			rvsProto := &pb.RaftVoterState{}
-			err = proto.Unmarshal(bites, rvsProto)
-			if err != nil {
-				// this should never happen
-				ci.logger.Errorf("Can't get cluster state: %s", err.Error())
-				time.Sleep(time.Duration(i) * time.Second)
-			}
-			memberInfo, ok = rvsProto.AllNodes[ci.config.longMemberId]
 		}
 
-		ci.shortMemberId = int(memberInfo.ShortMemberId)
+		if ok {
+			ci.shortMemberId = int(memberInfo.ShortMemberId)
+		}
 	}
 
 	return ci.shortMemberId

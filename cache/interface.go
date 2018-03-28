@@ -21,6 +21,10 @@ import (
 	"golang.org/x/net/context"
 )
 
+type CacheConfig struct {
+	maxCacheLineSizeBytes int
+}
+
 type CarbonGridError string
 
 func (e CarbonGridError) Error() string { return string(e) }
