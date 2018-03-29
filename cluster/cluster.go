@@ -37,7 +37,7 @@ import (
 // There is raft for leader election and coordination tasks that need consensus. It basically implements a consistent data store.
 //
 // This introduces a little weird interdependency between the cluster metadata and
-// and the consensus store. Metadata about who the raft leader is is distributed by
+// and the consensus store. Metadata about who the raft leader is distributed by
 // serf. The raft leader broadcasts its status via serf. That means serf needs to listen
 // for raft leader changes. At the same time raft needs to know where new nodes are located.
 // This way it will be able to always form a big enough (but not too big) voter base for consensus.
@@ -47,13 +47,13 @@ import (
 // Serf in turn needs to be updated with all status changes to the cluster structure (such as raft leadership changes or additions and removals).
 //
 // That means when a cluster starts, the components are started in the following order:
+// * start raft
+// *** the raft leader will decide whether any new node should be promoted to voter or nonvoter (based on the number of nodes already fulfilling these roles)
 // * start serf
 // *** join the current cluster or form a new one
 // *** if we join an existing cluster, process all events
 // *** find all the metadata required for operation
 // ***** that would mostly be the raft roles in the cluster (leader, voters, nonvoters, none)
-// * start raft
-// *** the raft leader will decide whether any new node should be promoted to voter or nonvoter (based on the number of nodes already fulfilling these roles)
 // * start raft service
 //
 // Cluster metadata is a flat map with a bunch of keys.
@@ -61,14 +61,12 @@ import (
 // The map includes all information necessary to manage the cluster,
 // the membership to clusters and specific roles and tasks that need to be
 // fulfilled within the cluster.
-// serf_addr: <hostname>:<port> - the address on which serf for this node operates
-// raft_addr: <hostname>:<port> - the address on which raft for this node operates
-// raft_service_addr: <hostname>:<port> - the address on which the raft service for this node operates
-// raft_role: leader, voter, nonvoter, none - the role a particular node has in the raft cluster
-// grid_addr: <hostname>:<port> - the addres on which the grid messages are being exchanged
-//
-// TODO:
-// * How to pass on changes in cluster membership?            -> forwarding serf events
+// host: the advertized hostname of this node
+// serf_port: the port on which serf for this node operates
+// raft_port: the port on which raft for this node operates
+// raft_service_port: the port on which the raft service for this node operates
+// raft_role: leader, voter, nonvoter - the role a particular node has in the raft cluster
+// grid_port: the port on which the grid messages are being exchanged
 //
 // I could toy around with this one day
 // "github.com/araddon/qlbridge"
@@ -485,7 +483,7 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 		LongMemberId:    myMemberId,
 		SerfPort:        int32(serfPort),
 		RaftPort:        int32(raftPort),
-		ValueServerPort: int32(raftServicePort),
+		RaftServicePort: int32(raftServicePort),
 		GridPort:        int32(gridPort),
 	}, nil
 }

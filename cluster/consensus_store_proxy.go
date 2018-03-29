@@ -26,6 +26,14 @@ import (
 	"google.golang.org/grpc"
 )
 
+//
+// The entire reason for this proxy to exist is to transparently
+// forward all operations that a node wants to do a the consensus store
+// to the raft leader.
+// It practically allows me to constantly pretend that the local node is
+// indeed the raft leader.
+//
+
 func newConsensusStoreProxy(config ClusterConfig, store *consensusStoreImpl, raftLeaderServiceAddrChan <-chan string) (*consensusStoreProxy, error) {
 	proxy := &consensusStoreProxy{
 		store:                     store,

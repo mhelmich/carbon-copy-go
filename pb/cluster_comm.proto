@@ -34,7 +34,7 @@ message MemberInfo {
     // the port on which the raft library operates
     int32 raftPort = 4;
     // the port on which the grpc consensus protocol operates
-    int32 valueServerPort = 5;
+    int32 raftServicePort = 5;
     // the port on which the grid protocol operates
     int32 gridPort = 6;
     // the port on which serf operates
