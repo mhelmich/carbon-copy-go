@@ -17,7 +17,6 @@
 package cache
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -63,7 +62,7 @@ type cacheClientMappingImpl struct {
 func (ccm *cacheClientMappingImpl) getClientForNodeId(nodeId int) (cacheClient, error) {
 	addr, ok := ccm.nodeIdToAddr.Load(nodeId)
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Can't find address for node id %d", nodeId))
+		return nil, fmt.Errorf("Can't find address for node id %d", nodeId)
 	}
 
 	val, err := ccm.connectionCache.Get(addr)

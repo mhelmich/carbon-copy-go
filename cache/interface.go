@@ -18,11 +18,19 @@ package cache
 
 import (
 	"github.com/mhelmich/carbon-copy-go/pb"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
 type CacheConfig struct {
-	maxCacheLineSizeBytes int
+	MaxCacheLineSizeBytes         int
+	MaxCacheSizeBytes             int
+	MaxNumConnectionsToOtherNodes int
+
+	logger        *log.Entry
+	hostname      string
+	shortMemberId int
+	idDevMode     bool
 }
 
 type CarbonGridError string
@@ -92,8 +100,8 @@ type NodeId interface {
 }
 
 // Constructor-type function creating a cache instance.
-func NewCache(myNodeId int, serverPort int) (InternalCache, error) {
-	return createNewCache(myNodeId, serverPort)
+func NewCache(myNodeId int, serverPort int, config CacheConfig) (InternalCache, error) {
+	return createNewCache(myNodeId, serverPort, config)
 }
 
 // This internal interface exists for decomposition (and mocking).

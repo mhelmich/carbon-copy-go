@@ -19,9 +19,21 @@ CarbonGrid:
     RaftPort: 19191
     RaftServicePort: 18181
     SerfPort: 17171
+    # default: ./db.carbon.grid/raft
     RaftStoreDir: "./db.carbon.grid/raft"
+    # defaut: ./db.carbon.grid/serf
     SerfSnapshotPath: "./db.carbon.grid/serf"
     NumRaftVoters: 3
 
   Cache:
+    # 1 KB
     MaxCacheLineSizeBytes: 1024
+    # 1 GB
+    MaxCacheSizeBytes: 1073741824
+    # The maximum number of connections a cache holds
+    # to other nodes in the cluster.
+    # The more connections you hold, the faster communication
+    # is when reusing connections.
+    # The less connections you hold, the less memory and ports
+    # you hold on to.
+    MaxNumConnectionsToOtherNodes: 99

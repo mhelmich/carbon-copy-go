@@ -17,12 +17,13 @@
 package cache
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTxnCommit(t *testing.T) {
-	c, err := createNewCache(975, 9753)
+	c, err := createNewCache(975, 9753, CacheConfig{})
 	assert.Nil(t, err)
 	lineId := newRandomCacheLineId()
 	txn := createNewTransaction(c)
@@ -37,7 +38,7 @@ func TestTxnCommit(t *testing.T) {
 }
 
 func TestTxnRollback(t *testing.T) {
-	c, err := createNewCache(975, 9753)
+	c, err := createNewCache(975, 9753, CacheConfig{})
 	assert.Nil(t, err)
 	lineId := newRandomCacheLineId()
 	txn := createNewTransaction(c)

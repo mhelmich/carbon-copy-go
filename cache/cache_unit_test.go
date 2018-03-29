@@ -157,6 +157,7 @@ func mockCache(mapping cacheClientMapping) *cacheImpl {
 		server:        nil,
 		myNodeId:      myNodeId,
 		port:          9999,
+		logger:        log.WithFields(log.Fields{}),
 	}
 
 	return cache

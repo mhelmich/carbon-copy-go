@@ -18,13 +18,14 @@ package cache
 
 import (
 	"context"
+	"testing"
+
 	"github.com/mhelmich/carbon-copy-go/pb"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestAllocateNewAndGet(t *testing.T) {
-	c, err := NewCache(111, 6666)
+	c, err := NewCache(111, 6666, CacheConfig{})
 	assert.Nil(t, err, "Can't create cache")
 	assert.NotNil(t, c, "There is no client")
 
@@ -51,11 +52,11 @@ func TestAllocateNewAndGet(t *testing.T) {
 }
 
 func TestGetPutInTwoCaches(t *testing.T) {
-	cache1, err := createNewCache(111, 6666)
+	cache1, err := createNewCache(111, 6666, CacheConfig{})
 	assert.Nil(t, err, "Can't create cache")
 	assert.NotNil(t, cache1, "There is no client")
 
-	cache2, err := createNewCache(999, 7777)
+	cache2, err := createNewCache(999, 7777, CacheConfig{})
 	if !assert.Nil(t, err, "Can't create cache") {
 		cache1.Stop()
 		return
@@ -68,6 +69,7 @@ func TestGetPutInTwoCaches(t *testing.T) {
 	value := "lalalalalala"
 	txn := cache1.NewTransaction()
 	CacheLineId, err := cache1.AllocateWithData([]byte(value), txn)
+	assert.Nil(t, err)
 	err = txn.Commit()
 	assert.Nil(t, err)
 	assert.Nil(t, err, "Can't create []byte")
@@ -93,10 +95,12 @@ func TestGetPutInTwoCaches(t *testing.T) {
 
 func TestGetPutInThreeCaches(t *testing.T) {
 	cache1, cache2, cache3, err := threeCaches(t)
+	assert.Nil(t, err)
 
 	value := "lalalalalala"
 	txn := cache1.NewTransaction()
 	lineId, err := cache1.AllocateWithData([]byte(value), txn)
+	assert.Nil(t, err)
 	err = txn.Commit()
 	assert.Nil(t, err)
 	if !assert.Nil(t, err, "Can't create []byte") {
@@ -113,6 +117,7 @@ func TestGetPutInThreeCaches(t *testing.T) {
 
 	txn = cache2.NewTransaction()
 	readBites, err := cache2.Getx(lineId, txn)
+	assert.Nil(t, err)
 	err = txn.Rollback()
 	assert.Nil(t, err)
 	if !assert.Nil(t, err, "Can't getx remotely") {
@@ -156,6 +161,7 @@ func TestOwnerChanged(t *testing.T) {
 	txn = cache2.NewTransaction()
 	readBites, err := cache2.Getx(lineId, txn)
 	assert.Nil(t, err)
+	assert.NotNil(t, readBites)
 	err = txn.Commit()
 	assert.Nil(t, err)
 	v, ok := cache1.store.getCacheLineById(lineId)
@@ -176,7 +182,7 @@ func TestOwnerChanged(t *testing.T) {
 }
 
 func TestStartStop(t *testing.T) {
-	c, err := NewCache(111, 6666)
+	c, err := NewCache(111, 6666, CacheConfig{})
 	assert.Nil(t, err)
 	c.Stop()
 }
@@ -184,7 +190,7 @@ func TestStartStop(t *testing.T) {
 func TestStartConnectStop(t *testing.T) {
 	clientId := 111
 	serverId := 123
-	c, err := NewCache(serverId, 6666)
+	c, err := NewCache(serverId, 6666, CacheConfig{})
 	assert.Nil(t, err)
 
 	client, err := createNewCacheClientFromAddr("localhost:6666")
@@ -207,15 +213,15 @@ func TestStartConnectStop(t *testing.T) {
 }
 
 func threeCaches(t *testing.T) (*cacheImpl, *cacheImpl, *cacheImpl, error) {
-	cache1, err := createNewCache(111, 6666)
+	cache1, err := createNewCache(111, 6666, CacheConfig{})
 	assert.Nil(t, err, "Can't create cache")
 	assert.NotNil(t, cache1, "There is no cache1")
 
-	cache2, err := createNewCache(222, 7777)
+	cache2, err := createNewCache(222, 7777, CacheConfig{})
 	assert.Nil(t, err, "Can't create cache")
 	assert.NotNil(t, cache2, "There is no cache2")
 
-	cache3, err := createNewCache(333, 8888)
+	cache3, err := createNewCache(333, 8888, CacheConfig{})
 	assert.Nil(t, err, "Can't create cache")
 	assert.NotNil(t, cache3, "There is no cache3")
 

@@ -19,9 +19,10 @@ package cache
 import (
 	"container/list"
 	"fmt"
+	"runtime/pprof"
+
 	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
-	"runtime/pprof"
 )
 
 func createNewTransaction(c *cacheImpl) *transactionImpl {
@@ -70,14 +71,14 @@ func (t *transactionImpl) canCommit(line *cacheLine) error {
 		w := log.StandardLogger().Writer()
 		pprof.Lookup("goroutine").WriteTo(w, 2)
 		w.Close()
-		return CarbonGridError(fmt.Sprintf("Line %d is not locked", line.id))
+		return CarbonGridError(fmt.Sprintf("Line %s is not locked", line.id.String()))
 	}
 
 	if line.cacheLineState != pb.CacheLineState_Exclusive {
 		w := log.StandardLogger().Writer()
 		pprof.Lookup("goroutine").WriteTo(w, 2)
 		w.Close()
-		return CarbonGridError(fmt.Sprintf("Line %d is in state %v instead exclusive", line.id, line.cacheLineState))
+		return CarbonGridError(fmt.Sprintf("Line %s is in state %v instead exclusive", line.id.String(), line.cacheLineState))
 	}
 
 	return nil

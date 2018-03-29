@@ -42,7 +42,7 @@ func createNewGrid(configFileName string) (*carbonGridImpl, error) {
 		return nil, fmt.Errorf("My member id can't be %d", myMemberId)
 	}
 
-	cache, err := cache.NewCache(myMemberId, gridConfig.cluster.GridPort)
+	cache, err := cache.NewCache(myMemberId, gridConfig.cluster.GridPort, gridConfig.cache)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +103,9 @@ func loadConfig(configFileName string) (*CarbonGridConfig, error) {
 func setConfigDefaults(cfg *viper.Viper) {
 	cfg.SetDefault("carbongrid.cluster.SerfSnapshotPath", clusterDefaultDir+"/serf")
 	cfg.SetDefault("carbongrid.cluster.RaftStoreDir", clusterDefaultDir+"/raft")
+	cfg.SetDefault("carbongrid.cluster.NumRaftVoters", 3)
+	cfg.SetDefault("carbongrid.cache.MaxCacheLineSizeBytes", 1024)
+	cfg.SetDefault("carbongrid.cache.MaxCacheSizeBytes", 1073741824)
 }
 
 type carbonGridImpl struct {

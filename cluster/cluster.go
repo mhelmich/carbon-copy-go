@@ -82,20 +82,10 @@ const (
 	consensusNodesRootName    = consensusNamespaceName + nameSeparator + "nodes" + nameSeparator
 )
 
-type kvStr struct {
-	key   string
-	value string
-}
-
-type kvBytes struct {
-	key   []byte
-	value []byte
-}
-
 func defaultClusterConfig(config ClusterConfig) ClusterConfig {
 	host, err := os.Hostname()
 	if err != nil {
-		log.Panicf("Can't get hostname: %s", err.Error())
+		log.Errorf("Can't get hostname: %s", err.Error())
 	}
 
 	if config.hostname == "" {

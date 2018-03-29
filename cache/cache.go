@@ -18,8 +18,8 @@ package cache
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -27,20 +27,46 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func createNewCache(myNodeId int, serverPort int) (*cacheImpl, error) {
+func defaultCacheConfig(myNodeId int, config CacheConfig) CacheConfig {
+	host, err := os.Hostname()
+	if err != nil {
+		log.Errorf("Can't get hostname: %s", err.Error())
+	}
+
+	if config.hostname == "" {
+		config.hostname = host
+	}
+
+	if config.logger == nil {
+		config.logger = log.WithFields(log.Fields{
+			"host":         host,
+			"component":    "cache",
+			"longMemberId": myNodeId,
+		})
+	}
+
+	return config
+}
+
+func createNewCache(myNodeId int, serverPort int, config CacheConfig) (*cacheImpl, error) {
+	config = defaultCacheConfig(myNodeId, config)
 	clStore := createNewCacheLineStore()
 	srv, err := createNewServer(myNodeId, serverPort, clStore)
 	if err != nil {
 		return nil, err
-	} else {
-		return &cacheImpl{
-			store:         clStore,
-			clientMapping: newCacheClientMapping(),
-			server:        srv,
-			myNodeId:      myNodeId,
-			port:          serverPort,
-		}, nil
 	}
+
+	return &cacheImpl{
+		store:         clStore,
+		clientMapping: newCacheClientMapping(),
+		server:        srv,
+		myNodeId:      myNodeId,
+		port:          serverPort,
+		config:        config,
+		logger: config.logger.WithFields(log.Fields{
+			"class": "cache",
+		}),
+	}, nil
 }
 
 type cacheImpl struct {
@@ -49,6 +75,8 @@ type cacheImpl struct {
 	server        cacheServer
 	myNodeId      int
 	port          int
+	config        CacheConfig
+	logger        *log.Entry
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -87,8 +115,7 @@ func (c *cacheImpl) Get(lineId CacheLineId) ([]byte, error) {
 
 			put, err := c.unicastGet(context.Background(), line.ownerId, g)
 			if err != nil {
-				log.Errorf(err.Error())
-				return nil, err
+				return nil, fmt.Errorf("Can't unicast get: %s", err.Error())
 			}
 
 			c.store.applyChangesFromPut(line, put)
@@ -106,8 +133,7 @@ func (c *cacheImpl) Get(lineId CacheLineId) ([]byte, error) {
 
 		put, err := c.multicastGet(context.Background(), g)
 		if err != nil {
-			log.Errorf(err.Error())
-			return nil, err
+			return nil, fmt.Errorf("Can't multicast get: %s", err.Error())
 		}
 
 		line = c.store.createCacheLineFromPut(put)
@@ -125,7 +151,7 @@ func (c *cacheImpl) Gets(lineId CacheLineId, txn Transaction) ([]byte, error) {
 		return nil, TxnNilError
 	}
 
-	return nil, nil
+	return nil, fmt.Errorf("Not implmented yet")
 }
 
 func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
@@ -145,8 +171,7 @@ func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 		case pb.CacheLineState_Shared, pb.CacheLineState_Invalid:
 			err := c.unicastExclusiveGet(context.Background(), line)
 			if err != nil {
-				log.Errorf(err.Error())
-				return nil, err
+				return nil, fmt.Errorf("Can't unicast exclusive get: %s", err.Error())
 			}
 			// shabang#!
 			// fall through this case and invalidate the line
@@ -154,34 +179,29 @@ func (c *cacheImpl) Getx(lineId CacheLineId, txn Transaction) ([]byte, error) {
 
 		case pb.CacheLineState_Owned:
 			err := c.elevateOwnedToExclusive(line)
-			if err == nil {
-				return line.buffer, nil
-			} else {
-				log.Errorf(err.Error())
-				return nil, err
+			if err != nil {
+				return nil, fmt.Errorf("Can't elevate owned to exclusive: %s", lineId.String())
 			}
+
+			return line.buffer, nil
 		}
 	} else {
 		// if we don't know about the line,
 		// let's ask around and see whether somebody else knows it
 		err := c.multicastExclusiveGet(context.Background(), lineId)
 		if err != nil {
-			log.Errorf(err.Error())
-			return nil, err
+			return nil, fmt.Errorf("Can't multicast exclusive get: %s", err.Error())
 		}
 
 		line, ok := c.store.getCacheLineById(lineId)
-		if ok {
-			txn.addToLockedLines(line)
-			return line.buffer, nil
-		} else {
-			err := errors.New(fmt.Sprintf("Can't find line with id %d even after get.", lineId))
-			log.Errorf(err.Error())
-			return nil, err
+		if !ok {
+			return nil, fmt.Errorf("Can't find line with id [%s] even after get.", lineId.String())
 		}
 
+		txn.addToLockedLines(line)
+		return line.buffer, nil
 	}
-	return nil, errors.New("Unknown error!")
+	return nil, fmt.Errorf("Unknown error!")
 }
 
 func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) error {
@@ -196,8 +216,7 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 		case pb.CacheLineState_Shared, pb.CacheLineState_Invalid:
 			err := c.unicastExclusiveGet(context.Background(), line)
 			if err != nil {
-				log.Errorf(err.Error())
-				return err
+				return fmt.Errorf("Can't unicast exclusive get: %s", err.Error())
 			}
 			// shabang#!
 			// fall through this case and invalidate the line
@@ -205,8 +224,7 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 		case pb.CacheLineState_Owned:
 			err := c.elevateOwnedToExclusive(line)
 			if err != nil {
-				log.Errorf(err.Error())
-				return err
+				return fmt.Errorf("Can't elevate owned to exclusive: %s", lineId.String())
 			}
 			// shabang#!
 			// fall through this case and invalidate the line
@@ -215,12 +233,12 @@ func (c *cacheImpl) Put(lineId CacheLineId, buffer []byte, txn Transaction) erro
 			line.version++
 			line.buffer = buffer
 		default:
-			log.Infof("No interesting state in put %v", line.cacheLineState)
+			c.logger.Infof("No interesting state in put %v", line.cacheLineState)
 		}
 
 		return nil
 	} else {
-		return errors.New("Not implemented yet!")
+		return fmt.Errorf("Not implemented yet!")
 	}
 }
 
@@ -229,7 +247,7 @@ func (c *cacheImpl) Putx(lineId CacheLineId, buffer []byte, txn Transaction) err
 		return TxnNilError
 	}
 
-	return errors.New("Not implemented yet!")
+	return fmt.Errorf("Not implemented yet!")
 }
 
 func (c *cacheImpl) NewTransaction() Transaction {
@@ -237,7 +255,7 @@ func (c *cacheImpl) NewTransaction() Transaction {
 }
 
 func (c *cacheImpl) Stop() {
-	wg := &sync.WaitGroup{}
+	wg := sync.WaitGroup{}
 	wg.Add(2)
 
 	go func() {
@@ -299,14 +317,13 @@ func (c *cacheImpl) elevateOwnedToExclusive(line *cacheLine) error {
 		LineId:   line.id.toProtoBuf(),
 	}
 
-	log.Infof("sharers %v", line.sharers)
 	err := c.multicastInvalidate(context.Background(), line.sharers, inv)
-	if err == nil {
-		line.cacheLineState = pb.CacheLineState_Exclusive
-		return nil
-	} else {
+	if err != nil {
 		return err
 	}
+
+	line.cacheLineState = pb.CacheLineState_Exclusive
+	return nil
 }
 
 func (c *cacheImpl) AddPeerNode(nodeId int, addr string) {
@@ -322,27 +339,31 @@ func (c *cacheImpl) unicastGet(ctx context.Context, nodeId int, get *pb.Get) (*p
 	var oc *pb.OwnerChanged
 	var err error
 	var client cacheClient
+	var nextNodeIdToContact int
+	nextNodeIdToContact = nodeId
 
 	// as long as we're getting owner changed messages,
 	// we keep iterating and try to find the actual line
 	for { // ever...
-		client, err = c.clientMapping.getClientForNodeId(nodeId)
+		client, err = c.clientMapping.getClientForNodeId(nextNodeIdToContact)
 		if err != nil {
-			log.Errorf(err.Error())
-			return nil, err
+			return nil, fmt.Errorf("Can't find client for node [%d] in client mapping!", nextNodeIdToContact)
 		}
 
 		p, oc, err = client.SendGet(ctx, get)
 		if oc != nil {
-			nodeId = int(oc.NewOwnerId)
+			// if we're getting owner changed messages
+			// we try to contact the new owner in an infinite loop
+			nextNodeIdToContact = int(oc.NewOwnerId)
 		} else if p != nil {
+			// when we're getting a put that means we found the owner
+			// we're done with our work
 			return p, nil
 		} else {
+			// when we get an error we return that and we're done
 			return nil, err
 		}
 	}
-
-	return nil, errors.New(fmt.Sprintf("Couldn't find cache lines for %v", get))
 }
 
 func (c *cacheImpl) multicastGet(ctx context.Context, get *pb.Get) (*pb.Put, error) {
@@ -370,26 +391,28 @@ func (c *cacheImpl) unicastGetx(ctx context.Context, nodeId int, getx *pb.Getx) 
 	var oc *pb.OwnerChanged
 	var err error
 	var client cacheClient
+	var nextNodeIdToContact int
+	nextNodeIdToContact = nodeId
 
 	for { //ever...
 		client, err = c.clientMapping.getClientForNodeId(nodeId)
 		if err != nil {
-			log.Errorf(err.Error())
-			return nil, err
+			return nil, fmt.Errorf("Can't find client for node [%d] in client mapping!", nextNodeIdToContact)
 		}
 
 		p, oc, err = client.SendGetx(ctx, getx)
 		if oc != nil {
-			log.Infof("Received owner changed %v", oc)
-			nodeId = int(oc.NewOwnerId)
+			// if we're getting owner changed messages
+			// we try to contact the new owner in an infinite loop
+			nextNodeIdToContact = int(oc.NewOwnerId)
 		} else if p != nil {
+			// when we're getting a put that means we found the owner
+			// we're done with our work
 			return p, nil
 		} else {
 			return nil, err
 		}
 	}
-
-	return nil, errors.New(fmt.Sprintf("Couldn't find cache lines for %v", getx))
 }
 
 func (c *cacheImpl) multicastGetx(ctx context.Context, getx *pb.Getx) (*pb.Putx, error) {
@@ -415,13 +438,15 @@ func (c *cacheImpl) multicastInvalidate(ctx context.Context, sharers []int, inv 
 	ch := make(chan interface{}, len(sharers))
 
 	for _, sharerId := range sharers {
+		// create new int to not point into the array
+		sId := sharerId
 		go func() {
-			client, err := c.clientMapping.getClientForNodeId(sharerId)
+			client, err := c.clientMapping.getClientForNodeId(sId)
 			if err == nil {
-				log.Infof("Send invalidate to %d", sharerId)
+				c.logger.Infof("Send invalidate message to node id [%d]", sId)
 				_, err := client.SendInvalidate(ctx, inv)
 				if err != nil {
-					log.Errorf("Couldn't invalidate %v with %d because of %s", inv, sharerId, err)
+					c.logger.Errorf("Couldn't invalidate %v with %d because of %s", inv, sId, err)
 				}
 				// send to channel anyways
 				// that way we're not stopping the entire train
