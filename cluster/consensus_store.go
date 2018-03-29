@@ -183,10 +183,10 @@ func (cs *consensusStoreImpl) consistentGet(key string) ([]byte, error) {
 	err := f.Error()
 	if err != nil {
 		return nil, err
-	} else {
-		resp := f.Response().(*raftApplyResponse)
-		return resp.value, resp.err
 	}
+
+	resp := f.Response().(*raftApplyResponse)
+	return resp.value, resp.err
 }
 
 func (cs *consensusStoreImpl) get(key string) ([]byte, error) {
@@ -277,13 +277,14 @@ func (cs *consensusStoreImpl) addVoter(serverId string, serverAddress string) er
 	}
 
 	f := cs.raft.AddVoter(raftId, raftAddr, 0, 0)
-	if f.Error() == nil {
-		cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
-		return nil
-	} else {
-		cs.logger.Infof("Couldn't add (%s - %s) as raft voter: %v", serverId, serverAddress, f.Error().Error())
-		return f.Error()
+	err = f.Error()
+	if err != nil {
+		cs.logger.Infof("Couldn't add (%s - %s) as raft voter: %v", serverId, serverAddress, err.Error())
+		return err
 	}
+
+	cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
+	return nil
 }
 
 func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string) error {
@@ -297,13 +298,13 @@ func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string)
 
 	future := cs.raft.AddNonvoter(raftId, raftAddr, 0, 0)
 	err = future.Error()
-	if err == nil {
-		cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
-		return nil
-	} else {
+	if err != nil {
 		cs.logger.Infof("Couldn't add (%s - %s) as raft voter: %v", serverId, serverAddress, err.Error())
 		return err
 	}
+
+	cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
+	return nil
 }
 
 func (cs *consensusStoreImpl) removeMember(id raft.ServerID, addr raft.ServerAddress) error {
@@ -328,6 +329,12 @@ func (cs *consensusStoreImpl) removeMember(id raft.ServerID, addr raft.ServerAdd
 	}
 
 	return nil
+}
+
+func (cs *consensusStoreImpl) removeVoter(serverId string, serverAddress string) error {
+	raftId := raft.ServerID(serverId)
+	raftAddr := raft.ServerAddress(serverAddress)
+	return cs.removeMember(raftId, raftAddr)
 }
 
 func (cs *consensusStoreImpl) addWatcher(prefix string, fn func(string, []byte)) {

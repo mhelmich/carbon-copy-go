@@ -43,6 +43,8 @@ const TimeoutError = CarbonGridError("Timeout")
 // This error is returned if the passed in transaction object is nil.
 const TxnNilError = CarbonGridError("Txn cannot be nil")
 
+// Transactions are NOT thread safe and not to be shared with
+// another goroutine!
 type Transaction interface {
 	// Makes all operations that are part of this transaction durable.
 	Commit() error

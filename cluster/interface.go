@@ -17,7 +17,6 @@
 package cluster
 
 import (
-	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -89,7 +88,7 @@ type consensusStore interface {
 	delete(key string) (bool, error)
 	addVoter(serverId string, serverAddress string) error
 	addNonvoter(serverId string, serverAddress string) error
-	removeMember(id raft.ServerID, addr raft.ServerAddress) error
+	removeVoter(serverId string, serverAddress string)
 	addWatcher(prefix string, fn func(string, []byte))
 	removeWatcher(prefix string)
 	close() error
