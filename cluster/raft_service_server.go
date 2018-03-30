@@ -91,7 +91,8 @@ func (rs *raftServiceImpl) ConsistentGet(ctx context.Context, req *pb.GetReq) (*
 	return rs.Get(ctx, req)
 }
 
-func (rs *raftServiceImpl) close() {
+func (rs *raftServiceImpl) close() error {
 	rs.grpcServer.Stop()
 	rs.localConsensusStore = nil
+	return nil
 }

@@ -590,11 +590,28 @@ func (ci *clusterImpl) printClusterState() {
 }
 
 func (ci *clusterImpl) Close() error {
-	ci.membership.close()
+	err := ci.membership.unmarkLeader()
+	if err != nil {
+		ci.logger.Errorf("Error unmarking myself as leader (I'm proceeding anyways though): %s", err.Error())
+	}
+
+	time.Sleep(1 * time.Second)
+	err = ci.membership.close()
+	if err != nil {
+		ci.logger.Errorf("Error closing membership store (I'm proceeding anyways though): %s", err.Error())
+	}
+
 	time.Sleep(1 * time.Second)
 	ci.raftService.close()
-	ci.consensusStore.close()
-	ci.consensusStoreProxy.close()
+	err = ci.consensusStore.close()
+	if err != nil {
+		ci.logger.Errorf("Error closing consensus store (I'm proceeding anyways though): %s", err.Error())
+	}
+
+	err = ci.consensusStoreProxy.close()
+	if err != nil {
+		ci.logger.Errorf("Error closing consensus proxy (I'm proceeding anyways though): %s", err.Error())
+	}
 	time.Sleep(1 * time.Second)
 	return nil
 }
