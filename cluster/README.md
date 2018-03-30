@@ -47,7 +47,7 @@ The metadata exists in two forms:
 2. as multiple map[string]string in the membership store
 
 Both forms include all information necessary to manage the cluster, the membership to clusters and specific roles and tasks that need to be fulfilled within the cluster.
-  * host: the advertised hostname of this node
+  * host: the advertised host name of this node
   * serf_port: the port on which serf for this node operates
   * raft_port: the port on which raft for this node operates
   * raft_service_port: the port on which the raft service for this node operates
