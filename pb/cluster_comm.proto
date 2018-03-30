@@ -81,22 +81,6 @@ message RaftSnapshot {
     map<string, bytes> snap = 1;
 }
 
-message AllMembers {
-  // all members of the cluster
-  // long member id -> node info
-  map<string, MemberInfo> members = 1;
-}
-
-message RaftVoters {
-  // a set of all voters in the raft cluster
-  map<string, bool> voters = 1;
-}
-
-message RaftNonvoters {
-  // a set of all nonvoters in the raft cluster
-  map<string, bool> nonvoters = 1;
-}
-
 message RaftVoterState {
     map<string, bool> voters = 1;
     map<string, bool> nonvoters = 2;

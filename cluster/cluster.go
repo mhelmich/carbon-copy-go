@@ -78,9 +78,9 @@ const (
 	consensusNamespaceName    = "carbon-grid"
 	consensusNodesRaftCluster = consensusNamespaceName + nameSeparator + "raftCluster"
 	consensusMembersRootName  = consensusNamespaceName + nameSeparator + "members" + nameSeparator
-	consensusLeaderName       = consensusNamespaceName + nameSeparator + "consensus_leader"
-	consensusVotersName       = consensusNamespaceName + nameSeparator + "consensus_voters"
-	consensusNonVotersName    = consensusNamespaceName + nameSeparator + "consensus_nonvoters"
+	consensusLeaderName       = consensusNamespaceName + nameSeparator + "consensus_leader" + nameSeparator
+	consensusVotersName       = consensusNamespaceName + nameSeparator + "consensus_voters" + nameSeparator
+	consensusNonVotersName    = consensusNamespaceName + nameSeparator + "consensus_nonvoters" + nameSeparator
 )
 
 func defaultClusterConfig(config ClusterConfig) ClusterConfig {
@@ -98,7 +98,7 @@ func defaultClusterConfig(config ClusterConfig) ClusterConfig {
 	}
 
 	if config.raftNotifyCh == nil {
-		config.raftNotifyCh = make(chan bool, 16)
+		config.raftNotifyCh = make(chan bool, 8)
 	}
 
 	if config.logger == nil {
@@ -309,7 +309,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 	}
 
 	// update me as leader
-	myMemberId := ci.membership.myMemberId()
+	myMemberId := ci.membership.myLongMemberId()
 	// set me as leader
 	rvsProto.Voters[myMemberId] = true
 	// get my node info proto going
@@ -351,6 +351,31 @@ func (ci *clusterImpl) getRaftClusterState() (*pb.RaftVoterState, error) {
 		err = proto.Unmarshal(bites, rvsProto)
 		return rvsProto, err
 	}
+}
+
+func (ci *clusterImpl) getMemberInfoFromConsensusStore(longMemberId string) (*pb.MemberInfo, error) {
+	bites, err := ci.consensusStore.get(consensusMembersRootName + longMemberId)
+	if err != nil {
+		return nil, err
+	}
+
+	if bites == nil {
+		return nil, fmt.Errorf("No member with id [%s] found!", longMemberId)
+	}
+
+	memberInfo := &pb.MemberInfo{}
+	err = proto.Unmarshal(bites, memberInfo)
+	return memberInfo, err
+}
+
+func (ci *clusterImpl) setMemberInfoInConsensusStore(longMemberId string, memberInfo *pb.MemberInfo) error {
+	bites, err := proto.Marshal(memberInfo)
+	if err != nil {
+		return err
+	}
+
+	_, err = ci.consensusStore.set(consensusMembersRootName+longMemberId, bites)
+	return err
 }
 
 func (ci *clusterImpl) setRaftClusterState(rvsProto *pb.RaftVoterState) error {

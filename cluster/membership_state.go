@@ -84,12 +84,24 @@ func (cs *membershipState) getMemberById(memberId string) (map[string]string, bo
 	}
 	cs.mutex.RUnlock()
 
-	if ok {
-		return newMap, ok
-	} else {
+	if !ok {
 		return nil, ok
 	}
 
+	return newMap, ok
+}
+
+func (cs *membershipState) getAllLongMemberIds() []string {
+	// thanks to read locking nobody can change the map while I iterate over it
+	cs.mutex.RLock()
+	memberIds := make([]string, len(cs.currentMembers))
+	i := 0
+	for id := range cs.currentMembers {
+		memberIds[i] = id
+		i++
+	}
+	cs.mutex.RUnlock()
+	return memberIds
 }
 
 func (cs *membershipState) getNumMembers() int {

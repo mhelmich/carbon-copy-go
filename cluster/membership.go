@@ -19,6 +19,7 @@ package cluster
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/serf/serf"
 	log "github.com/sirupsen/logrus"
@@ -205,7 +206,7 @@ func (m *membership) unmarkLeader() error {
 func (m *membership) updateMemberTags(newTags map[string]string) error {
 	// this will update the nodes metadata and broadcast it out
 	// blocks until broadcasting was successful or timed out
-	tags, ok := m.getMemberById(m.myMemberId())
+	tags, ok := m.getMemberById(m.myLongMemberId())
 	if ok {
 		for k, v := range newTags {
 			tags[k] = v
@@ -218,7 +219,7 @@ func (m *membership) updateMemberTags(newTags map[string]string) error {
 	return m.serf.SetTags(tags)
 }
 
-func (m *membership) myMemberId() string {
+func (m *membership) myLongMemberId() string {
 	return m.config.longMemberId
 }
 
@@ -226,8 +227,26 @@ func (m *membership) getClusterSize() int {
 	return m.membershipState.getNumMembers()
 }
 
-func (m *membership) close() {
-	m.unmarkLeader()
-	m.serf.Leave()
-	m.serf.Shutdown()
+func (m *membership) getAllLongMemberIds() []string {
+	return m.membershipState.getAllLongMemberIds()
+}
+
+func (m *membership) close() error {
+	var errors []string
+
+	errLeave := m.serf.Leave()
+	if errLeave != nil {
+		errors = append(errors, errLeave.Error())
+	}
+
+	errShutDown := m.serf.Shutdown()
+	if errShutDown != nil {
+		errors = append(errors, errShutDown.Error())
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors during close: %s", strings.Join(errors, " - "))
+	}
+
+	return nil
 }

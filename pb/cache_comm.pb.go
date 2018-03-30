@@ -31,9 +31,6 @@ It has these top-level messages:
 	SetCommand
 	DeleteCommand
 	RaftSnapshot
-	AllMembers
-	RaftVoters
-	RaftNonvoters
 	RaftVoterState
 	GetReq
 	GetResp

@@ -45,6 +45,10 @@ func TestMembershipBasic(t *testing.T) {
 	assert.NotNil(t, m1)
 	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
 
+	memberIds := m1.getAllLongMemberIds()
+	assert.Equal(t, 1, len(memberIds))
+	assert.True(t, isStringIsInArray(t, m1.myLongMemberId(), memberIds))
+
 	nid2 := "node222"
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", hn, c1.SerfPort)
@@ -79,9 +83,19 @@ func TestMembershipBasic(t *testing.T) {
 	assert.Equal(t, 2, m1.getClusterSize())
 	assert.Equal(t, 2, m2.getClusterSize())
 
+	memberIds = m2.getAllLongMemberIds()
+	assert.Equal(t, 2, len(memberIds))
+	assert.True(t, isStringIsInArray(t, m1.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInArray(t, m2.myLongMemberId(), memberIds))
+
 	m1.close()
 	assertNumMessages(t, m1.memberLeftChan, 1)
 	assertNumMessages(t, m2.memberLeftChan, 1)
+
+	memberIds = m2.getAllLongMemberIds()
+	assert.Equal(t, 1, len(memberIds))
+	assert.True(t, isStringIsInArray(t, m2.myLongMemberId(), memberIds))
+
 	m2.close()
 }
 
@@ -110,7 +124,7 @@ func TestMembershipMarkAsLeaderInCluster(t *testing.T) {
 	assert.Nil(t, err)
 	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
 	assert.Equal(t, fmt.Sprintf("%s:%d", hn, c1.RaftServicePort), <-m1.raftLeaderServiceAddrChan)
-	tags, ok := m1.getMemberById(m1.myMemberId())
+	tags, ok := m1.getMemberById(m1.myLongMemberId())
 	assert.True(t, ok)
 	v, ok := tags[serfMDKeyRaftRole]
 	assert.True(t, ok)
@@ -203,11 +217,11 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
 	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 1)
 
-	m, ok := m1.getMemberById(m1.myMemberId())
+	m, ok := m1.getMemberById(m1.myLongMemberId())
 	assert.True(t, ok)
 	assert.Equal(t, "value1", m["key1"])
 
-	m, ok = m2.getMemberById(m1.myMemberId())
+	m, ok = m2.getMemberById(m1.myLongMemberId())
 	assert.True(t, ok)
 	assert.Equal(t, "value1", m["key1"])
 
@@ -226,18 +240,31 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
 	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 1)
 
-	m, ok = m2.getMemberById(m2.myMemberId())
+	m, ok = m2.getMemberById(m2.myLongMemberId())
 	assert.True(t, ok)
 	assert.Equal(t, "value1", m["key1"])
 
-	m, ok = m2.getMemberById(m1.myMemberId())
+	m, ok = m2.getMemberById(m1.myLongMemberId())
 	assert.True(t, ok)
 	assert.Equal(t, "value1", m["key1"])
+	memberIds := m2.getAllLongMemberIds()
+	assert.Equal(t, 2, len(memberIds))
+	assert.True(t, isStringIsInArray(t, m1.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInArray(t, m2.myLongMemberId(), memberIds))
 
 	m1.close()
 	assertNumMessages(t, m1.memberLeftChan, 1)
 	assertNumMessages(t, m2.memberLeftChan, 1)
 	m2.close()
+}
+
+func isStringIsInArray(t *testing.T, findMe string, inThisArray []string) bool {
+	for _, item := range inThisArray {
+		if item == findMe {
+			return true
+		}
+	}
+	return false
 }
 
 func assertNumMessages(t *testing.T, c <-chan string, num int) {
