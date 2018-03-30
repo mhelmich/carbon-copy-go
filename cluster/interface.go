@@ -42,8 +42,6 @@ type ClusterConfig struct {
 	// One other peers is enough to bootstrap this member. However, multiple are
 	// advisable for fault tolerance.
 	Peers []string
-	// Will be set internally.
-	hostname string
 	// The port on which the service operates.
 	RaftServicePort int
 	// The port on which serf operates. This address is supposed to be given
@@ -53,15 +51,17 @@ type ClusterConfig struct {
 	GridPort int
 	// Path under which serf writes its metadata.
 	SerfSnapshotPath string
+	// The number of raft voters that a cluster should have.
+	// All other members will be added as Nonvoters.
+	NumRaftVoters int
+	// Will be set internally.
+	hostname string
 	// Will be set internally.
 	longMemberId string
 	// Will be set internally.
 	raftNotifyCh chan bool
 	// Will be set internally.
 	logger *log.Entry
-	// The number of raft voters that a cluster should have.
-	// All other members will be added as Nonvoters.
-	NumRaftVoters int
 	// Will be set internally.
 	isDevMode bool
 }
@@ -71,6 +71,7 @@ type Cluster interface {
 	// This method will return this members short id.
 	// This id is guaranteed to be unique in the cluster.
 	GetMyShortMemberId() int
+	// Take care: Calling this method multiple times will return the same channel!!
 	GetGridMemberChangeEvents() <-chan *GridMemberConnectionEvent
 	// Closes this cluster.
 	Close() error
@@ -81,6 +82,7 @@ func NewCluster(config ClusterConfig) (Cluster, error) {
 	return createNewCluster(config)
 }
 
+// internal interface
 type consensusStore interface {
 	get(key string) ([]byte, error)
 	consistentGet(key string) ([]byte, error)

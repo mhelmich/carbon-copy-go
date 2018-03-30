@@ -31,6 +31,9 @@ It has these top-level messages:
 	SetCommand
 	DeleteCommand
 	RaftSnapshot
+	AllMembers
+	RaftVoters
+	RaftNonvoters
 	RaftVoterState
 	GetReq
 	GetResp
@@ -38,8 +41,6 @@ It has these top-level messages:
 	SetResp
 	DeleteReq
 	DeleteResp
-	AcquireUniqueShortNodeIdReq
-	AcquireUniqueShortNodeIdResp
 */
 package pb
 

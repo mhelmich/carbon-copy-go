@@ -227,6 +227,7 @@ func (m *membership) getClusterSize() int {
 }
 
 func (m *membership) close() {
+	m.unmarkLeader()
 	m.serf.Leave()
 	m.serf.Shutdown()
 }

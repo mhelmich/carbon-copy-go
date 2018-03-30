@@ -53,22 +53,22 @@ func createNewConsensusStore(config ClusterConfig) (*consensusStoreImpl, error) 
 	}
 
 	consensusStore := &consensusStoreImpl{
-		raft:         r,
-		raftFsm:      raftFsm,
-		logger:       config.logger,
-		raftNotifyCh: config.raftNotifyCh,
-		config:       config,
+		raft:    r,
+		raftFsm: raftFsm,
+		logger:  config.logger,
+		raftLeaderChangeNotifyCh: config.raftNotifyCh,
+		config: config,
 	}
 
 	return consensusStore, nil
 }
 
 type consensusStoreImpl struct {
-	logger       *log.Entry
-	raft         *raft.Raft
-	raftFsm      *fsm
-	raftNotifyCh <-chan bool
-	config       ClusterConfig
+	logger                   *log.Entry
+	raft                     *raft.Raft
+	raftFsm                  *fsm
+	raftLeaderChangeNotifyCh <-chan bool
+	config                   ClusterConfig
 }
 
 // see this example or rather reference usage

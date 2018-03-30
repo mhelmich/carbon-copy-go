@@ -75,9 +75,12 @@ import (
 
 const (
 	nameSeparator             = "/"
-	consensusNamespaceName    = "carbon-copy"
+	consensusNamespaceName    = "carbon-grid"
 	consensusNodesRaftCluster = consensusNamespaceName + nameSeparator + "raftCluster"
-	consensusNodesRootName    = consensusNamespaceName + nameSeparator + "nodes" + nameSeparator
+	consensusMembersRootName  = consensusNamespaceName + nameSeparator + "members" + nameSeparator
+	consensusLeaderName       = consensusNamespaceName + nameSeparator + "consensus_leader"
+	consensusVotersName       = consensusNamespaceName + nameSeparator + "consensus_voters"
+	consensusNonVotersName    = consensusNamespaceName + nameSeparator + "consensus_nonvoters"
 )
 
 func defaultClusterConfig(config ClusterConfig) ClusterConfig {
@@ -141,7 +144,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		config:             config,
 		logger:             config.logger,
 		shortMemberId:      -1,
-		gridMemberInfoChan: make(chan *GridMemberConnectionEvent, 2),
+		gridMemberInfoChan: make(chan *GridMemberConnectionEvent),
 	}
 	go ci.eventProcessorLoop()
 
@@ -165,11 +168,12 @@ func createRaftService(config ClusterConfig, consensusStore *consensusStoreImpl)
 	}
 
 	grpcServer := grpc.NewServer()
-
 	raftServer := &raftServiceImpl{
 		grpcServer:          grpcServer,
 		localConsensusStore: consensusStore,
-		logger:              config.logger,
+		logger: config.logger.WithFields(log.Fields{
+			"sub_component": "raft_service",
+		}),
 	}
 
 	pb.RegisterRaftServiceServer(grpcServer, raftServer)
@@ -197,11 +201,13 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		// this channel fires in case raft leadership changes
 		// it can be true if the local node becomes the new leader
 		// and false if some other member becomes the new leader
-		case isLeader := <-ci.consensusStore.raftNotifyCh:
+		case isLeader := <-ci.consensusStore.raftLeaderChangeNotifyCh:
 			if isLeader {
 				// initial house keeping work for the raft leader
 				// 1. get the current cluster state according to raft
 				// 2. reconcile serf and raft state
+				//    * take the serf state as I see it
+				//    * drop it into raft and keep collecting the state from serf events
 				// 3. put yourself into the driver seat as leader
 				if rvsProto, err := ci.newLeaderHouseKeeping(); err != nil {
 					ci.logger.Errorf("Can't do my housekeeping: %s", err.Error())
@@ -214,12 +220,22 @@ func (ci *clusterImpl) eventProcessorLoop() {
 					ci.logger.Errorf("Can't unmark myself as leader: %s", err.Error())
 				}
 			}
-		case memberJoined := <-ci.membership.memberJoinedOrUpdatedChan:
-			if memberJoined == "" {
+		case memberJoinedOrUpdated := <-ci.membership.memberJoinedOrUpdatedChan:
+			if memberJoinedOrUpdated == "" {
 				// the channel was closed and we're done
-				ci.logger.Warnf("Member joined channel is closed stopping event processor loop [%s]", memberJoined)
+				ci.logger.Warnf("Member joined channel is closed stopping event processor loop [%s]", memberJoinedOrUpdated)
 				return
 			}
+
+			// publish member addition or update
+			// 1. take long member id to run consistent get
+			// 2. take short member id and address out of consistent get result
+			// 3. publish into channel
+
+			// 1. open watcher
+			// 2. get current state
+			// 3. pipe current state into public channel
+			// 4. pipe watcher updates into the current channel
 
 			// if I'm the leader, I need to do all sorts of housekeeping
 			// These things include:
@@ -235,7 +251,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 				}
 
 				// if we see a new node come up, add it to the raft cluster if necessary
-				rvsProto = ci.addNewMemberToRaftCluster(memberJoined, rvsProto)
+				rvsProto = ci.addNewMemberToRaftCluster(memberJoinedOrUpdated, rvsProto)
 				ci.setRaftClusterState(rvsProto)
 			}
 		case memberLeft := <-ci.membership.memberLeftChan:
@@ -270,7 +286,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 
 func (ci *clusterImpl) newLeaderHouseKeeping() (*pb.RaftVoterState, error) {
 	if !ci.consensusStore.isRaftLeader() {
-		return &pb.RaftVoterState{}, fmt.Errorf("Not leader")
+		return &pb.RaftVoterState{}, fmt.Errorf("Not leader!!")
 	}
 
 	// update my serf status
