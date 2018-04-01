@@ -58,3 +58,9 @@ The data layout in both the membership and consensus store has a key-value forma
 * individual keys for each member in the cluster of the form "carbon-grid/members/<long member id>"
   * the value behind each of these keys is a byte array corresponding to a node info object
 * three individual lists of raft leaders, raft voters, and raft nonvoters
+
+The consensus store keeps the state of the cluster under a handful of keys. The names and strings are defined in the [cluster file](mhelmich/carbon-copy-go/cluster/cluster.go#L78):
+* each cluster member has its member info under its long member id
+* there's a key for the raft leader
+* a prefix for raft voters
+* a prefix for raft nonvoters
