@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -196,6 +197,21 @@ func (cs *consensusStoreImpl) get(key string) ([]byte, error) {
 	return cs.raftFsm.state[key], nil
 }
 
+func (cs *consensusStoreImpl) getPrefix(prefix string) ([]*kv, error) {
+	cs.raftFsm.mutex.RLock()
+	kvs := make([]*kv, 0)
+	for k, v := range cs.raftFsm.state {
+		if strings.HasPrefix(k, prefix) {
+			kvs = append(kvs, &kv{
+				k: k,
+				v: v,
+			})
+		}
+	}
+	cs.raftFsm.mutex.RUnlock()
+	return kvs, nil
+}
+
 // takes a key and a value and stashes both in a strongly consistent manner
 // this function returns whether the key was created and potential errors
 func (cs *consensusStoreImpl) set(key string, value []byte) (bool, error) {
@@ -364,4 +380,9 @@ func (f localApplyFuture) Response() interface{} {
 
 func (f localApplyFuture) Index() uint64 {
 	return 0
+}
+
+type kv struct {
+	k string
+	v []byte
 }

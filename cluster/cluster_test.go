@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/mhelmich/carbon-copy-go/pb"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -78,4 +80,44 @@ func TestClusterBasic(t *testing.T) {
 
 	assert.Nil(t, c1.Close())
 	assert.Nil(t, c2.Close())
+}
+
+func TestClusterHouseKeeping(t *testing.T) {
+	hn := "127.0.0.1"
+
+	cfg1 := ClusterConfig{
+		RaftPort:        18111,
+		NumRaftVoters:   3,
+		Peers:           nil,
+		hostname:        hn,
+		RaftServicePort: 28111,
+		SerfPort:        38111,
+		longMemberId:    "node1",
+		raftNotifyCh:    make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "AAA",
+		}),
+		isDevMode: true,
+	}
+	c1, err := createNewCluster(cfg1)
+	assert.Nil(t, err)
+	assert.NotNil(t, c1)
+
+	bites, err := c1.consensusStore.get(consensusLeaderName)
+	assert.Nil(t, err)
+	assert.Equal(t, cfg1.longMemberId, string(bites))
+	bites, err = c1.consensusStore.get(consensusMembersRootName + cfg1.longMemberId)
+	assert.Nil(t, err)
+	assert.NotNil(t, bites)
+	memberInfo := &pb.MemberInfo{}
+	err = proto.Unmarshal(bites, memberInfo)
+	assert.Nil(t, err)
+	assert.Equal(t, cfg1.longMemberId, memberInfo.LongMemberId)
+	kvs, err := c1.consensusStore.getPrefix(consensusVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(kvs))
+	assert.Equal(t, consensusVotersName+cfg1.longMemberId, kvs[0].k)
+	assert.NotNil(t, bites)
+
+	c1.Close()
 }

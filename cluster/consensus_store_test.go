@@ -226,3 +226,56 @@ func TestConsensusStoreWatcher(t *testing.T) {
 	err = store2.close()
 	assert.Nil(t, err)
 }
+
+func TestConsensusStoreGetPrefix(t *testing.T) {
+	hn, err := os.Hostname()
+	assert.Nil(t, err)
+
+	cfg1 := ClusterConfig{
+		RaftPort:        9876,
+		RaftServicePort: 9877,
+		longMemberId:    "node111",
+		hostname:        hn,
+		raftNotifyCh:    make(chan bool, 16),
+		isDevMode:       true,
+	}
+	store1, err := createNewConsensusStore(cfg1)
+	assert.Nil(t, err)
+	assert.NotNil(t, store1)
+	assert.True(t, <-cfg1.raftNotifyCh)
+
+	commonPrefix := "polly_wants_cracker_"
+
+	store1.set(commonPrefix+"1", []byte(ulid.MustNew(ulid.Now(), rand.Reader).String()))
+	store1.set(commonPrefix+"2", []byte(ulid.MustNew(ulid.Now(), rand.Reader).String()))
+	store1.set(commonPrefix+"3", []byte(ulid.MustNew(ulid.Now(), rand.Reader).String()))
+	store1.set("lalalalla_1", []byte(ulid.MustNew(ulid.Now(), rand.Reader).String()))
+
+	kvs, err := store1.getPrefix(commonPrefix)
+	assert.Equal(t, 3, len(kvs))
+	assert.True(t, isStringIsInKvArray(commonPrefix+"3", kvs))
+	assert.True(t, isStringIsInKvArray(commonPrefix+"1", kvs))
+	assert.True(t, isStringIsInKvArray(commonPrefix+"2", kvs))
+	assert.Nil(t, err)
+
+	kvs, err = store1.getPrefix("la")
+	assert.Equal(t, 1, len(kvs))
+	assert.True(t, isStringIsInKvArray("lalalalla_1", kvs))
+	assert.Nil(t, err)
+
+	kvs, err = store1.getPrefix("narf")
+	assert.Equal(t, 0, len(kvs))
+	assert.Nil(t, err)
+
+	err = store1.close()
+	assert.Nil(t, err)
+}
+
+func isStringIsInKvArray(findMe string, inThisArray []*kv) bool {
+	for _, item := range inThisArray {
+		if item.k == findMe {
+			return true
+		}
+	}
+	return false
+}

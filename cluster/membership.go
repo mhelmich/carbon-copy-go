@@ -34,8 +34,8 @@ const (
 	serfMDKeyRaftServicePort = "raft_service_port"
 	serfMDKeyRaftRole        = "raft_role"
 	serfMDKeyGridPort        = "grid_port"
+	serfMDKeyShortMemberId   = "short_member_id"
 
-	// TODO: this can be changed to use ints instead
 	raftRoleLeader   = "l"
 	raftRoleVoter    = "v"
 	raftRoleNonvoter = "n"

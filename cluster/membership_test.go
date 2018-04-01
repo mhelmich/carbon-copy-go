@@ -47,7 +47,7 @@ func TestMembershipBasic(t *testing.T) {
 
 	memberIds := m1.getAllLongMemberIds()
 	assert.Equal(t, 1, len(memberIds))
-	assert.True(t, isStringIsInArray(t, m1.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInStringArray(m1.myLongMemberId(), memberIds))
 
 	nid2 := "node222"
 	peers := make([]string, 1)
@@ -85,8 +85,8 @@ func TestMembershipBasic(t *testing.T) {
 
 	memberIds = m2.getAllLongMemberIds()
 	assert.Equal(t, 2, len(memberIds))
-	assert.True(t, isStringIsInArray(t, m1.myLongMemberId(), memberIds))
-	assert.True(t, isStringIsInArray(t, m2.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInStringArray(m1.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInStringArray(m2.myLongMemberId(), memberIds))
 
 	m1.close()
 	assertNumMessages(t, m1.memberLeftChan, 1)
@@ -94,7 +94,7 @@ func TestMembershipBasic(t *testing.T) {
 
 	memberIds = m2.getAllLongMemberIds()
 	assert.Equal(t, 1, len(memberIds))
-	assert.True(t, isStringIsInArray(t, m2.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInStringArray(m2.myLongMemberId(), memberIds))
 
 	m2.close()
 }
@@ -163,10 +163,10 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	c1 := ClusterConfig{
 		Peers:        make([]string, 0),
 		hostname:     hn,
-		SerfPort:     17111,
+		SerfPort:     27111,
 		longMemberId: nid1,
 		logger: log.WithFields(log.Fields{
-			"serf_port": 17111,
+			"serf_port": 27111,
 			"node_id":   nid1,
 		}),
 	}
@@ -182,10 +182,10 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	c2 := ClusterConfig{
 		Peers:        peers,
 		hostname:     hn,
-		SerfPort:     17222,
+		SerfPort:     27222,
 		longMemberId: nid2,
 		logger: log.WithFields(log.Fields{
-			"serf_port": 17222,
+			"serf_port": 27222,
 			"node_id":   nid2,
 		}),
 	}
@@ -249,8 +249,8 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	assert.Equal(t, "value1", m["key1"])
 	memberIds := m2.getAllLongMemberIds()
 	assert.Equal(t, 2, len(memberIds))
-	assert.True(t, isStringIsInArray(t, m1.myLongMemberId(), memberIds))
-	assert.True(t, isStringIsInArray(t, m2.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInStringArray(m1.myLongMemberId(), memberIds))
+	assert.True(t, isStringIsInStringArray(m2.myLongMemberId(), memberIds))
 
 	m1.close()
 	assertNumMessages(t, m1.memberLeftChan, 1)
@@ -258,7 +258,7 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	m2.close()
 }
 
-func isStringIsInArray(t *testing.T, findMe string, inThisArray []string) bool {
+func isStringIsInStringArray(findMe string, inThisArray []string) bool {
 	for _, item := range inThisArray {
 		if item == findMe {
 			return true
