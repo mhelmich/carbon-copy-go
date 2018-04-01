@@ -94,7 +94,8 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 	// If they block, membership can't do any updates.
 	// No changes to memberships states will ever be processed.
 	//
-	memberJoinedOrUpdated := make(chan string)
+	memberJoined := make(chan string)
+	memberUpdated := make(chan string)
 	memberLeft := make(chan string)
 	raftLeaderServiceAddrChan := make(chan string)
 
@@ -102,13 +103,14 @@ func createNewMembership(config ClusterConfig) (*membership, error) {
 		serf:                      surf,
 		logger:                    config.logger,
 		membershipState:           newMembershipState(config.logger),
-		memberJoinedOrUpdatedChan: memberJoinedOrUpdated,
+		memberJoinedChan:          memberJoined,
+		memberUpdatedChan:         memberUpdated,
 		memberLeftChan:            memberLeft,
 		raftLeaderServiceAddrChan: raftLeaderServiceAddrChan,
 		config: config,
 	}
 
-	go m.handleSerfEvents(serfEventCh, memberJoinedOrUpdated, memberLeft, raftLeaderServiceAddrChan)
+	go m.handleSerfEvents(serfEventCh, memberJoined, memberUpdated, memberLeft, raftLeaderServiceAddrChan)
 	return m, nil
 }
 
@@ -123,12 +125,15 @@ type membership struct {
 	// If they block, membership can't do any updates.
 	// No changes to memberships states will ever be processed.
 	//
-	memberJoinedOrUpdatedChan <-chan string
-	memberLeftChan            <-chan string
+	memberJoinedChan  <-chan string
+	memberUpdatedChan <-chan string
+	memberLeftChan    <-chan string
+	// this channel contains the raft service address of the raft leader
+	// updates are being sent after every change in raft leadership
 	raftLeaderServiceAddrChan <-chan string
 }
 
-func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, memberJoined chan<- string, memberLeft chan<- string, raftLeaderServiceAddrChan chan<- string) {
+func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, memberJoined chan<- string, memberUpdated chan<- string, memberLeft chan<- string, raftLeaderServiceAddrChan chan<- string) {
 	for { // ever...
 		select {
 		case serfEvent := <-serfEventChannel:
@@ -136,6 +141,7 @@ func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, member
 				// seems the channel was closed
 				// let's stop this go routine
 				close(memberJoined)
+				close(memberUpdated)
 				close(memberLeft)
 				close(raftLeaderServiceAddrChan)
 				return
@@ -146,13 +152,16 @@ func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, member
 			// That means we need to do some sort of diffing.
 			//
 			switch serfEvent.EventType() {
-			case serf.EventMemberJoin, serf.EventMemberUpdate:
+			case serf.EventMemberJoin:
 				m.handleMemberJoinEvent(serfEvent.(serf.MemberEvent), memberJoined, raftLeaderServiceAddrChan)
+			case serf.EventMemberUpdate:
+				m.handleMemberUpdatedEvent(serfEvent.(serf.MemberEvent), memberUpdated, raftLeaderServiceAddrChan)
 			case serf.EventMemberLeave, serf.EventMemberFailed:
 				m.handleMemberLeaveEvent(serfEvent.(serf.MemberEvent), memberLeft)
 			}
 		case <-m.serf.ShutdownCh():
 			close(memberJoined)
+			close(memberUpdated)
 			close(memberLeft)
 			close(raftLeaderServiceAddrChan)
 			return
@@ -166,6 +175,28 @@ func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined cha
 		if updated {
 			memberJoined <- item.Name
 
+			// see whether this update changed the leader
+			// we drop it into the leader update channel if this is the leader anyways
+			go func() {
+				role, roleOk := item.Tags[serfMDKeyRaftRole]
+				host, hostOk := item.Tags[serfMDKeyHost]
+				raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
+				if roleOk && hostOk && portOk && role == raftRoleLeader {
+					raftLeaderServiceAddrChan <- host + ":" + raftPort
+				}
+			}()
+		}
+	}
+}
+
+func (m *membership) handleMemberUpdatedEvent(me serf.MemberEvent, memberUpdated chan<- string, raftLeaderServiceAddrChan chan<- string) {
+	for _, item := range me.Members {
+		updated := m.membershipState.updateMember(item.Name, item.Tags)
+		if updated {
+			memberUpdated <- item.Name
+
+			// see whether this update changed the leader
+			// we drop it into the leader update channel if this is the leader anyways
 			go func() {
 				role, roleOk := item.Tags[serfMDKeyRaftRole]
 				host, hostOk := item.Tags[serfMDKeyHost]

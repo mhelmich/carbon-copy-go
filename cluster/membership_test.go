@@ -43,7 +43,7 @@ func TestMembershipBasic(t *testing.T) {
 	m1, err := createNewMembership(c1)
 	assert.Nil(t, err)
 	assert.NotNil(t, m1)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
+	assertNumMessages(t, m1.memberJoinedChan, 1)
 
 	memberIds := m1.getAllLongMemberIds()
 	assert.Equal(t, 1, len(memberIds))
@@ -67,8 +67,8 @@ func TestMembershipBasic(t *testing.T) {
 	m2, err := createNewMembership(c2)
 	assert.Nil(t, err)
 	assert.NotNil(t, m2)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
-	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 2)
+	assertNumMessages(t, m1.memberJoinedChan, 1)
+	assertNumMessages(t, m2.memberJoinedChan, 2)
 
 	_, ok := m1.getMemberById(nid1)
 	assert.True(t, ok)
@@ -118,11 +118,11 @@ func TestMembershipMarkAsLeaderInCluster(t *testing.T) {
 	m1, err := createNewMembership(c1)
 	assert.Nil(t, err)
 	assert.NotNil(t, m1)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
+	assertNumMessages(t, m1.memberJoinedChan, 1)
 
 	err = m1.markLeader()
 	assert.Nil(t, err)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
+	assertNumMessages(t, m1.memberUpdatedChan, 1)
 	assert.Equal(t, fmt.Sprintf("%s:%d", hn, c1.RaftServicePort), <-m1.raftLeaderServiceAddrChan)
 	tags, ok := m1.getMemberById(m1.myLongMemberId())
 	assert.True(t, ok)
@@ -149,8 +149,8 @@ func TestMembershipMarkAsLeaderInCluster(t *testing.T) {
 	m2, err := createNewMembership(c2)
 	assert.Nil(t, err)
 	assert.NotNil(t, m2)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
-	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 2)
+	assertNumMessages(t, m1.memberJoinedChan, 1)
+	assertNumMessages(t, m2.memberJoinedChan, 2)
 	assert.Equal(t, fmt.Sprintf("%s:%d", hn, c1.RaftServicePort), <-m2.raftLeaderServiceAddrChan)
 
 	m1.close()
@@ -174,7 +174,7 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	m1, err := createNewMembership(c1)
 	assert.Nil(t, err)
 	assert.NotNil(t, m1)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
+	assertNumMessages(t, m1.memberJoinedChan, 1)
 
 	nid2 := "node222"
 	peers := make([]string, 1)
@@ -193,8 +193,8 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	m2, err := createNewMembership(c2)
 	assert.Nil(t, err)
 	assert.NotNil(t, m2)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
-	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 2)
+	assertNumMessages(t, m1.memberJoinedChan, 1)
+	assertNumMessages(t, m2.memberJoinedChan, 2)
 
 	_, ok := m1.getMemberById(nid1)
 	assert.True(t, ok)
@@ -214,8 +214,8 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	newTags["key1"] = "value1"
 	err = m1.updateMemberTags(newTags)
 	assert.Nil(t, err)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
-	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 1)
+	assertNumMessages(t, m1.memberUpdatedChan, 1)
+	assertNumMessages(t, m2.memberUpdatedChan, 1)
 
 	m, ok := m1.getMemberById(m1.myLongMemberId())
 	assert.True(t, ok)
@@ -229,16 +229,16 @@ func TestMembershipNotificationDedup(t *testing.T) {
 	// see no messages being triggered
 	err = m1.updateMemberTags(newTags)
 	assert.Nil(t, err)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 0)
-	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 0)
+	assertNumMessages(t, m1.memberUpdatedChan, 0)
+	assertNumMessages(t, m2.memberUpdatedChan, 0)
 
 	// update the other member with these tags
 	// see messages being triggered
 	// as these tags are new to this node
 	err = m2.updateMemberTags(newTags)
 	assert.Nil(t, err)
-	assertNumMessages(t, m1.memberJoinedOrUpdatedChan, 1)
-	assertNumMessages(t, m2.memberJoinedOrUpdatedChan, 1)
+	assertNumMessages(t, m1.memberUpdatedChan, 1)
+	assertNumMessages(t, m2.memberUpdatedChan, 1)
 
 	m, ok = m2.getMemberById(m2.myLongMemberId())
 	assert.True(t, ok)

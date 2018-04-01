@@ -74,13 +74,12 @@ import (
 // "github.com/couchbase/moss"
 
 const (
-	nameSeparator             = "/"
-	consensusNamespaceName    = "carbon-grid"
-	consensusNodesRaftCluster = consensusNamespaceName + nameSeparator + "raftCluster"
-	consensusMembersRootName  = consensusNamespaceName + nameSeparator + "members" + nameSeparator
-	consensusLeaderName       = consensusNamespaceName + nameSeparator + "consensus_leader" + nameSeparator
-	consensusVotersName       = consensusNamespaceName + nameSeparator + "consensus_voters" + nameSeparator
-	consensusNonVotersName    = consensusNamespaceName + nameSeparator + "consensus_nonvoters" + nameSeparator
+	nameSeparator            = "/"
+	consensusNamespaceName   = "carbon-grid"
+	consensusMembersRootName = consensusNamespaceName + nameSeparator + "members" + nameSeparator
+	consensusLeaderName      = consensusNamespaceName + nameSeparator + "consensus_leader" + nameSeparator
+	consensusVotersName      = consensusNamespaceName + nameSeparator + "consensus_voters" + nameSeparator
+	consensusNonVotersName   = consensusNamespaceName + nameSeparator + "consensus_nonvoters" + nameSeparator
 )
 
 func defaultClusterConfig(config ClusterConfig) ClusterConfig {
@@ -219,10 +218,10 @@ func (ci *clusterImpl) eventProcessorLoop() {
 					ci.logger.Errorf("Can't unmark myself as leader: %s", err.Error())
 				}
 			}
-		case memberJoinedOrUpdated := <-ci.membership.memberJoinedOrUpdatedChan:
-			if memberJoinedOrUpdated == "" {
-				// the channel was closed and we're done
-				ci.logger.Warnf("Member joined channel is closed stopping event processor loop [%s]", memberJoinedOrUpdated)
+		case memberJoined := <-ci.membership.memberJoinedChan:
+			if memberJoined == "" {
+				// the channel was closed, we're done
+				ci.logger.Warnf("Member joined channel is closed stopping event processor loop [%s]", memberJoined)
 				return
 			}
 
@@ -235,14 +234,22 @@ func (ci *clusterImpl) eventProcessorLoop() {
 			// if I'm NOT the leader, I just discard the message out of the channel
 			if ci.consensusStore.isRaftLeader() {
 				// if we see a new node come up, add it to the raft cluster if necessary
-				err := ci.addNewMemberToRaftCluster(memberJoinedOrUpdated)
+				err := ci.addNewMemberToRaftCluster(memberJoined)
 				if err != nil {
 					ci.logger.Errorf("Can't rebalance cluster: %s", err.Error())
 				}
 			}
+
+		case memberUpdated := <-ci.membership.memberUpdatedChan:
+			if memberUpdated == "" {
+				// the channel was closed, we're done
+				ci.logger.Warnf("Member updated channel is closed stopping event processor loop [%s]", memberUpdated)
+				return
+			}
+
 		case memberLeft := <-ci.membership.memberLeftChan:
 			if memberLeft == "" {
-				// the channel was closed and we're done
+				// the channel was closed, we're done
 				ci.logger.Warnf("Member left channel is closed stopping event processor loop [%s]", memberLeft)
 				return
 			}
