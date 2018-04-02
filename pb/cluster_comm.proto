@@ -81,17 +81,6 @@ message RaftSnapshot {
     map<string, bytes> snap = 1;
 }
 
-message RaftVoterState {
-    map<string, bool> voters = 1;
-    map<string, bool> nonvoters = 2;
-    map<string, bool> nones = 3;
-
-    // This is not the most efficient implementation. But as long as we don't rely
-    // on these updates to ship together through raft, we are free to make this better
-    // as soon as this actually becomes a big problem.
-    map<string, MemberInfo> allNodes = 4;
-}
-
 // This service definition fulfills two different purposes:
 // 1. It provides the ability for every node to join the raft cluster.
 //    It does that by providing the joinRaftCluster RPC.

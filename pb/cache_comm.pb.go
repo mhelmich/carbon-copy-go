@@ -31,7 +31,6 @@ It has these top-level messages:
 	SetCommand
 	DeleteCommand
 	RaftSnapshot
-	RaftVoterState
 	GetReq
 	GetResp
 	SetReq
