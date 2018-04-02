@@ -376,10 +376,12 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 		return err
 	}
 
-	// get me a short member id in addition to the long member id
-	memberInfoProto, err = ci.findShortMemberId(myMemberId, memberInfoProto)
-	if err != nil {
-		return err
+	if memberInfoProto.ShortMemberId <= 0 {
+		// get me a short member id in addition to the long member id
+		memberInfoProto, err = ci.findShortMemberId(myMemberId, memberInfoProto)
+		if err != nil {
+			return err
+		}
 	}
 
 	// get the previous value in case one of the updates fails
@@ -507,7 +509,10 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string) error {
 		return fmt.Errorf("Can't create member info proto: %s", err.Error())
 	}
 
-	memberInfoProto, _ = ci.findShortMemberId(newMemberId, memberInfoProto)
+	if memberInfoProto.ShortMemberId <= 0 {
+		memberInfoProto, _ = ci.findShortMemberId(newMemberId, memberInfoProto)
+	}
+
 	raftAddr := fmt.Sprintf("%s:%d", memberInfoProto.Host, memberInfoProto.RaftPort)
 
 	//
@@ -642,6 +647,17 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 		return nil, err
 	}
 
+	var shortMemberId int
+	shortMemberIdStr, ok := serfInfo[serfMDKeyShortMemberId]
+	if ok {
+		shortMemberId, err = strconv.Atoi(shortMemberIdStr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		shortMemberId = 0
+	}
+
 	return &pb.MemberInfo{
 		Host:            host,
 		LongMemberId:    myMemberId,
@@ -649,6 +665,7 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 		RaftPort:        int32(raftPort),
 		RaftServicePort: int32(raftServicePort),
 		GridPort:        int32(gridPort),
+		ShortMemberId:   int32(shortMemberId),
 	}, nil
 }
 
