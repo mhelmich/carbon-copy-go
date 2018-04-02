@@ -75,7 +75,7 @@ func TestConsensusStoreBasic(t *testing.T) {
 	assert.True(t, created)
 
 	// give it some time to replicate
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	val, err := store2.get(key)
 	assert.Nil(t, err)

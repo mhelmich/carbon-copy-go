@@ -654,13 +654,13 @@ func (ci *clusterImpl) Close() error {
 		ci.logger.Errorf("Error unmarking myself as leader (I'm proceeding anyways though): %s", err.Error())
 	}
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 	err = ci.membership.close()
 	if err != nil {
 		ci.logger.Errorf("Error closing membership store (I'm proceeding anyways though): %s", err.Error())
 	}
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 	ci.raftService.close()
 	err = ci.consensusStore.close()
 	if err != nil {
@@ -671,7 +671,7 @@ func (ci *clusterImpl) Close() error {
 	if err != nil {
 		ci.logger.Errorf("Error closing consensus proxy (I'm proceeding anyways though): %s", err.Error())
 	}
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 	return nil
 }
 

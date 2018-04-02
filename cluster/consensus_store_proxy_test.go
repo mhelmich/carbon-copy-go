@@ -92,7 +92,7 @@ func TestProxyProxy(t *testing.T) {
 	assert.Nil(t, err)
 
 	// allowing raft to settle
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	k := "keykeykey"
 	v := []byte("value_value_value")
@@ -130,7 +130,7 @@ func TestProxyProxyFailover(t *testing.T) {
 	assert.Nil(t, err)
 
 	// allowing raft to settle
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	k := "keykeykey"
 	v := []byte("value_value_value")
