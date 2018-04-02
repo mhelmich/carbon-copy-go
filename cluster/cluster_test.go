@@ -47,12 +47,7 @@ func TestClusterBasic(t *testing.T) {
 	c1, err := createNewCluster(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
-	go func() {
-		ch := c1.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c1.GetGridMemberChangeEvents())
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", hn, 37111)
@@ -73,12 +68,7 @@ func TestClusterBasic(t *testing.T) {
 	c2, err := createNewCluster(cfg2)
 	assert.Nil(t, err)
 	assert.NotNil(t, c2)
-	go func() {
-		ch := c2.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c2.GetGridMemberChangeEvents())
 
 	ids := make(map[int]bool)
 	ids[1] = true
@@ -151,12 +141,7 @@ func TestClusterHouseKeeping(t *testing.T) {
 	// yupp, no grid port set hence the value is 0
 	assert.Equal(t, hn+":0", gridEvent.MemberGridAddress)
 	// eat all other messages in this channel
-	go func() {
-		ch := c1.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c1.GetGridMemberChangeEvents())
 
 	// assert on consensus store state
 	bites, err := c1.consensusStore.get(consensusLeaderName)
@@ -198,12 +183,7 @@ func TestClusterAddNonvoters(t *testing.T) {
 	c1, err := createNewCluster(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
-	go func() {
-		ch := c1.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c1.GetGridMemberChangeEvents())
 
 	time.Sleep(500 * time.Millisecond)
 	peers2 := make([]string, 1)
@@ -225,12 +205,7 @@ func TestClusterAddNonvoters(t *testing.T) {
 	c2, err := createNewCluster(cfg2)
 	assert.Nil(t, err)
 	assert.NotNil(t, c2)
-	go func() {
-		ch := c2.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c2.GetGridMemberChangeEvents())
 
 	time.Sleep(500 * time.Millisecond)
 	peers3 := make([]string, 1)
@@ -252,12 +227,7 @@ func TestClusterAddNonvoters(t *testing.T) {
 	c3, err := createNewCluster(cfg3)
 	assert.Nil(t, err)
 	assert.NotNil(t, c3)
-	go func() {
-		ch := c3.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c3.GetGridMemberChangeEvents())
 
 	time.Sleep(500 * time.Millisecond)
 	peers4 := make([]string, 1)
@@ -279,12 +249,7 @@ func TestClusterAddNonvoters(t *testing.T) {
 	c4, err := createNewCluster(cfg4)
 	assert.Nil(t, err)
 	assert.NotNil(t, c4)
-	go func() {
-		ch := c4.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c4.GetGridMemberChangeEvents())
 
 	time.Sleep(500 * time.Millisecond)
 	peers5 := make([]string, 1)
@@ -306,12 +271,7 @@ func TestClusterAddNonvoters(t *testing.T) {
 	c5, err := createNewCluster(cfg5)
 	assert.Nil(t, err)
 	assert.NotNil(t, c5)
-	go func() {
-		ch := c5.GetGridMemberChangeEvents()
-		for {
-			<-ch
-		}
-	}()
+	consumeChannelEmpty(c5.GetGridMemberChangeEvents())
 
 	time.Sleep(500 * time.Millisecond)
 	kvs, err := c4.consensusStore.getPrefix(consensusVotersName)
@@ -326,4 +286,15 @@ func TestClusterAddNonvoters(t *testing.T) {
 	c3.Close()
 	c4.Close()
 	c5.Close()
+}
+
+func consumeChannelEmpty(ch <-chan *GridMemberConnectionEvent) {
+	go func() {
+		for {
+			i := <-ch
+			if i == nil {
+				return
+			}
+		}
+	}()
 }
