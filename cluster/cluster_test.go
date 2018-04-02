@@ -144,6 +144,12 @@ func TestClusterHouseKeeping(t *testing.T) {
 	c1, err := createNewCluster(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
+	gridEvent := <-c1.GetGridMemberChangeEvents()
+	assert.Equal(t, MemberJoined, gridEvent.Type)
+	assert.Equal(t, 1, gridEvent.ShortMemberId)
+	// yupp, no grid port set hence the value is 0
+	assert.Equal(t, hn+":0", gridEvent.MemberGridAddress)
+	// eat all other messages in this channel
 	go func() {
 		ch := c1.GetGridMemberChangeEvents()
 		for {

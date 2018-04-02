@@ -282,6 +282,25 @@ func (ci *clusterImpl) eventProcessorLoop() {
 				return
 			}
 
+			tags, ok := ci.membership.getMemberById(memberUpdated)
+			if ok {
+				shortMid, shortMidOk := tags[serfMDKeyShortMemberId]
+				host, hostOk := tags[serfMDKeyHost]
+				gridPort, gridPortOk := tags[serfMDKeyGridPort]
+				if shortMidOk && hostOk && gridPortOk {
+					id, err := strconv.Atoi(shortMid)
+					if err != nil {
+						ci.logger.Errorf("Can't convert short id [%s] to int: %s", shortMid, err.Error())
+					} else {
+						ci.gridMemberInfoChan <- &GridMemberConnectionEvent{
+							Type:              MemberJoined,
+							ShortMemberId:     id,
+							MemberGridAddress: host + ":" + gridPort,
+						}
+					}
+				}
+			}
+
 		case memberLeft := <-ci.membership.memberLeftChan:
 			if memberLeft == "" {
 				// the channel was closed, we're done
@@ -304,6 +323,23 @@ func (ci *clusterImpl) eventProcessorLoop() {
 					ci.logger.Errorf("Can't rebalance cluster: %s", err.Error())
 				}
 			}
+
+			tags, ok := ci.membership.getMemberById(memberLeft)
+			if ok {
+				shortMid, shortMidOk := tags[serfMDKeyShortMemberId]
+				if shortMidOk {
+					id, err := strconv.Atoi(shortMid)
+					if err != nil {
+						ci.logger.Errorf("Can't convert short id [%s] to int: %s", shortMid, err.Error())
+					} else {
+						ci.gridMemberInfoChan <- &GridMemberConnectionEvent{
+							Type:          MemberLeft,
+							ShortMemberId: id,
+						}
+					}
+				}
+			}
+
 		}
 	}
 }
