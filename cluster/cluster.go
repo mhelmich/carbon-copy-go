@@ -131,8 +131,11 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 				config.logger.Errorf("Can't acquire short member id: %s", errUnMarshall.Error())
 			}
 
-			shortMemberIdChan <- int(mi.ShortMemberId)
-			close(shortMemberIdChan)
+			shortMemberId := int(mi.ShortMemberId)
+			if shortMemberId > 0 {
+				shortMemberIdChan <- int(mi.ShortMemberId)
+				close(shortMemberIdChan)
+			}
 		}
 	})
 
@@ -160,7 +163,6 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		config:             config,
 		logger:             config.logger,
 		shortMemberId:      -1,
-		shortMemberIdChan:  shortMemberIdChan,
 		gridMemberInfoChan: make(chan *GridMemberConnectionEvent),
 	}
 	go ci.eventProcessorLoop()
@@ -175,6 +177,21 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	// I know this is a little brittle and I don't like partial objects myself
 	// but a shortcut is a shortcut :)
 	ci.consensusStoreProxy = proxy
+
+	// wait for the short member id to become available
+	// after it becomes available (via consensus watcher), set the short id locally,
+	// remove the watcher (to not run that forever), update the new id in membership
+	select {
+	case newShortMemberId := <-shortMemberIdChan:
+		if newShortMemberId > 0 {
+			ci.shortMemberId = newShortMemberId
+			ci.consensusStore.removeWatcher(consensusMembersRootName + ci.config.longMemberId)
+			ci.membership.updateMemberTag(serfMDKeyShortMemberId, strconv.Itoa(ci.shortMemberId))
+		}
+	case <-time.After(3 * time.Second):
+		return nil, fmt.Errorf("Getting short member id timed out!")
+	}
+
 	return ci, nil
 }
 
@@ -207,7 +224,6 @@ type clusterImpl struct {
 	logger              *log.Entry
 	config              ClusterConfig
 	shortMemberId       int
-	shortMemberIdChan   <-chan int
 	gridMemberInfoChan  chan *GridMemberConnectionEvent
 }
 
@@ -445,7 +461,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string) error {
 	if errVoter != nil || errNonvoter != nil {
 		return fmt.Errorf("Error getting voter/nonvoter info: %s %s", errVoter, errNonvoter)
 	} else if bitesVoter != nil || bitesNonvoter != nil {
-		return nil
+		return fmt.Errorf("Voter / Nonvoter status for member [%s] not set yet!?!?", newMemberId)
 	}
 
 	// get the new members info from membership
@@ -615,12 +631,6 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 //      PUBLIC INTERFACE DEFINITIONS
 
 func (ci *clusterImpl) GetMyShortMemberId() int {
-	if ci.shortMemberId <= 0 {
-		ci.shortMemberId = <-ci.shortMemberIdChan
-		ci.consensusStore.removeWatcher(consensusMembersRootName + ci.config.longMemberId)
-		ci.shortMemberIdChan = nil
-	}
-
 	return ci.shortMemberId
 }
 

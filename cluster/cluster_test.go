@@ -46,6 +46,12 @@ func TestClusterBasic(t *testing.T) {
 	c1, err := createNewCluster(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
+	go func() {
+		ch := c1.GetGridMemberChangeEvents()
+		for {
+			<-ch
+		}
+	}()
 
 	peers := make([]string, 1)
 	peers[0] = fmt.Sprintf("%s:%d", hn, 37111)
@@ -66,6 +72,12 @@ func TestClusterBasic(t *testing.T) {
 	c2, err := createNewCluster(cfg2)
 	assert.Nil(t, err)
 	assert.NotNil(t, c2)
+	go func() {
+		ch := c2.GetGridMemberChangeEvents()
+		for {
+			<-ch
+		}
+	}()
 
 	ids := make(map[int]bool)
 	ids[1] = true
@@ -132,6 +144,12 @@ func TestClusterHouseKeeping(t *testing.T) {
 	c1, err := createNewCluster(cfg1)
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
+	go func() {
+		ch := c1.GetGridMemberChangeEvents()
+		for {
+			<-ch
+		}
+	}()
 
 	// assert on consensus store state
 	bites, err := c1.consensusStore.get(consensusLeaderName)

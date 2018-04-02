@@ -177,14 +177,12 @@ func (m *membership) handleMemberJoinEvent(me serf.MemberEvent, memberJoined cha
 
 			// see whether this update changed the leader
 			// we drop it into the leader update channel if this is the leader anyways
-			go func() {
-				role, roleOk := item.Tags[serfMDKeyRaftRole]
-				host, hostOk := item.Tags[serfMDKeyHost]
-				raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
-				if roleOk && hostOk && portOk && role == raftRoleLeader {
-					raftLeaderServiceAddrChan <- host + ":" + raftPort
-				}
-			}()
+			role, roleOk := item.Tags[serfMDKeyRaftRole]
+			host, hostOk := item.Tags[serfMDKeyHost]
+			raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
+			if roleOk && hostOk && portOk && role == raftRoleLeader {
+				raftLeaderServiceAddrChan <- host + ":" + raftPort
+			}
 		}
 	}
 }
@@ -197,14 +195,12 @@ func (m *membership) handleMemberUpdatedEvent(me serf.MemberEvent, memberUpdated
 
 			// see whether this update changed the leader
 			// we drop it into the leader update channel if this is the leader anyways
-			go func() {
-				role, roleOk := item.Tags[serfMDKeyRaftRole]
-				host, hostOk := item.Tags[serfMDKeyHost]
-				raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
-				if roleOk && hostOk && portOk && role == raftRoleLeader {
-					raftLeaderServiceAddrChan <- host + ":" + raftPort
-				}
-			}()
+			role, roleOk := item.Tags[serfMDKeyRaftRole]
+			host, hostOk := item.Tags[serfMDKeyHost]
+			raftPort, portOk := item.Tags[serfMDKeyRaftServicePort]
+			if roleOk && hostOk && portOk && role == raftRoleLeader {
+				raftLeaderServiceAddrChan <- host + ":" + raftPort
+			}
 		}
 	}
 }
@@ -232,6 +228,15 @@ func (m *membership) unmarkLeader() error {
 	newTags := make(map[string]string)
 	newTags[serfMDKeyRaftRole] = ""
 	return m.updateMemberTags(newTags)
+}
+
+func (m *membership) updateMemberTag(newTagKey string, newTagValue string) error {
+	tags, ok := m.getMemberById(m.myLongMemberId())
+	if ok {
+		tags[newTagKey] = newTagValue
+	}
+	// this update will be processed via the regular membership event processing
+	return m.serf.SetTags(tags)
 }
 
 func (m *membership) updateMemberTags(newTags map[string]string) error {
