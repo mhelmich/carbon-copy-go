@@ -279,6 +279,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 			if memberUpdated == "" {
 				// the channel was closed, we're done
 				ci.logger.Warn("Member updated channel is closed stopping event processor loop")
+				close(ci.gridMemberInfoChan)
 				return
 			}
 
@@ -305,6 +306,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 			if memberLeft == "" {
 				// the channel was closed, we're done
 				ci.logger.Warn("Member left channel is closed stopping event processor loop")
+				close(ci.gridMemberInfoChan)
 				return
 			}
 
@@ -324,22 +326,16 @@ func (ci *clusterImpl) eventProcessorLoop() {
 				}
 			}
 
-			tags, ok := ci.membership.getMemberById(memberLeft)
-			if ok {
-				shortMid, shortMidOk := tags[serfMDKeyShortMemberId]
-				if shortMidOk {
-					id, err := strconv.Atoi(shortMid)
-					if err != nil {
-						ci.logger.Errorf("Can't convert short id [%s] to int: %s", shortMid, err.Error())
-					} else {
-						ci.gridMemberInfoChan <- &GridMemberConnectionEvent{
-							Type:          MemberLeft,
-							ShortMemberId: id,
-						}
-					}
+			mi, err := ci.getMemberInfoFromConsensusStore(memberLeft)
+			if err != nil {
+				ci.logger.Errorf("Can't get consensus info for node [%s]: %s", memberLeft, err.Error())
+			} else {
+				// drop the member leave into the channel
+				ci.gridMemberInfoChan <- &GridMemberConnectionEvent{
+					Type:          MemberLeft,
+					ShortMemberId: int(mi.ShortMemberId),
 				}
 			}
-
 		}
 	}
 }
@@ -468,22 +464,22 @@ func (ci *clusterImpl) ensureConsensusStoreVoters() error {
 
 		// recruit more nodes to be voters
 		for _, kv := range kvs {
-			// get the member info from the membership store
-			info, ok := ci.membership.getMemberById(kv.k)
-			if ok {
-				raftAddr := info[serfMDKeyHost] + ":" + info[serfMDKeyRaftPort]
-				err := ci.consensusStore.addVoter(kv.k, raftAddr)
-				if err == nil {
-					// seems to succesfully added a voter
-					// we can decrease the number of voters we want to add
-					numVotersIWant--
-					if numVotersIWant <= 0 {
-						// we're done !!!
-						return nil
-					}
+			mi := &pb.MemberInfo{}
+			err := proto.Unmarshal(kv.v, mi)
+			if err != nil {
+				ci.logger.Infof("Can't unmarshal member info: %s", err.Error())
+			}
+
+			raftAddr := fmt.Sprintf("%s:%d", mi.Host, mi.RaftPort)
+			err = ci.consensusStore.addVoter(kv.k, raftAddr)
+			if err == nil {
+				// seems to succesfully added a voter
+				// we can decrease the number of voters we want to add
+				numVotersIWant--
+				if numVotersIWant <= 0 {
+					// we're done !!!
+					return nil
 				}
-			} else {
-				ci.logger.Infof("Member with id %s exists in consensus store but not in membership store", kv.k)
 			}
 		}
 	}
