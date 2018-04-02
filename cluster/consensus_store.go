@@ -132,9 +132,9 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 	}
 
 	fsm := &fsm{
-		logger: config.logger,
-		state:  make(map[string][]byte),
-		mutex:  sync.RWMutex{},
+		logger:     config.logger,
+		state:      make(map[string][]byte),
+		stateMutex: sync.RWMutex{},
 	}
 
 	// instantiate the Raft systems
@@ -191,14 +191,14 @@ func (cs *consensusStoreImpl) consistentGet(key string) ([]byte, error) {
 }
 
 func (cs *consensusStoreImpl) get(key string) ([]byte, error) {
-	cs.raftFsm.mutex.RLock()
-	defer cs.raftFsm.mutex.RUnlock()
+	cs.raftFsm.stateMutex.RLock()
+	defer cs.raftFsm.stateMutex.RUnlock()
 	// this might be a stale read :/
 	return cs.raftFsm.state[key], nil
 }
 
 func (cs *consensusStoreImpl) getPrefix(prefix string) ([]*kv, error) {
-	cs.raftFsm.mutex.RLock()
+	cs.raftFsm.stateMutex.RLock()
 	kvs := make([]*kv, 0)
 	for k, v := range cs.raftFsm.state {
 		if strings.HasPrefix(k, prefix) {
@@ -208,7 +208,7 @@ func (cs *consensusStoreImpl) getPrefix(prefix string) ([]*kv, error) {
 			})
 		}
 	}
-	cs.raftFsm.mutex.RUnlock()
+	cs.raftFsm.stateMutex.RUnlock()
 	return kvs, nil
 }
 

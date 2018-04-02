@@ -119,6 +119,23 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		return nil, err
 	}
 
+	// this channel is used only once at startup
+	// the method GetMyShortMemberId() will block on it
+	// until the underlying watcher fires
+	shortMemberIdChan := make(chan int)
+	cs.addWatcher(consensusMembersRootName+config.longMemberId, func(key string, value []byte) {
+		if key == consensusMembersRootName+config.longMemberId {
+			mi := &pb.MemberInfo{}
+			errUnMarshall := proto.Unmarshal(value, mi)
+			if errUnMarshall != nil {
+				config.logger.Errorf("Can't acquire short member id: %s", errUnMarshall.Error())
+			}
+
+			shortMemberIdChan <- int(mi.ShortMemberId)
+			close(shortMemberIdChan)
+		}
+	})
+
 	// then we need membership to announce our presence to others (or not)
 	m, err := createNewMembership(config)
 	if err != nil {
@@ -143,6 +160,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 		config:             config,
 		logger:             config.logger,
 		shortMemberId:      -1,
+		shortMemberIdChan:  shortMemberIdChan,
 		gridMemberInfoChan: make(chan *GridMemberConnectionEvent),
 	}
 	go ci.eventProcessorLoop()
@@ -189,6 +207,7 @@ type clusterImpl struct {
 	logger              *log.Entry
 	config              ClusterConfig
 	shortMemberId       int
+	shortMemberIdChan   <-chan int
 	gridMemberInfoChan  chan *GridMemberConnectionEvent
 }
 
@@ -221,7 +240,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		case memberJoined := <-ci.membership.memberJoinedChan:
 			if memberJoined == "" {
 				// the channel was closed, we're done
-				ci.logger.Warnf("Member joined channel is closed stopping event processor loop [%s]", memberJoined)
+				ci.logger.Warn("Member joined channel is closed stopping event processor loop")
 				return
 			}
 
@@ -243,14 +262,14 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		case memberUpdated := <-ci.membership.memberUpdatedChan:
 			if memberUpdated == "" {
 				// the channel was closed, we're done
-				ci.logger.Warnf("Member updated channel is closed stopping event processor loop [%s]", memberUpdated)
+				ci.logger.Warn("Member updated channel is closed stopping event processor loop")
 				return
 			}
 
 		case memberLeft := <-ci.membership.memberLeftChan:
 			if memberLeft == "" {
 				// the channel was closed, we're done
-				ci.logger.Warnf("Member left channel is closed stopping event processor loop [%s]", memberLeft)
+				ci.logger.Warn("Member left channel is closed stopping event processor loop")
 				return
 			}
 
@@ -272,6 +291,11 @@ func (ci *clusterImpl) eventProcessorLoop() {
 		}
 	}
 }
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////
+///////////////////////////////////////////
+//         EXECUTED AS RAFT LEADER
 
 func (ci *clusterImpl) newLeaderHouseKeeping() error {
 	if !ci.consensusStore.isRaftLeader() {
@@ -419,7 +443,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string) error {
 	bitesVoter, errVoter := ci.consensusStore.get(consensusVotersName + newMemberId)
 	bitesNonvoter, errNonvoter := ci.consensusStore.get(consensusNonVotersName + newMemberId)
 	if errVoter != nil || errNonvoter != nil {
-		return nil
+		return fmt.Errorf("Error getting voter/nonvoter info: %s %s", errVoter, errNonvoter)
 	} else if bitesVoter != nil || bitesNonvoter != nil {
 		return nil
 	}
@@ -427,14 +451,12 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string) error {
 	// get the new members info from membership
 	info, infoOk := ci.membership.getMemberById(newMemberId)
 	if !infoOk {
-		ci.logger.Errorf("Member info for member %s is not present!?!?!?", newMemberId)
-		return nil
+		return fmt.Errorf("Member info for member %s is not present!?!?!?", newMemberId)
 	}
 
 	memberInfoProto, err := ci.convertNodeInfoFromSerfToRaft(newMemberId, info)
 	if err != nil {
-		ci.logger.Errorf("Can't create member info proto: %s", err.Error())
-		return err
+		return fmt.Errorf("Can't create member info proto: %s", err.Error())
 	}
 
 	memberInfoProto, _ = ci.findShortMemberId(newMemberId, memberInfoProto)
@@ -582,37 +604,21 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 	}, nil
 }
 
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////
+///////////////////////////////////////////
+//         EXECUTED AS RAFT LEADER
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////
+///////////////////////////////////////////
+//      PUBLIC INTERFACE DEFINITIONS
+
 func (ci *clusterImpl) GetMyShortMemberId() int {
 	if ci.shortMemberId <= 0 {
-		ok := false
-		var memberInfo *pb.MemberInfo
-		retries := 4
-		for i := 1; i < retries && !ok; i++ {
-			bites, err := ci.consensusStore.get(consensusMembersRootName + ci.config.longMemberId)
-			if err != nil {
-				// this also shouldn't happen unless the leader is down
-				ci.logger.Errorf("Can't get cluster state: %s", err.Error())
-				time.Sleep(time.Duration(i) * time.Second)
-			} else if bites == nil {
-				// this can happen on any follower when the leader made the change
-				// but the change is slow to replicate
-				ci.logger.Warnf("Cluster state doesn't exist yet. Sleeping %d seconds and trying %d times more...", i, retries-i)
-				time.Sleep(time.Duration(i) * time.Second)
-			} else {
-				memberInfo = &pb.MemberInfo{}
-				err = proto.Unmarshal(bites, memberInfo)
-				if err != nil {
-					// this should never happen
-					ci.logger.Errorf("Can't get cluster state: %s", err.Error())
-					time.Sleep(time.Duration(i) * time.Second)
-				}
-				ok = true
-			}
-		}
-
-		if ok {
-			ci.shortMemberId = int(memberInfo.ShortMemberId)
-		}
+		ci.shortMemberId = <-ci.shortMemberIdChan
+		ci.consensusStore.removeWatcher(consensusMembersRootName + ci.config.longMemberId)
+		ci.shortMemberIdChan = nil
 	}
 
 	return ci.shortMemberId

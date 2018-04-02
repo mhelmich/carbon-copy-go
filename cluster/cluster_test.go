@@ -78,6 +78,36 @@ func TestClusterBasic(t *testing.T) {
 	delete(ids, c2.GetMyShortMemberId())
 	assert.Equal(t, 0, len(ids))
 
+	// assert on cluster state
+	// I'm constantly asking c2 during this series of assertions
+	// see who the leader is - should be c1
+	bites, err := c2.consensusStore.get(consensusLeaderName)
+	assert.Nil(t, err)
+	assert.Equal(t, cfg1.longMemberId, string(bites))
+	// get member info of c1 - assert on short id
+	bites, err = c2.consensusStore.get(consensusMembersRootName + cfg1.longMemberId)
+	assert.Nil(t, err)
+	assert.NotNil(t, bites)
+	memberInfo := &pb.MemberInfo{}
+	err = proto.Unmarshal(bites, memberInfo)
+	assert.Nil(t, err)
+	assert.Equal(t, cfg1.longMemberId, memberInfo.LongMemberId)
+	assert.Equal(t, 1, int(memberInfo.ShortMemberId))
+	// get member info of c2 - assert on short id
+	bites, err = c2.consensusStore.get(consensusMembersRootName + cfg2.longMemberId)
+	assert.Nil(t, err)
+	assert.NotNil(t, bites)
+	memberInfo = &pb.MemberInfo{}
+	err = proto.Unmarshal(bites, memberInfo)
+	assert.Nil(t, err)
+	assert.Equal(t, cfg2.longMemberId, memberInfo.LongMemberId)
+	assert.Equal(t, 2, int(memberInfo.ShortMemberId))
+	// assert both have been added as raft voters
+	kvs, err := c2.consensusStore.getPrefix(consensusVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(kvs))
+	assert.NotNil(t, bites)
+
 	assert.Nil(t, c1.Close())
 	assert.Nil(t, c2.Close())
 }
@@ -103,6 +133,7 @@ func TestClusterHouseKeeping(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c1)
 
+	// assert on consensus store state
 	bites, err := c1.consensusStore.get(consensusLeaderName)
 	assert.Nil(t, err)
 	assert.Equal(t, cfg1.longMemberId, string(bites))

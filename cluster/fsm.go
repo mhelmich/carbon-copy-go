@@ -43,7 +43,7 @@ type raftApplyResponse struct {
 // the state machine implementation
 type fsm struct {
 	state        map[string][]byte
-	mutex        sync.RWMutex
+	stateMutex   sync.RWMutex
 	logger       *log.Entry
 	watcherMutex sync.RWMutex
 	watchers     map[string]func(string, []byte)
@@ -75,8 +75,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 
 // Snapshot returns a snapshot of the key-value store.
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
+	f.stateMutex.Lock()
+	defer f.stateMutex.Unlock()
 	// copy the entire map
 	o := make(map[string][]byte)
 	for k, v := range f.state {
@@ -105,9 +105,9 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 }
 
 func (f *fsm) applyConsistentGet(key string) interface{} {
-	f.mutex.RLock()
+	f.stateMutex.RLock()
 	buf, ok := f.state[key]
-	f.mutex.RUnlock()
+	f.stateMutex.RUnlock()
 
 	if !ok {
 		return &raftApplyResponse{
@@ -123,20 +123,22 @@ func (f *fsm) applyConsistentGet(key string) interface{} {
 }
 
 func (f *fsm) applySet(key string, value []byte) interface{} {
-	f.mutex.Lock()
+	f.stateMutex.Lock()
 	_, ok := f.state[key]
 	f.state[key] = value
-	f.mutex.Unlock()
+	f.stateMutex.Unlock()
 
 	// meh, this is consistent enough
 	// I don't want to block the apply mutex too long
 	// and I don't want to put in the work to improve locking now
 	if f.watchers != nil {
+		f.watcherMutex.RLock()
 		for prefix, fn := range f.watchers {
 			if strings.HasPrefix(key, prefix) {
 				go fn(key, value)
 			}
 		}
+		f.watcherMutex.RUnlock()
 	}
 
 	// this byte has a "created" semantic
@@ -160,20 +162,22 @@ func (f *fsm) applySet(key string, value []byte) interface{} {
 // if the byte is zero it indicates false
 // (as in there key didn't exist and couldn't be deleted)
 func (f *fsm) applyDelete(key string) interface{} {
-	f.mutex.Lock()
+	f.stateMutex.Lock()
 	_, ok := f.state[key]
 	delete(f.state, key)
-	f.mutex.Unlock()
+	f.stateMutex.Unlock()
 
 	// meh, this is consistent enough
 	// I don't want to block the apply mutex too long
 	// and I don't want to put in the work to improve locking now
 	if f.watchers != nil {
+		f.watcherMutex.RLock()
 		for prefix, fn := range f.watchers {
 			if strings.HasPrefix(key, prefix) {
 				go fn(key, nil)
 			}
 		}
+		f.watcherMutex.RUnlock()
 	}
 
 	b := make([]byte, 1)
@@ -191,14 +195,18 @@ func (f *fsm) applyDelete(key string) interface{} {
 }
 
 func (f *fsm) addWatcher(prefix string, fn func(string, []byte)) {
+	f.watcherMutex.Lock()
 	if f.watchers == nil {
 		f.watchers = make(map[string]func(string, []byte))
 	}
 	f.watchers[prefix] = fn
+	f.watcherMutex.Unlock()
 }
 
 func (f *fsm) removeWatcher(prefix string) {
+	f.watcherMutex.Lock()
 	delete(f.watchers, prefix)
+	f.watcherMutex.Unlock()
 }
 
 type fsmSnapshot struct {
