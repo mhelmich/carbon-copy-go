@@ -282,7 +282,18 @@ func TestClusterAddNonvoters(t *testing.T) {
 	assert.Equal(t, 2, len(kvs))
 
 	c1.Close()
+	time.Sleep(1000 * time.Millisecond)
 	c2.Close()
+	time.Sleep(1000 * time.Millisecond)
+
+	time.Sleep(1000 * time.Millisecond)
+	kvs, err = c4.consensusStore.getPrefix(consensusVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 3, len(kvs))
+	kvs, err = c3.consensusStore.getPrefix(consensusNonVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(kvs))
+
 	c3.Close()
 	c4.Close()
 	c5.Close()
