@@ -319,7 +319,7 @@ func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string)
 		return err
 	}
 
-	cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
+	cs.logger.Infof("Added (%s - %s) as raft nonvoter", serverId, serverAddress)
 	return nil
 }
 
@@ -351,6 +351,24 @@ func (cs *consensusStoreImpl) removeVoter(serverId string, serverAddress string)
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
 	return cs.removeMember(raftId, raftAddr)
+}
+
+func (cs *consensusStoreImpl) getVoters() (map[string]string, error) {
+	f := cs.raft.GetConfiguration()
+	err := f.Error()
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]string)
+	cfg := f.Configuration()
+	for _, svr := range cfg.Servers {
+		if svr.Suffrage == raft.Voter {
+			res[string(svr.ID)] = string(svr.Address)
+		}
+	}
+
+	return res, nil
 }
 
 func (cs *consensusStoreImpl) addWatcher(prefix string, fn func(string, []byte)) {

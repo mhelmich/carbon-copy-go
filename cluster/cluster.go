@@ -23,6 +23,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -363,6 +364,29 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 		}
 	}
 
+	// set myself to be leader
+	err = ci.constructLeaderMemberInfoInConsensus()
+	if err != nil {
+		return err
+	}
+
+	// take my view of the world (from membership) and apply it to consensus
+	err = ci.rebuildConsensusStateFromMembershipState()
+	if err != nil {
+		return err
+	}
+
+	// align raft voter state
+	err = ci.alignConsensusVoterState()
+	if err != nil {
+		return err
+	}
+
+	// make sure we have enough voters in the voter pool
+	return ci.ensureConsensusStoreVoters()
+}
+
+func (ci *clusterImpl) constructLeaderMemberInfoInConsensus() error {
 	myMemberId := ci.membership.myLongMemberId()
 	// get my member info out of the membership store
 	info, ok := ci.membership.getMemberById(myMemberId)
@@ -412,9 +436,81 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 
 	// delete myself out of
 	ci.consensusStore.delete(consensusNonVotersName + myMemberId)
+	return nil
+}
 
-	// make sure we have enough voters in the voter pool
-	err = ci.ensureConsensusStoreVoters()
+func (ci *clusterImpl) rebuildConsensusStateFromMembershipState() error {
+	myMemberId := ci.membership.myLongMemberId()
+	allLongMemberIds := ci.membership.getAllLongMemberIds()
+	for _, longMemberId := range allLongMemberIds {
+		if longMemberId != myMemberId {
+			info, ok := ci.membership.getMemberById(longMemberId)
+			if !ok {
+				ci.logger.Errorf("Can't find metadata for member [%s]?", longMemberId)
+			}
+
+			// convert to proto
+			memberInfoProto, err := ci.convertNodeInfoFromSerfToRaft(longMemberId, info)
+			if err != nil {
+				ci.logger.Errorf("Can't convert membership state of consensus state: %s", err.Error())
+			}
+
+			if memberInfoProto.ShortMemberId <= 0 {
+				// get me a short member id in addition to the long member id
+				memberInfoProto, err = ci.findShortMemberId(longMemberId, memberInfoProto)
+				if err != nil {
+					ci.logger.Errorf("Can't assign short member id: %s", err.Error())
+				}
+			}
+
+			err = ci.setMemberInfoInConsensusStore(longMemberId, memberInfoProto)
+			if err != nil {
+				ci.logger.Errorf("Can't set member info in consensus: %s", err.Error())
+			}
+
+			if memberInfoProto.RaftState == pb.RaftState_Voter {
+				_, err = ci.consensusStore.set(consensusVotersName+longMemberId, make([]byte, 0))
+				if err != nil {
+					ci.logger.Errorf("Can't set voter state in consensus: %s", err.Error())
+				}
+			} else if memberInfoProto.RaftState == pb.RaftState_Nonvoter {
+				_, err = ci.consensusStore.set(consensusNonVotersName+longMemberId, make([]byte, 0))
+				if err != nil {
+					ci.logger.Errorf("Can't set nonvoter state in consensus: %s", err.Error())
+				}
+			}
+
+			ci.logger.Infof("Reconciled %s", longMemberId)
+		}
+	}
+	return nil
+}
+
+func (ci *clusterImpl) alignConsensusVoterState() error {
+	consensusVoters, err := ci.consensusStore.getVoters()
+	if err != nil {
+		return err
+	}
+
+	kvs, err := ci.consensusStore.getPrefix(consensusVotersName)
+	if err != nil {
+		return err
+	}
+
+	// delete all the ones that I know about
+	for _, kv := range kvs {
+		id := strings.Replace(kv.k, consensusVotersName, "", 1)
+		delete(consensusVoters, id)
+	}
+
+	// all consensus voters left can be removed
+	for id, addr := range consensusVoters {
+		err := ci.consensusStore.removeVoter(id, addr)
+		if err != nil {
+			ci.logger.Errorf("Can't remove voter: %s", err.Error())
+		}
+		ci.logger.Infof("Removed non-existing voter: %s %s", id, addr)
+	}
 
 	return nil
 }
@@ -466,21 +562,23 @@ func (ci *clusterImpl) ensureConsensusStoreVoters() error {
 
 		// recruit more nodes to be voters
 		for _, kv := range kvs {
-			mi := &pb.MemberInfo{}
-			err := proto.Unmarshal(kv.v, mi)
-			if err != nil {
-				ci.logger.Infof("Can't unmarshal member info: %s", err.Error())
-			}
+			if kv.v != nil && len(kv.v) > 0 {
+				mi := &pb.MemberInfo{}
+				err := proto.Unmarshal(kv.v, mi)
+				if err != nil {
+					ci.logger.Infof("Can't unmarshal member info: %s", err.Error())
+				}
 
-			raftAddr := fmt.Sprintf("%s:%d", mi.Host, mi.RaftPort)
-			err = ci.consensusStore.addVoter(kv.k, raftAddr)
-			if err == nil {
-				// seems to succesfully added a voter
-				// we can decrease the number of voters we want to add
-				numVotersIWant--
-				if numVotersIWant <= 0 {
-					// we're done !!!
-					return nil
+				raftAddr := fmt.Sprintf("%s:%d", mi.Host, mi.RaftPort)
+				err = ci.consensusStore.addVoter(mi.LongMemberId, raftAddr)
+				if err == nil {
+					// seems to succesfully added a voter
+					// we can decrease the number of voters we want to add
+					numVotersIWant--
+					if numVotersIWant <= 0 {
+						// we're done !!!
+						return nil
+					}
 				}
 			}
 		}
