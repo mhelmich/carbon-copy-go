@@ -112,7 +112,7 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 		}
 
 		// create the log store and stable store
-		if err := os.MkdirAll(config.RaftStoreDir, 0755); err != nil {
+		if err = os.MkdirAll(config.RaftStoreDir, 0755); err != nil {
 			return nil, nil, fmt.Errorf("couldn't create dirs: %s", err)
 		}
 		// create a durable bolt store
@@ -287,7 +287,7 @@ func (cs *consensusStoreImpl) addVoter(serverId string, serverAddress string) er
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
 
-	err := cs.removeMember(raftId, raftAddr)
+	err := cs.deleteMember(raftId, raftAddr)
 	if err != nil {
 		return err
 	}
@@ -307,7 +307,7 @@ func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string)
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
 
-	err := cs.removeMember(raftId, raftAddr)
+	err := cs.deleteMember(raftId, raftAddr)
 	if err != nil {
 		return err
 	}
@@ -319,11 +319,11 @@ func (cs *consensusStoreImpl) addNonvoter(serverId string, serverAddress string)
 		return err
 	}
 
-	cs.logger.Infof("Added (%s - %s) as raft voter", serverId, serverAddress)
+	cs.logger.Infof("Added (%s - %s) as raft nonvoter", serverId, serverAddress)
 	return nil
 }
 
-func (cs *consensusStoreImpl) removeMember(id raft.ServerID, addr raft.ServerAddress) error {
+func (cs *consensusStoreImpl) deleteMember(id raft.ServerID, addr raft.ServerAddress) error {
 	configFuture := cs.raft.GetConfiguration()
 	err := configFuture.Error()
 	if err != nil {
@@ -332,7 +332,7 @@ func (cs *consensusStoreImpl) removeMember(id raft.ServerID, addr raft.ServerAdd
 
 	for _, server := range configFuture.Configuration().Servers {
 		if server.Address == addr {
-			cs.logger.Infof("The new server has an address that exists already. Removing it out of the current config before adding it afresh. (%v - %v)", id, addr)
+			cs.logger.Infof("Removing member out of consensus cluster: (%v - %v)", id, addr)
 			future := cs.raft.RemoveServer(server.ID, 0, 0)
 			err = future.Error()
 			if err != nil {
@@ -347,10 +347,28 @@ func (cs *consensusStoreImpl) removeMember(id raft.ServerID, addr raft.ServerAdd
 	return nil
 }
 
-func (cs *consensusStoreImpl) removeVoter(serverId string, serverAddress string) error {
+func (cs *consensusStoreImpl) removeMember(serverId string, serverAddress string) error {
 	raftId := raft.ServerID(serverId)
 	raftAddr := raft.ServerAddress(serverAddress)
-	return cs.removeMember(raftId, raftAddr)
+	return cs.deleteMember(raftId, raftAddr)
+}
+
+func (cs *consensusStoreImpl) getVoters() (map[string]string, error) {
+	f := cs.raft.GetConfiguration()
+	err := f.Error()
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]string)
+	cfg := f.Configuration()
+	for _, svr := range cfg.Servers {
+		if svr.Suffrage == raft.Voter {
+			res[string(svr.ID)] = string(svr.Address)
+		}
+	}
+
+	return res, nil
 }
 
 func (cs *consensusStoreImpl) addWatcher(prefix string, fn func(string, []byte)) {

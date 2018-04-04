@@ -53,6 +53,7 @@ Both forms include all information necessary to manage the cluster, the membersh
   * raft_service_port: the port on which the raft service for this node operates
   * raft_role: leader, voter, nonvoter - the role a particular node has in the raft cluster
   * grid_port: the address on which the grid messages are being exchanged
+  * short_member_id: the unique integer member id a member is assigned
 
 The data layout in both the membership and consensus store has a key-value format. The majority of data in membership is available as map[string]string. While information in consensus is a loose collection of keys and associated values. The keys however follow conventions that make deriving these keys possible. All naming conventions are defined in cluster.go as constants. Keep in mind that even though these keys read like directories, they are not! The data layout for consensus looks as follows:
 * individual keys for each member in the cluster of the form "carbon-grid/members/<long member id>"

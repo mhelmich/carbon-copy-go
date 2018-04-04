@@ -67,6 +67,7 @@ import (
 // raft_service_port: the port on which the raft service for this node operates
 // raft_role: leader, voter, nonvoter - the role a particular node has in the raft cluster
 // grid_port: the port on which the grid messages are being exchanged
+// short_member_id: the unique integer member id a member is assigned
 //
 // I could toy around with this one day
 // "github.com/araddon/qlbridge"
@@ -243,6 +244,7 @@ func (ci *clusterImpl) eventProcessorLoop() {
 				//    * take the serf state as I see it
 				//    * drop it into raft and keep collecting the state from serf events
 				// 3. put yourself into the driver seat as leader
+				// 4. need to modify raft voter state to remove failed voters
 				if err := ci.newLeaderHouseKeeping(); err != nil {
 					ci.logger.Errorf("Can't do my housekeeping: %s", err.Error())
 				}
@@ -350,6 +352,18 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 		return fmt.Errorf("Not leader!!")
 	}
 
+	// coming in here this member was elected new consensus leader
+	// this can happen after one of two scenarios:
+	// 1. start of a brand new cluster
+	// 2. when the consensus leader failed over
+	// while the first use case is not too interesting (because nothing much needs to be done),
+	// in the failover scenario is interesting because of (potentially) conflicting state
+	// membership and consensus only have a consistent view from the leaders viewpoint
+	// after a failover, the new leader inherits a consensus state from a different member
+	// but its local membership store might show a different state (as in member this new leader doesn't know about at all)
+
+	ci.logger.Info("Change in consensus leadership detected! I'm the new leader now.")
+
 	// update my serf status
 	// a bit hacky but gets the job done
 	err := fmt.Errorf("No real error")
@@ -363,6 +377,32 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 		}
 	}
 
+	// set myself to be leader
+	err = ci.constructLeaderMemberInfoInConsensus()
+	if err != nil {
+		return err
+	}
+
+	// take my view of the world (from membership) and apply it to consensus
+	ci.logger.Info("Updating my membership status to be the consensus view of the world.")
+	err = ci.rebuildConsensusStateFromMembershipState()
+	if err != nil {
+		return err
+	}
+
+	// align raft voter state
+	ci.logger.Info("Cleaning out consensus voter state.")
+	err = ci.alignConsensusVoterState()
+	if err != nil {
+		return err
+	}
+
+	// make sure we have enough voters in the voter pool
+	ci.logger.Info("Rebalancing consensus cluster.")
+	return ci.ensureConsensusStoreVoters()
+}
+
+func (ci *clusterImpl) constructLeaderMemberInfoInConsensus() error {
 	myMemberId := ci.membership.myLongMemberId()
 	// get my member info out of the membership store
 	info, ok := ci.membership.getMemberById(myMemberId)
@@ -371,7 +411,7 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 	}
 
 	// convert to proto
-	memberInfoProto, err := ci.convertNodeInfoFromSerfToRaft(myMemberId, info)
+	memberInfoProto, err := ci.convertNodeInfoFromMembershipToConsensus(myMemberId, info)
 	if err != nil {
 		return err
 	}
@@ -412,9 +452,108 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 
 	// delete myself out of
 	ci.consensusStore.delete(consensusNonVotersName + myMemberId)
+	return nil
+}
 
-	// make sure we have enough voters in the voter pool
-	err = ci.ensureConsensusStoreVoters()
+// this method merges the membership state of the leader with
+// the cluster-wide consensus state
+// for this code to run the consensus leader must have died
+// the merge works as follows:
+// * get both the membership state and the consensus state and diff them
+// *** a member exists in consensus but not in membership
+// *** =-> delete out of consensus and the raft internal voter/nonvoter state
+// ***     it's obviously majorly uncool if this member happens to be a voter
+// ***     this would expose us to a complete loss of consensus data if we keep
+// ***     keep removing all voters and then the new leader fails
+// ***     beware: there's a race between serf membership handlers and this code
+// *** a member exists in membership but not in consensus
+// *** =-> add the member to consensus
+// ***     beware: there's a race between serf membership handlers and this code
+func (ci *clusterImpl) rebuildConsensusStateFromMembershipState() error {
+	myMemberId := ci.membership.myLongMemberId()
+	// get all member ids I know about
+	membershipIds := ci.membership.getAllLongMemberIds()
+	// get all members that consensus knows about
+	// kvs, err := ci.consensusStore.getPrefix(consensusMembersRootName)
+	// if err != nil {
+	// 	return err
+	// }
+
+	for _, longMemberId := range membershipIds {
+		if longMemberId != myMemberId {
+			info, ok := ci.membership.getMemberById(longMemberId)
+			if !ok {
+				ci.logger.Errorf("Can't find metadata for member [%s]?", longMemberId)
+			}
+
+			// convert to proto
+			memberInfoProto, err := ci.convertNodeInfoFromMembershipToConsensus(longMemberId, info)
+			if err != nil {
+				ci.logger.Errorf("Can't convert membership state of consensus state: %s", err.Error())
+			}
+
+			if memberInfoProto.ShortMemberId <= 0 {
+				// get me a short member id in addition to the long member id
+				memberInfoProto, err = ci.findShortMemberId(longMemberId, memberInfoProto)
+				if err != nil {
+					ci.logger.Errorf("Can't assign short member id: %s", err.Error())
+				}
+			}
+
+			ci.logger.Infof("Adding member [%s] to consensus store: %s", longMemberId, memberInfoProto.String())
+			err = ci.setMemberInfoInConsensusStore(longMemberId, memberInfoProto)
+			if err != nil {
+				ci.logger.Errorf("Can't set member info in consensus: %s", err.Error())
+			}
+
+			if memberInfoProto.RaftState == pb.RaftState_Voter {
+				_, err = ci.consensusStore.set(consensusVotersName+longMemberId, make([]byte, 0))
+				if err != nil {
+					ci.logger.Errorf("Can't set voter state in consensus: %s", err.Error())
+				}
+			} else if memberInfoProto.RaftState == pb.RaftState_Nonvoter {
+				_, err = ci.consensusStore.set(consensusNonVotersName+longMemberId, make([]byte, 0))
+				if err != nil {
+					ci.logger.Errorf("Can't set nonvoter state in consensus: %s", err.Error())
+				}
+			}
+			// else if is leader: then it should be set already
+
+			ci.logger.Infof("Reconciled %s", longMemberId)
+		}
+	}
+
+	return nil
+}
+
+// removes all members the leader doesn't know about from
+// the consensus voter or nonvoter state
+func (ci *clusterImpl) alignConsensusVoterState() error {
+	consensusVoters, err := ci.consensusStore.getVoters()
+	if err != nil {
+		return err
+	}
+
+	kvs, err := ci.consensusStore.getPrefix(consensusVotersName)
+	if err != nil {
+		return err
+	}
+
+	// delete all the ones that I know about
+	for _, kv := range kvs {
+		id := kv.k[len(consensusVotersName) : len(kv.k)-1]
+		delete(consensusVoters, id)
+	}
+
+	// all consensus voters left can be removed
+	for id, addr := range consensusVoters {
+		err := ci.consensusStore.removeMember(id, addr)
+		if err != nil {
+			ci.logger.Errorf("Can't remove voter: %s", err.Error())
+		} else {
+			ci.logger.Infof("Removed non-existing voter: %s %s", id, addr)
+		}
+	}
 
 	return nil
 }
@@ -464,23 +603,31 @@ func (ci *clusterImpl) ensureConsensusStoreVoters() error {
 			return fmt.Errorf("Can't get nonvoters: %s", err.Error())
 		}
 
-		// recruit more nodes to be voters
-		for _, kv := range kvs {
-			mi := &pb.MemberInfo{}
-			err := proto.Unmarshal(kv.v, mi)
-			if err != nil {
-				ci.logger.Infof("Can't unmarshal member info: %s", err.Error())
-			}
+		ci.logger.Infof("Need to add %d voters.", numVotersIWant)
 
-			raftAddr := fmt.Sprintf("%s:%d", mi.Host, mi.RaftPort)
-			err = ci.consensusStore.addVoter(kv.k, raftAddr)
-			if err == nil {
-				// seems to succesfully added a voter
-				// we can decrease the number of voters we want to add
-				numVotersIWant--
-				if numVotersIWant <= 0 {
-					// we're done !!!
-					return nil
+		// recruit more members to be voters
+		for _, kv := range kvs {
+			if kv.v != nil && len(kv.v) > 0 {
+				mi := &pb.MemberInfo{}
+				err := proto.Unmarshal(kv.v, mi)
+				if err != nil {
+					ci.logger.Infof("Can't unmarshal member info: %s", err.Error())
+				}
+
+				ci.logger.Infof("Looking at adding [%s] to be a voter: %s", mi.LongMemberId, mi.String())
+
+				if mi.RaftState == pb.RaftState_Nonvoter {
+					ci.logger.Infof("Adding member [%s] as new voter", mi.LongMemberId)
+					err = ci.markVoter(mi.LongMemberId, mi)
+					if err == nil {
+						// seems to succesfully added a voter
+						// we can decrease the number of voters we want to add
+						numVotersIWant--
+						if numVotersIWant <= 0 {
+							// we're done !!!
+							return nil
+						}
+					}
 				}
 			}
 		}
@@ -504,7 +651,7 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string) error {
 		return fmt.Errorf("Member info for member %s is not present!?!?!?", newMemberId)
 	}
 
-	memberInfoProto, err := ci.convertNodeInfoFromSerfToRaft(newMemberId, info)
+	memberInfoProto, err := ci.convertNodeInfoFromMembershipToConsensus(newMemberId, info)
 	if err != nil {
 		return fmt.Errorf("Can't create member info proto: %s", err.Error())
 	}
@@ -512,8 +659,6 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string) error {
 	if memberInfoProto.ShortMemberId <= 0 {
 		memberInfoProto, _ = ci.findShortMemberId(newMemberId, memberInfoProto)
 	}
-
-	raftAddr := fmt.Sprintf("%s:%d", memberInfoProto.Host, memberInfoProto.RaftPort)
 
 	//
 	// add new voters to raft cluster
@@ -528,58 +673,14 @@ func (ci *clusterImpl) addNewMemberToRaftCluster(newMemberId string) error {
 	// compute the number of voters I want
 	numVotersIWant := ci.config.NumRaftVoters - numVoters
 	if numVotersIWant > 0 {
-		err := ci.consensusStore.addVoter(newMemberId, raftAddr)
-		if err == nil {
-			// add the new member as voter
-			_, err = ci.consensusStore.set(consensusVotersName+newMemberId, make([]byte, 0))
-			if err != nil {
-				return err
-			}
-
-			// marshal the new members member info
-			bites, err := proto.Marshal(memberInfoProto)
-			if err != nil {
-				return err
-			}
-
-			// set member info in consensus
-			_, err = ci.consensusStore.set(consensusMembersRootName+newMemberId, bites)
-			if err != nil {
-				return err
-			}
-
-			// cuz I'm paranoid delete the new member from nonvoters in consensus
-			_, err = ci.consensusStore.delete(consensusNonVotersName + newMemberId)
-			if err != nil {
-				return err
-			}
+		err := ci.markVoter(newMemberId, memberInfoProto)
+		if err != nil {
+			return err
 		}
 	} else {
-		err := ci.consensusStore.addNonvoter(newMemberId, raftAddr)
-		if err == nil {
-			// add the new member as nonvoter
-			_, err = ci.consensusStore.set(consensusNonVotersName+newMemberId, make([]byte, 0))
-			if err != nil {
-				return err
-			}
-
-			// marshal the new members member info
-			bites, err := proto.Marshal(memberInfoProto)
-			if err != nil {
-				return err
-			}
-
-			// set member info in consensus
-			_, err = ci.consensusStore.set(consensusMembersRootName+newMemberId, bites)
-			if err != nil {
-				return err
-			}
-
-			// cuz I'm paranoid delete the new member from nonvoters in consensus
-			_, err = ci.consensusStore.delete(consensusVotersName + newMemberId)
-			if err != nil {
-				return err
-			}
+		err := ci.markNonvoter(newMemberId, memberInfoProto)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -624,7 +725,7 @@ func (ci *clusterImpl) findShortMemberId(memberId string, memberInfo *pb.MemberI
 	return memberInfo, nil
 }
 
-func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo map[string]string) (*pb.MemberInfo, error) {
+func (ci *clusterImpl) convertNodeInfoFromMembershipToConsensus(myMemberId string, serfInfo map[string]string) (*pb.MemberInfo, error) {
 	host := serfInfo[serfMDKeyHost]
 
 	serfPort, err := strconv.Atoi(serfInfo[serfMDKeySerfPort])
@@ -658,6 +759,18 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 		shortMemberId = 0
 	}
 
+	var pbRole pb.RaftState
+	role, roleOk := serfInfo[serfMDKeyRaftRole]
+	if roleOk {
+		if role == raftRoleLeader {
+			pbRole = pb.RaftState_Leader
+		} else if role == raftRoleVoter {
+			pbRole = pb.RaftState_Voter
+		} else if role == raftRoleNonvoter {
+			pbRole = pb.RaftState_Nonvoter
+		}
+	}
+
 	return &pb.MemberInfo{
 		Host:            host,
 		LongMemberId:    myMemberId,
@@ -666,7 +779,68 @@ func (ci *clusterImpl) convertNodeInfoFromSerfToRaft(myMemberId string, serfInfo
 		RaftServicePort: int32(raftServicePort),
 		GridPort:        int32(gridPort),
 		ShortMemberId:   int32(shortMemberId),
+		RaftState:       pbRole,
 	}, nil
+}
+
+func (ci *clusterImpl) markVoter(memberId string, memberInfo *pb.MemberInfo) error {
+	var err error
+
+	err = ci.consensusStore.addVoter(memberId, fmt.Sprintf("%s:%d", memberInfo.Host, memberInfo.RaftPort))
+	if err != nil {
+		return err
+	}
+
+	memberInfo.RaftState = pb.RaftState_Voter
+
+	// add member as voter in consensus
+	_, err = ci.consensusStore.set(consensusVotersName+memberId, make([]byte, 0))
+	if err != nil {
+		return err
+	}
+
+	// override member info in consensus
+	err = ci.setMemberInfoInConsensusStore(memberId, memberInfo)
+	if err != nil {
+		return err
+	}
+
+	_, err = ci.consensusStore.delete(consensusNonVotersName + memberId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ci *clusterImpl) markNonvoter(memberId string, memberInfo *pb.MemberInfo) error {
+	var err error
+
+	err = ci.consensusStore.addNonvoter(memberId, fmt.Sprintf("%s:%d", memberInfo.Host, memberInfo.RaftPort))
+	if err != nil {
+		return err
+	}
+
+	memberInfo.RaftState = pb.RaftState_Nonvoter
+
+	// add member as voter in consensus
+	_, err = ci.consensusStore.set(consensusNonVotersName+memberId, make([]byte, 0))
+	if err != nil {
+		return err
+	}
+
+	// override member info in consensus
+	err = ci.setMemberInfoInConsensusStore(memberId, memberInfo)
+	if err != nil {
+		return err
+	}
+
+	_, err = ci.consensusStore.delete(consensusVotersName + memberId)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 /////////////////////////////////////////////////////////////////
