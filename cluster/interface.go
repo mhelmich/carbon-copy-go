@@ -81,17 +81,3 @@ type Cluster interface {
 func NewCluster(config ClusterConfig) (Cluster, error) {
 	return createNewCluster(config)
 }
-
-// internal interface
-type consensusStore interface {
-	get(key string) ([]byte, error)
-	consistentGet(key string) ([]byte, error)
-	set(key string, value []byte) (bool, error)
-	delete(key string) (bool, error)
-	addVoter(serverId string, serverAddress string) error
-	addNonvoter(serverId string, serverAddress string) error
-	removeVoter(serverId string, serverAddress string)
-	addWatcher(prefix string, fn func(string, []byte))
-	removeWatcher(prefix string)
-	close() error
-}
