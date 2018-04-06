@@ -353,6 +353,12 @@ func (cs *consensusStoreImpl) removeMember(serverId string, serverAddress string
 	return cs.deleteMember(raftId, raftAddr)
 }
 
+func (cs *consensusStoreImpl) removeMemberById(serverId string) error {
+	raftId := raft.ServerID(serverId)
+	f := cs.raft.RemoveServer(raftId, 0, 0)
+	return f.Error()
+}
+
 func (cs *consensusStoreImpl) getVoters() (map[string]string, error) {
 	f := cs.raft.GetConfiguration()
 	err := f.Error()

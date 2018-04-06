@@ -368,13 +368,12 @@ func TestClusterComplicatedLeaderFailoverVotersNonVoters(t *testing.T) {
 	assert.Equal(t, 2, len(kvs))
 
 	c1.Close()
-	time.Sleep(10000 * time.Millisecond)
-	// c2.Close()
-	// time.Sleep(10000 * time.Millisecond)
+	time.Sleep(5000 * time.Millisecond)
 
 	kvs, err = c3.consensusStore.getPrefix(consensusVotersName)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(kvs))
+	c3.printClusterState()
 	kvs, err = c3.consensusStore.getPrefix(consensusNonVotersName)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(kvs))

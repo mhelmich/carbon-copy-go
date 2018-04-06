@@ -39,6 +39,8 @@ const (
 	raftRoleLeader   = "l"
 	raftRoleVoter    = "v"
 	raftRoleNonvoter = "n"
+
+	serfQueryFindMemberById = "findMemberById"
 )
 
 func createNewMembership(config ClusterConfig) (*membership, error) {
@@ -158,6 +160,8 @@ func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, member
 				m.handleMemberUpdatedEvent(serfEvent.(serf.MemberEvent), memberUpdated, raftLeaderServiceAddrChan)
 			case serf.EventMemberLeave, serf.EventMemberFailed:
 				m.handleMemberLeaveEvent(serfEvent.(serf.MemberEvent), memberLeft)
+			case serf.EventQuery:
+				m.handleQuery((serfEvent).(*serf.Query))
 			}
 		case <-m.serf.ShutdownCh():
 			close(memberJoined)
@@ -166,6 +170,12 @@ func (m *membership) handleSerfEvents(serfEventChannel <-chan serf.Event, member
 			close(raftLeaderServiceAddrChan)
 			return
 		}
+	}
+}
+
+func (m *membership) handleQuery(qe *serf.Query) {
+	if qe.Name == serfQueryFindMemberById {
+		qe.Respond([]byte(m.myLongMemberId()))
 	}
 }
 
@@ -265,6 +275,21 @@ func (m *membership) getClusterSize() int {
 
 func (m *membership) getAllLongMemberIds() []string {
 	return m.membershipState.getAllLongMemberIds()
+}
+
+func (m *membership) findMemberById(memberId string) error {
+	qp := m.serf.DefaultQueryParams()
+	qp.FilterNodes = []string{memberId}
+	qr, err := m.serf.Query(serfQueryFindMemberById, make([]byte, 0), qp)
+	if err != nil {
+		return err
+	}
+
+	resp := <-qr.ResponseCh()
+	idAgain := string(resp.Payload)
+	m.logger.Info(resp.From + " - " + idAgain)
+
+	return nil
 }
 
 func (m *membership) close() error {

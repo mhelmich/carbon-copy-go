@@ -364,9 +364,26 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 
 	ci.logger.Info("Change in consensus leadership detected! I'm the new leader now.")
 
+	// get old leader id
+	b, err := ci.consensusStore.get(consensusLeaderName)
+	if err != nil {
+		return err
+	}
+
+	oldLeaderId := string(b)
+	err = ci.consensusStore.removeMemberById(oldLeaderId)
+	if err != nil {
+		return err
+	}
+
+	_, err = ci.consensusStore.delete(consensusVotersName + oldLeaderId)
+	if err != nil {
+		return err
+	}
+
 	// update my serf status
 	// a bit hacky but gets the job done
-	err := fmt.Errorf("No real error")
+	err = fmt.Errorf("No real error")
 	for err != nil {
 		// update my own state in serf
 		if err = ci.membership.markLeader(); err == nil {
@@ -379,20 +396,6 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 
 	// set myself to be leader
 	err = ci.constructLeaderMemberInfoInConsensus()
-	if err != nil {
-		return err
-	}
-
-	// take my view of the world (from membership) and apply it to consensus
-	ci.logger.Info("Updating my membership status to be the consensus view of the world.")
-	err = ci.rebuildConsensusStateFromMembershipState()
-	if err != nil {
-		return err
-	}
-
-	// align raft voter state
-	ci.logger.Info("Cleaning out consensus voter state.")
-	err = ci.alignConsensusVoterState()
 	if err != nil {
 		return err
 	}
@@ -455,109 +458,6 @@ func (ci *clusterImpl) constructLeaderMemberInfoInConsensus() error {
 	return nil
 }
 
-// this method merges the membership state of the leader with
-// the cluster-wide consensus state
-// for this code to run the consensus leader must have died
-// the merge works as follows:
-// * get both the membership state and the consensus state and diff them
-// *** a member exists in consensus but not in membership
-// *** =-> delete out of consensus and the raft internal voter/nonvoter state
-// ***     it's obviously majorly uncool if this member happens to be a voter
-// ***     this would expose us to a complete loss of consensus data if we keep
-// ***     keep removing all voters and then the new leader fails
-// ***     beware: there's a race between serf membership handlers and this code
-// *** a member exists in membership but not in consensus
-// *** =-> add the member to consensus
-// ***     beware: there's a race between serf membership handlers and this code
-func (ci *clusterImpl) rebuildConsensusStateFromMembershipState() error {
-	myMemberId := ci.membership.myLongMemberId()
-	// get all member ids I know about
-	membershipIds := ci.membership.getAllLongMemberIds()
-	// get all members that consensus knows about
-	// kvs, err := ci.consensusStore.getPrefix(consensusMembersRootName)
-	// if err != nil {
-	// 	return err
-	// }
-
-	for _, longMemberId := range membershipIds {
-		if longMemberId != myMemberId {
-			info, ok := ci.membership.getMemberById(longMemberId)
-			if !ok {
-				ci.logger.Errorf("Can't find metadata for member [%s]?", longMemberId)
-			}
-
-			// convert to proto
-			memberInfoProto, err := ci.convertNodeInfoFromMembershipToConsensus(longMemberId, info)
-			if err != nil {
-				ci.logger.Errorf("Can't convert membership state of consensus state: %s", err.Error())
-			}
-
-			if memberInfoProto.ShortMemberId <= 0 {
-				// get me a short member id in addition to the long member id
-				memberInfoProto, err = ci.findShortMemberId(longMemberId, memberInfoProto)
-				if err != nil {
-					ci.logger.Errorf("Can't assign short member id: %s", err.Error())
-				}
-			}
-
-			ci.logger.Infof("Adding member [%s] to consensus store: %s", longMemberId, memberInfoProto.String())
-			err = ci.setMemberInfoInConsensusStore(longMemberId, memberInfoProto)
-			if err != nil {
-				ci.logger.Errorf("Can't set member info in consensus: %s", err.Error())
-			}
-
-			if memberInfoProto.RaftState == pb.RaftState_Voter {
-				_, err = ci.consensusStore.set(consensusVotersName+longMemberId, make([]byte, 0))
-				if err != nil {
-					ci.logger.Errorf("Can't set voter state in consensus: %s", err.Error())
-				}
-			} else if memberInfoProto.RaftState == pb.RaftState_Nonvoter {
-				_, err = ci.consensusStore.set(consensusNonVotersName+longMemberId, make([]byte, 0))
-				if err != nil {
-					ci.logger.Errorf("Can't set nonvoter state in consensus: %s", err.Error())
-				}
-			}
-			// else if is leader: then it should be set already
-
-			ci.logger.Infof("Reconciled %s", longMemberId)
-		}
-	}
-
-	return nil
-}
-
-// removes all members the leader doesn't know about from
-// the consensus voter or nonvoter state
-func (ci *clusterImpl) alignConsensusVoterState() error {
-	consensusVoters, err := ci.consensusStore.getVoters()
-	if err != nil {
-		return err
-	}
-
-	kvs, err := ci.consensusStore.getPrefix(consensusVotersName)
-	if err != nil {
-		return err
-	}
-
-	// delete all the ones that I know about
-	for _, kv := range kvs {
-		id := kv.k[len(consensusVotersName) : len(kv.k)-1]
-		delete(consensusVoters, id)
-	}
-
-	// all consensus voters left can be removed
-	for id, addr := range consensusVoters {
-		err := ci.consensusStore.removeMember(id, addr)
-		if err != nil {
-			ci.logger.Errorf("Can't remove voter: %s", err.Error())
-		} else {
-			ci.logger.Infof("Removed non-existing voter: %s %s", id, addr)
-		}
-	}
-
-	return nil
-}
-
 func (ci *clusterImpl) getMemberInfoFromConsensusStore(longMemberId string) (*pb.MemberInfo, error) {
 	bites, err := ci.consensusStore.get(consensusMembersRootName + longMemberId)
 	if err != nil {
@@ -603,18 +503,19 @@ func (ci *clusterImpl) ensureConsensusStoreVoters() error {
 			return fmt.Errorf("Can't get nonvoters: %s", err.Error())
 		}
 
-		ci.logger.Infof("Need to add %d voters.", numVotersIWant)
+		ci.logger.Infof("Need to add %d voters out of %d nonvoters.", numVotersIWant, len(kvs))
 
 		// recruit more members to be voters
 		for _, kv := range kvs {
-			if kv.v != nil && len(kv.v) > 0 {
+			id := kv.k[len(consensusNonVotersName):len(kv.k)]
+			b, err := ci.consensusStore.get(consensusMembersRootName + id)
+
+			if err == nil && b != nil && len(b) > 0 {
 				mi := &pb.MemberInfo{}
-				err := proto.Unmarshal(kv.v, mi)
+				err := proto.Unmarshal(b, mi)
 				if err != nil {
 					ci.logger.Infof("Can't unmarshal member info: %s", err.Error())
 				}
-
-				ci.logger.Infof("Looking at adding [%s] to be a voter: %s", mi.LongMemberId, mi.String())
 
 				if mi.RaftState == pb.RaftState_Nonvoter {
 					ci.logger.Infof("Adding member [%s] as new voter", mi.LongMemberId)
@@ -861,24 +762,54 @@ func (ci *clusterImpl) GetGridMemberChangeEvents() <-chan *GridMemberConnectionE
 	return ci.gridMemberInfoChan
 }
 
-func (ci *clusterImpl) printClusterState() {
-	// state, _ := ci.getRaftClusterState()
-	//
-	// ci.logger.Info("CLUSTER STATE:")
-	// ci.logger.Infof("Voters [%d]:", len(state.Voters))
-	// for id := range state.Voters {
-	// 	ci.logger.Infof("%s", id)
-	// }
-	//
-	// ci.logger.Infof("Nonvoters [%d]:", len(state.Nonvoters))
-	// for id := range state.Nonvoters {
-	// 	ci.logger.Infof("%s", id)
-	// }
-	//
-	// ci.logger.Infof("AllNodes [%d]:", len(state.AllNodes))
-	// for _, info := range state.AllNodes {
-	// 	ci.logger.Infof("%s", info.String())
-	// }
+func (ci *clusterImpl) printClusterState() error {
+	allMembers, err := ci.consensusStore.getPrefix(consensusMembersRootName)
+	if err != nil {
+		return err
+	}
+
+	ci.logger.Info("=====================================================")
+	ci.logger.Info("CLUSTER STATE!!!")
+	ci.logger.Info("ALL MEMBERS:")
+	for _, kv := range allMembers {
+		p := &pb.MemberInfo{}
+		err = proto.Unmarshal(kv.v, p)
+		if err == nil {
+			ci.logger.Infof("Member: %s %s", kv.k[len(consensusMembersRootName):len(kv.k)], p.String())
+		}
+	}
+
+	ci.logger.Info("LEADER:")
+
+	leader, err := ci.consensusStore.get(consensusLeaderName)
+	if err != nil {
+		return err
+	}
+
+	ci.logger.Infof("Leader: %s", string(leader))
+
+	voters, err := ci.consensusStore.getPrefix(consensusVotersName)
+	if err != nil {
+		return err
+	}
+
+	ci.logger.Info("VOTERS:")
+	for _, voter := range voters {
+		ci.logger.Infof("Voter: %s", voter.k[len(consensusVotersName):len(voter.k)])
+	}
+
+	nonvoters, err := ci.consensusStore.getPrefix(consensusNonVotersName)
+	if err != nil {
+		return err
+	}
+
+	ci.logger.Info("NONVOTERS:")
+	for _, nonvoter := range nonvoters {
+		ci.logger.Infof("Nonvoter: %s", nonvoter.k[len(consensusNonVotersName):len(nonvoter.k)])
+	}
+	ci.logger.Info("=====================================================")
+
+	return nil
 }
 
 func (ci *clusterImpl) Close() error {
