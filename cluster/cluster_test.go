@@ -18,7 +18,6 @@ package cluster
 
 import (
 	"fmt"
-	"runtime/debug"
 	"testing"
 	"time"
 
@@ -231,8 +230,6 @@ func TestClusterSimpleLeaderFailoverOnlyVoters(t *testing.T) {
 	assert.NotNil(t, c3)
 	consumeChannelEmpty(c3.GetGridMemberChangeEvents())
 
-	debug.PrintStack()
-
 	time.Sleep(2000 * time.Millisecond)
 	kvs, err := c2.consensusStore.getPrefix(consensusVotersName)
 	assert.Nil(t, err)
@@ -359,7 +356,7 @@ func TestClusterComplicatedLeaderFailoverVotersNonVoters(t *testing.T) {
 	assert.NotNil(t, c5)
 	consumeChannelEmpty(c5.GetGridMemberChangeEvents())
 
-	time.Sleep(2000 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	kvs, err := c3.consensusStore.getPrefix(consensusVotersName)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(kvs))
@@ -367,13 +364,14 @@ func TestClusterComplicatedLeaderFailoverVotersNonVoters(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(kvs))
 
+	c3.printClusterState()
 	c1.Close()
-	time.Sleep(5000 * time.Millisecond)
+	time.Sleep(3000 * time.Millisecond)
+	c3.printClusterState()
 
 	kvs, err = c3.consensusStore.getPrefix(consensusVotersName)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(kvs))
-	c3.printClusterState()
 	kvs, err = c3.consensusStore.getPrefix(consensusNonVotersName)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(kvs))
@@ -382,6 +380,96 @@ func TestClusterComplicatedLeaderFailoverVotersNonVoters(t *testing.T) {
 	c3.Close()
 	c4.Close()
 	c5.Close()
+}
+
+func TestClusterVoterNonLeaderDies(t *testing.T) {
+	hn := "127.0.0.1"
+
+	cfg1 := ClusterConfig{
+		RaftPort:        49111,
+		NumRaftVoters:   3,
+		Peers:           nil,
+		hostname:        hn,
+		RaftServicePort: 48111,
+		SerfPort:        47111,
+		longMemberId:    "node1",
+		raftNotifyCh:    make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "AAA",
+		}),
+		isDevMode: true,
+	}
+	c1, err := createNewCluster(cfg1)
+	assert.Nil(t, err)
+	assert.NotNil(t, c1)
+	consumeChannelEmpty(c1.GetGridMemberChangeEvents())
+
+	time.Sleep(500 * time.Millisecond)
+	peers2 := make([]string, 1)
+	peers2[0] = fmt.Sprintf("%s:%d", hn, cfg1.SerfPort)
+	cfg2 := ClusterConfig{
+		RaftPort:        49222,
+		NumRaftVoters:   3,
+		Peers:           peers2,
+		hostname:        hn,
+		RaftServicePort: 48222,
+		SerfPort:        47222,
+		longMemberId:    "node2",
+		raftNotifyCh:    make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "BBB",
+		}),
+		isDevMode: true,
+	}
+	c2, err := createNewCluster(cfg2)
+	assert.Nil(t, err)
+	assert.NotNil(t, c2)
+	consumeChannelEmpty(c2.GetGridMemberChangeEvents())
+
+	time.Sleep(500 * time.Millisecond)
+	peers3 := make([]string, 1)
+	peers3[0] = fmt.Sprintf("%s:%d", hn, cfg1.SerfPort)
+	cfg3 := ClusterConfig{
+		RaftPort:        49333,
+		NumRaftVoters:   3,
+		Peers:           peers3,
+		hostname:        hn,
+		RaftServicePort: 48333,
+		SerfPort:        47333,
+		longMemberId:    "node3",
+		raftNotifyCh:    make(chan bool, 16),
+		logger: log.WithFields(log.Fields{
+			"cluster": "CCC",
+		}),
+		isDevMode: true,
+	}
+	c3, err := createNewCluster(cfg3)
+	assert.Nil(t, err)
+	assert.NotNil(t, c3)
+	consumeChannelEmpty(c3.GetGridMemberChangeEvents())
+
+	time.Sleep(500 * time.Millisecond)
+	kvs, err := c3.consensusStore.getPrefix(consensusVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 3, len(kvs))
+	kvs, err = c3.consensusStore.getPrefix(consensusNonVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(kvs))
+
+	c3.printClusterState()
+	c2.Close()
+	time.Sleep(3000 * time.Millisecond)
+	c3.printClusterState()
+
+	kvs, err = c3.consensusStore.getPrefix(consensusVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(kvs))
+	kvs, err = c3.consensusStore.getPrefix(consensusNonVotersName)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(kvs))
+
+	c1.Close()
+	c3.Close()
 }
 
 func consumeChannelEmpty(ch <-chan *GridMemberConnectionEvent) {

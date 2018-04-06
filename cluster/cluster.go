@@ -370,12 +370,15 @@ func (ci *clusterImpl) newLeaderHouseKeeping() error {
 		return err
 	}
 
+	// this removes the old leader from the consensus internal
+	// server config list
 	oldLeaderId := string(b)
 	err = ci.consensusStore.removeMemberById(oldLeaderId)
 	if err != nil {
 		return err
 	}
 
+	// this removes the old leader from my bookkeeping
 	_, err = ci.consensusStore.delete(consensusVotersName + oldLeaderId)
 	if err != nil {
 		return err
