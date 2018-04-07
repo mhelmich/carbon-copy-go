@@ -377,6 +377,24 @@ func (cs *consensusStoreImpl) getVoters() (map[string]string, error) {
 	return res, nil
 }
 
+func (cs *consensusStoreImpl) getNonvoters() (map[string]string, error) {
+	f := cs.raft.GetConfiguration()
+	err := f.Error()
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]string)
+	cfg := f.Configuration()
+	for _, svr := range cfg.Servers {
+		if svr.Suffrage == raft.Nonvoter {
+			res[string(svr.ID)] = string(svr.Address)
+		}
+	}
+
+	return res, nil
+}
+
 func (cs *consensusStoreImpl) addWatcher(prefix string, fn func(string, []byte)) {
 	cs.raftFsm.addWatcher(prefix, fn)
 }

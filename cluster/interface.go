@@ -78,6 +78,6 @@ type Cluster interface {
 }
 
 // Creates a new cluster from the given config.
-func NewCluster(config ClusterConfig) (Cluster, error) {
+func NewCluster2(config ClusterConfig) (Cluster, error) {
 	return createNewCluster(config)
 }
