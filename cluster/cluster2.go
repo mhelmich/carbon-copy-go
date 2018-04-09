@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/mhelmich/carbon-copy-go/pb"
@@ -37,6 +38,11 @@ type cluster2 struct {
 	gridMemberInfoChan  chan *GridMemberConnectionEvent
 	longIdsToShortIds   map[string]int
 }
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////
+///////////////////////////////////////////
+//               CONSTRUCTORS
 
 func createNewCluster2(config ClusterConfig) (*cluster2, error) {
 	config = defaultClusterConfig(config)
@@ -61,6 +67,8 @@ func createNewCluster2(config ClusterConfig) (*cluster2, error) {
 		return nil, err
 	}
 
+	// construct a partial object now in order to
+	// get the processing loop going
 	c := &cluster2{
 		membership:          m,
 		consensusStore:      cs,
@@ -145,6 +153,11 @@ func consensusLeaderAddrFromConsensus(leaderIdBites []byte, cs *consensusStoreIm
 	return fmt.Sprintf("%s:%d", mi.Host, mi.RaftServicePort), nil
 }
 
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////
+///////////////////////////////////////////
+//               METHODS
+
 func (c *cluster2) eventProcessorLoop() {
 	for { // ever...
 		var err error
@@ -195,6 +208,8 @@ func (c *cluster2) eventProcessorLoop() {
 	}
 }
 
+// this will only executed right after the local node
+// was elected consensus leader
 func (c *cluster2) handleNewLeaderHousekeeping() error {
 	if !c.consensusStore.isRaftLeader() {
 		return fmt.Errorf("Not leader!!")
@@ -202,7 +217,7 @@ func (c *cluster2) handleNewLeaderHousekeeping() error {
 
 	// remove old leader from consensus
 	// add myself as new leader everywhere
-	err := c.doConsensusBookkeeping()
+	err := c.doLeaderConsensusBookkeeping()
 	if err != nil {
 		return err
 	}
@@ -211,22 +226,28 @@ func (c *cluster2) handleNewLeaderHousekeeping() error {
 	return c.balanceOutCluster()
 }
 
+// when we reach here, a brandnew node contacted us via membership
+// nonthing exists for this node yet, hence we only know what
+// we know from membership
 func (c *cluster2) handleLeaderMemberJoined(memberId string) error {
 	if !c.consensusStore.isRaftLeader() {
 		return nil
 	}
 
 	// get the new members info from membership
+	// this is all we know about this node at this point in time
 	info, infoOk := c.membership.getMemberById(memberId)
 	if !infoOk {
 		return fmt.Errorf("Member info for member [%s] is not present!?!?!?", memberId)
 	}
 
+	// convert the loose map into the member info protobuf
 	mi, err := c.convertNodeInfoFromMembershipToConsensus(memberId, info)
 	if err != nil {
 		return fmt.Errorf("Can't create member info proto: %s", err.Error())
 	}
 
+	// let's find a short member id for the new node
 	shortId, err := c.findShortMemberId()
 	if err != nil {
 		return fmt.Errorf("Failed to find short member id for member [%s]: %s", memberId, err.Error())
@@ -241,6 +262,7 @@ func (c *cluster2) handleLeaderMemberJoined(memberId string) error {
 	numVoters := len(voters)
 	// compute the number of voters I want
 	numVotersIWant := c.config.NumRaftVoters - numVoters
+	// see whether to make the new member a voter or nonvoter
 	if numVotersIWant > 0 {
 		err := c.markVoter(mi)
 		if err != nil {
@@ -257,26 +279,19 @@ func (c *cluster2) handleLeaderMemberJoined(memberId string) error {
 }
 
 func (c *cluster2) handleMemberUpdated(memberId string) error {
-	tags, ok := c.membership.getMemberById(memberId)
-	if ok {
-		shortMid, shortMidOk := tags[serfMDKeyShortMemberId]
-		host, hostOk := tags[serfMDKeyHost]
-		gridPort, gridPortOk := tags[serfMDKeyGridPort]
-		if shortMidOk && hostOk && gridPortOk {
-			id, err := strconv.Atoi(shortMid)
-			if err != nil {
-				c.logger.Errorf("Can't convert short id [%s] to int: %s", shortMid, err.Error())
-			} else {
-				// save for member left use case
-				c.longIdsToShortIds[memberId] = id
+	mi, err := c.getMemberInfoFromConsensusStore(memberId)
+	if err != nil {
+		return err
+	}
 
-				c.gridMemberInfoChan <- &GridMemberConnectionEvent{
-					Type:              MemberJoined,
-					ShortMemberId:     id,
-					MemberGridAddress: host + ":" + gridPort,
-				}
-			}
-		}
+	id := int(mi.ShortMemberId)
+	addr := fmt.Sprintf("%s:%d", mi.Host, mi.RaftServicePort)
+	c.longIdsToShortIds[memberId] = id
+	c.logger.Infof("Sending connection event: %s %s", id, addr)
+	c.gridMemberInfoChan <- &GridMemberConnectionEvent{
+		Type:              MemberJoined,
+		ShortMemberId:     id,
+		MemberGridAddress: addr,
 	}
 
 	return nil
@@ -308,7 +323,7 @@ func (c *cluster2) handleMemberLeft(memberId string) error {
 
 // this method does all the work necessary to remove all traces
 // of the previous leader and set myself up as the new leader
-func (c *cluster2) doConsensusBookkeeping() error {
+func (c *cluster2) doLeaderConsensusBookkeeping() error {
 	// get old leader id
 	oldLeaderIdBites, err := c.consensusStore.get(consensusLeaderName)
 	if err != nil {
@@ -365,7 +380,7 @@ func (c *cluster2) doConsensusBookkeeping() error {
 		return err
 	}
 
-	// delete myself out of
+	// delete myself out of nonvoters
 	c.consensusStore.delete(consensusNonVotersName + mi.LongMemberId)
 	return nil
 }
@@ -399,7 +414,7 @@ func (c *cluster2) balanceOutCluster() error {
 		for id := range nonvoters {
 			mi, err := c.getMemberInfoFromConsensusStore(id)
 			if err != nil {
-				c.logger.Errorf("Can't get member [%s] from consensus store: %s", id, err.Error())
+				c.logger.Warnf("Can't get member [%s] from consensus store: %s", id, err.Error())
 			} else {
 				err = c.markVoter(mi)
 				if err != nil {
@@ -570,5 +585,28 @@ func (c *cluster2) GetGridMemberChangeEvents() <-chan *GridMemberConnectionEvent
 }
 
 func (c *cluster2) Close() error {
+	err := c.membership.unmarkLeader()
+	if err != nil {
+		c.logger.Errorf("Error unmarking myself as leader (I'm proceeding anyways though): %s", err.Error())
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	err = c.membership.close()
+	if err != nil {
+		c.logger.Errorf("Error closing membership store (I'm proceeding anyways though): %s", err.Error())
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	c.raftService.close()
+	err = c.consensusStore.close()
+	if err != nil {
+		c.logger.Errorf("Error closing consensus store (I'm proceeding anyways though): %s", err.Error())
+	}
+
+	err = c.consensusStoreProxy.close()
+	if err != nil {
+		c.logger.Errorf("Error closing consensus proxy (I'm proceeding anyways though): %s", err.Error())
+	}
+	time.Sleep(50 * time.Millisecond)
 	return nil
 }
