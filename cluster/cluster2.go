@@ -78,8 +78,10 @@ func createNewCluster2(config ClusterConfig) (*cluster2, error) {
 		config:              &config,
 		shortMemberId:       -1,
 		longIdsToShortIds:   make(map[string]int),
+		gridMemberInfoChan:  make(chan *GridMemberConnectionEvent),
 	}
 	go c.eventProcessorLoop()
+	c.membershipUpdater()
 
 	// at last create the proxy
 	proxy, err := newConsensusStoreProxy(config, cs, raftLeaderAddressChan)
@@ -94,7 +96,7 @@ func createNewCluster2(config ClusterConfig) (*cluster2, error) {
 }
 
 func shortMemberIdChan(cs *consensusStoreImpl, config ClusterConfig) chan int {
-	shortMemberIdChan := make(chan int)
+	shortMemberIdChan := make(chan int, 1)
 
 	cs.addWatcher(consensusMembersRootName+config.longMemberId, func(key string, value []byte) {
 		if key == consensusMembersRootName+config.longMemberId {
@@ -117,23 +119,22 @@ func shortMemberIdChan(cs *consensusStoreImpl, config ClusterConfig) chan int {
 }
 
 func raftLeaderAddressChan(cs *consensusStoreImpl, config ClusterConfig) chan string {
-	raftLeaderAddrChan := make(chan string)
+	raftLeaderAddrChan := make(chan string, 1)
 
-	go func() {
-		lb, _ := cs.get(consensusLeaderName)
-		s, err := consensusLeaderAddrFromConsensus(lb, cs)
-		if err == nil {
-			raftLeaderAddrChan <- s
-		}
-	}()
-
-	cs.addWatcher(consensusLeaderName, func(key string, value []byte) {
+	updaterFunc := func(key string, value []byte) {
 		s, err := consensusLeaderAddrFromConsensus(value, cs)
 		if err == nil {
 			raftLeaderAddrChan <- s
 		}
-	})
+	}
 
+	lb, err := cs.get(consensusLeaderName)
+	if err != nil {
+		config.logger.Errorf("Can't get data from consensus: %s", err.Error())
+	}
+
+	updaterFunc(consensusLeaderName, lb)
+	cs.addWatcher(consensusLeaderName, updaterFunc)
 	return raftLeaderAddrChan
 }
 
@@ -157,6 +158,28 @@ func consensusLeaderAddrFromConsensus(leaderIdBites []byte, cs *consensusStoreIm
 /////////////////////////////////////////////////////
 ///////////////////////////////////////////
 //               METHODS
+
+// this method constantly transcribes the consensus state for this member into
+// the membership store and broadcasts it throughout the universe
+func (c *cluster2) membershipUpdater() {
+	updaterFunc := func(key string, value []byte) {
+		mi := &pb.MemberInfo{}
+		err := proto.Unmarshal(value, mi)
+		if err != nil {
+			c.logger.Errorf("Can't read changes from consensus: %s", err.Error())
+		}
+		m := c.convertNodeInfoFromConsensusToMembership(mi)
+		c.membership.updateMemberTags(m)
+	}
+
+	bites, err := c.consensusStore.get(consensusMembersRootName + c.config.longMemberId)
+	if err != nil {
+		c.logger.Errorf("Can't read data from consensus: %s", err.Error())
+	}
+
+	updaterFunc(consensusMembersRootName+c.config.longMemberId, bites)
+	c.consensusStore.addWatcher(consensusMembersRootName+c.config.longMemberId, updaterFunc)
+}
 
 func (c *cluster2) eventProcessorLoop() {
 	for { // ever...
@@ -279,19 +302,36 @@ func (c *cluster2) handleLeaderMemberJoined(memberId string) error {
 }
 
 func (c *cluster2) handleMemberUpdated(memberId string) error {
-	mi, err := c.getMemberInfoFromConsensusStore(memberId)
-	if err != nil {
-		return err
-	}
-
-	id := int(mi.ShortMemberId)
-	addr := fmt.Sprintf("%s:%d", mi.Host, mi.RaftServicePort)
-	c.longIdsToShortIds[memberId] = id
-	c.logger.Infof("Sending connection event: %s %s", id, addr)
-	c.gridMemberInfoChan <- &GridMemberConnectionEvent{
-		Type:              MemberJoined,
-		ShortMemberId:     id,
-		MemberGridAddress: addr,
+	// this handler looks for updated members that have a short id now
+	// the short id is what the cache needs to talk to other nodes
+	// keep in mind that brandnew members only have a short id
+	// only after the raft leader picked them up and assigned a short id to them
+	// that's why short ids can only appear in an update
+	tags, ok := c.membership.getMemberById(memberId)
+	if ok {
+		shortMid, shortMidOk := tags[serfMDKeyShortMemberId]
+		host, hostOk := tags[serfMDKeyHost]
+		gridPort, gridPortOk := tags[serfMDKeyGridPort]
+		if shortMidOk && hostOk && gridPortOk {
+			id, err := strconv.Atoi(shortMid)
+			if err != nil {
+				c.logger.Errorf("Can't convert short id [%s] to int: %s", shortMid, err.Error())
+			} else {
+				sid, err := strconv.Atoi(shortMid)
+				if err == nil && sid > 0 {
+					c.logger.Infof("Member with ids (long) [%s] (short) [%s] will join the grid cluster.", memberId, shortMid)
+					c.gridMemberInfoChan <- &GridMemberConnectionEvent{
+						Type:              MemberJoined,
+						ShortMemberId:     id,
+						MemberGridAddress: host + ":" + gridPort,
+					}
+				} else if err != nil && sid > 0 {
+					c.logger.Warnf("Finding weird short id and error: %d, %s", sid, err.Error())
+				} else {
+					c.logger.Warnf("Finding weird short id: %d", sid)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -533,6 +573,24 @@ func (c *cluster2) convertNodeInfoFromMembershipToConsensus(myMemberId string, s
 		RaftServicePort: int32(raftServicePort),
 		GridPort:        int32(gridPort),
 	}, nil
+}
+
+func (c *cluster2) convertNodeInfoFromConsensusToMembership(mi *pb.MemberInfo) map[string]string {
+	m := make(map[string]string)
+	m[serfMDKeyHost] = mi.Host
+	m[serfMDKeySerfPort] = strconv.Itoa(int(mi.SerfPort))
+	m[serfMDKeyRaftPort] = strconv.Itoa(int(mi.RaftPort))
+	m[serfMDKeyRaftServicePort] = strconv.Itoa(int(mi.RaftServicePort))
+	m[serfMDKeyGridPort] = strconv.Itoa(int(mi.GridPort))
+	m[serfMDKeyShortMemberId] = strconv.Itoa(int(mi.ShortMemberId))
+	if mi.GetRaftState() == pb.RaftState_Leader {
+		m[serfMDKeyRaftRole] = raftRoleLeader
+	} else if mi.GetRaftState() == pb.RaftState_Voter {
+		m[serfMDKeyRaftRole] = raftRoleVoter
+	} else if mi.GetRaftState() == pb.RaftState_Nonvoter {
+		m[serfMDKeyRaftRole] = raftRoleNonvoter
+	}
+	return m
 }
 
 func (c *cluster2) findShortMemberId() (int, error) {

@@ -117,7 +117,7 @@ func createRaft(config ClusterConfig) (*raft.Raft, *fsm, error) {
 		}
 		// create a durable bolt store
 		var boltStore *raftboltdb.BoltStore
-		boltStore, err := raftboltdb.NewBoltStore(filepath.Join(config.RaftStoreDir, raftDbFileName))
+		boltStore, err = raftboltdb.NewBoltStore(filepath.Join(config.RaftStoreDir, raftDbFileName))
 		if err != nil {
 			return nil, nil, fmt.Errorf("new bolt store: %s", err)
 		}
