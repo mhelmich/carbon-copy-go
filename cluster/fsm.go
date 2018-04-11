@@ -32,12 +32,19 @@ import (
 // I'm sneaking this struct in here as response for a consistent read
 // this is the generic return type of an apply step
 // I hope I can press all possible responses into this format
-// at least this way I have boil type-safety problems down to casting
+// at least this way I have boiled type-safety problems down to casting
 // to the same thing always and then I have to deal with putting state
 // back together from a byte array
 type raftApplyResponse struct {
 	err   error
 	value []byte
+}
+
+type watcherCallback func(string, []byte)
+
+type watcher struct {
+	prefix string
+	fn     watcherCallback
 }
 
 // the state machine implementation
@@ -46,7 +53,7 @@ type fsm struct {
 	stateMutex   sync.RWMutex
 	logger       *log.Entry
 	watcherMutex sync.RWMutex
-	watchers     map[string]func(string, []byte)
+	watchers     map[string]watcherCallback
 }
 
 // Apply applies a Raft log entry to the key-value store.
@@ -197,7 +204,7 @@ func (f *fsm) applyDelete(key string) interface{} {
 func (f *fsm) addWatcher(prefix string, fn func(string, []byte)) {
 	f.watcherMutex.Lock()
 	if f.watchers == nil {
-		f.watchers = make(map[string]func(string, []byte))
+		f.watchers = make(map[string]watcherCallback)
 	}
 	f.watchers[prefix] = fn
 	f.watcherMutex.Unlock()
