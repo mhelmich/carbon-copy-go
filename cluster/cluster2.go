@@ -106,6 +106,8 @@ func shortMemberIdChan(cs *consensusStoreImpl, config ClusterConfig) chan int {
 			return
 		}
 
+		config.logger.Errorf("Running this shortIdWatcherCh [%s] [%s]", e.key, string(e.value))
+
 		if e.key == consensusMembersRootName+config.longMemberId {
 			mi := &pb.MemberInfo{}
 			errUnMarshall := proto.Unmarshal(e.value, mi)
@@ -150,6 +152,7 @@ func raftLeaderAddressChan(cs *consensusStoreImpl, config ClusterConfig) chan st
 				return
 			}
 
+			config.logger.Errorf("Running this raftLeaderWatchCh [%s] [%s]", e.key, string(e.value))
 			updaterFunc(e.key, e.value)
 		}
 	}()
@@ -206,6 +209,7 @@ func (c *cluster2) membershipUpdater() {
 				return
 			}
 
+			c.logger.Errorf("Running this raftMemberWatcherCh [%s] [%s]", e.key, string(e.value))
 			updaterFunc(e.key, e.value)
 		}
 	}()
@@ -286,6 +290,8 @@ func (c *cluster2) handleLeaderMemberJoined(memberId string) error {
 	if !c.consensusStore.isRaftLeader() {
 		return nil
 	}
+
+	c.logger.Infof("Adding a new member with id [%s] to the cluster...", memberId)
 
 	// get the new members info from membership
 	// this is all we know about this node at this point in time

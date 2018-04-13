@@ -219,7 +219,7 @@ func (f *fsm) addWatcher(prefix string) watcherChannel {
 	f.watcherMutex.Lock()
 	if f.watchers == nil {
 		f.watchers = make(map[string][]watcherChannel)
-		f.watchers[prefix] = make([]watcherChannel, 1)
+		f.watchers[prefix] = make([]watcherChannel, 0)
 	}
 
 	ch := make(watcherChannel)
@@ -234,6 +234,7 @@ func (f *fsm) removeWatcher(prefix string, ch watcherChannel) {
 	deleted := false
 
 	if len(channels) == 1 {
+		close(channels[0])
 		delete(f.watchers, prefix)
 		deleted = true
 	} else {
