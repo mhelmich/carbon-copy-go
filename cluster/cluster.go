@@ -124,10 +124,16 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	// the method GetMyShortMemberId() will block on it
 	// until the underlying watcher fires
 	shortMemberIdChan := make(chan int)
-	cs.addWatcher(consensusMembersRootName+config.longMemberId, func(key string, value []byte) {
-		if key == consensusMembersRootName+config.longMemberId {
+	shortIdWatcherChan := cs.addWatcher(consensusMembersRootName + config.longMemberId)
+	go func() {
+		e := <-shortIdWatcherChan
+		if e == nil {
+			return
+		}
+
+		if e.key == consensusMembersRootName+config.longMemberId {
 			mi := &pb.MemberInfo{}
-			errUnMarshall := proto.Unmarshal(value, mi)
+			errUnMarshall := proto.Unmarshal(e.value, mi)
 			if errUnMarshall != nil {
 				config.logger.Errorf("Can't acquire short member id: %s", errUnMarshall.Error())
 			}
@@ -138,7 +144,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 				close(shortMemberIdChan)
 			}
 		}
-	})
+	}()
 
 	// then we need membership to announce our presence to others (or not)
 	m, err := createNewMembership(config)
@@ -186,7 +192,7 @@ func createNewCluster(config ClusterConfig) (*clusterImpl, error) {
 	case newShortMemberId := <-shortMemberIdChan:
 		if newShortMemberId > 0 {
 			ci.shortMemberId = newShortMemberId
-			ci.consensusStore.removeWatcher(consensusMembersRootName + ci.config.longMemberId)
+			ci.consensusStore.removeWatcher(consensusMembersRootName+ci.config.longMemberId, shortIdWatcherChan)
 			ci.membership.updateMemberTag(serfMDKeyShortMemberId, strconv.Itoa(ci.shortMemberId))
 		}
 	case <-time.After(3 * time.Second):

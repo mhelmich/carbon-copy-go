@@ -44,7 +44,14 @@ type watcherCallback func(string, []byte)
 
 type watcher struct {
 	prefix string
-	fn     watcherCallback
+	fn     *watcherCallback
+}
+
+type watcherChannel chan *watcherEvent
+
+type watcherEvent struct {
+	key   string
+	value []byte
 }
 
 // the state machine implementation
@@ -53,7 +60,8 @@ type fsm struct {
 	stateMutex   sync.RWMutex
 	logger       *log.Entry
 	watcherMutex sync.RWMutex
-	watchers     map[string]watcherCallback
+	watchers     map[string][]watcherChannel
+	idToWatcher  map[int]string
 }
 
 // Apply applies a Raft log entry to the key-value store.
@@ -140,9 +148,12 @@ func (f *fsm) applySet(key string, value []byte) interface{} {
 	// and I don't want to put in the work to improve locking now
 	if f.watchers != nil {
 		f.watcherMutex.RLock()
-		for prefix, fn := range f.watchers {
+		for prefix, allChannels := range f.watchers {
 			if strings.HasPrefix(key, prefix) {
-				go fn(key, value)
+				for _, ch := range allChannels {
+					c := ch
+					go func() { c <- &watcherEvent{key: key, value: value} }()
+				}
 			}
 		}
 		f.watcherMutex.RUnlock()
@@ -179,9 +190,12 @@ func (f *fsm) applyDelete(key string) interface{} {
 	// and I don't want to put in the work to improve locking now
 	if f.watchers != nil {
 		f.watcherMutex.RLock()
-		for prefix, fn := range f.watchers {
+		for prefix, allChannels := range f.watchers {
 			if strings.HasPrefix(key, prefix) {
-				go fn(key, nil)
+				for _, ch := range allChannels {
+					c := ch
+					go func() { c <- &watcherEvent{key: key, value: nil} }()
+				}
 			}
 		}
 		f.watcherMutex.RUnlock()
@@ -201,19 +215,46 @@ func (f *fsm) applyDelete(key string) interface{} {
 	}
 }
 
-func (f *fsm) addWatcher(prefix string, fn func(string, []byte)) {
+func (f *fsm) addWatcher(prefix string) watcherChannel {
 	f.watcherMutex.Lock()
 	if f.watchers == nil {
-		f.watchers = make(map[string]watcherCallback)
+		f.watchers = make(map[string][]watcherChannel)
+		f.watchers[prefix] = make([]watcherChannel, 1)
 	}
-	f.watchers[prefix] = fn
+
+	ch := make(watcherChannel)
+	f.watchers[prefix] = append(f.watchers[prefix], ch)
 	f.watcherMutex.Unlock()
+	return ch
 }
 
-func (f *fsm) removeWatcher(prefix string) {
+func (f *fsm) removeWatcher(prefix string, ch watcherChannel) {
 	f.watcherMutex.Lock()
-	delete(f.watchers, prefix)
+	channels := f.watchers[prefix]
+	deleted := false
+
+	if len(channels) == 1 {
+		delete(f.watchers, prefix)
+		deleted = true
+	} else {
+		for idx, c := range channels {
+			if ch == c {
+				// replace the channel to delete with the last one
+				channels[idx] = channels[len(channels)-1]
+				// chop off the last element
+				channels = channels[:len(channels)-1]
+				close(ch)
+				deleted = true
+				break
+			}
+		}
+	}
+
 	f.watcherMutex.Unlock()
+
+	if !deleted {
+		f.logger.Warnf("Didn't find watcher for prefix [%s] and channel [%v] and hence didn't remove it", prefix, ch)
+	}
 }
 
 type fsmSnapshot struct {

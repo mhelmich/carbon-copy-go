@@ -98,10 +98,17 @@ func createNewCluster2(config ClusterConfig) (*cluster2, error) {
 func shortMemberIdChan(cs *consensusStoreImpl, config ClusterConfig) chan int {
 	shortMemberIdChan := make(chan int, 1)
 
-	cs.addWatcher(consensusMembersRootName+config.longMemberId, func(key string, value []byte) {
-		if key == consensusMembersRootName+config.longMemberId {
+	shortIdWatcherCh := cs.addWatcher(consensusMembersRootName + config.longMemberId)
+
+	go func() {
+		e := <-shortIdWatcherCh
+		if e == nil {
+			return
+		}
+
+		if e.key == consensusMembersRootName+config.longMemberId {
 			mi := &pb.MemberInfo{}
-			errUnMarshall := proto.Unmarshal(value, mi)
+			errUnMarshall := proto.Unmarshal(e.value, mi)
 			if errUnMarshall != nil {
 				config.logger.Errorf("Can't acquire short member id: %s", errUnMarshall.Error())
 			}
@@ -109,11 +116,11 @@ func shortMemberIdChan(cs *consensusStoreImpl, config ClusterConfig) chan int {
 			shortMemberId := int(mi.ShortMemberId)
 			if shortMemberId > 0 {
 				shortMemberIdChan <- int(mi.ShortMemberId)
-				cs.removeWatcher(consensusMembersRootName + config.longMemberId)
 				close(shortMemberIdChan)
 			}
 		}
-	})
+
+	}()
 
 	return shortMemberIdChan
 }
@@ -134,7 +141,19 @@ func raftLeaderAddressChan(cs *consensusStoreImpl, config ClusterConfig) chan st
 	}
 
 	updaterFunc(consensusLeaderName, lb)
-	cs.addWatcher(consensusLeaderName, updaterFunc)
+	raftLeaderWatchCh := cs.addWatcher(consensusLeaderName)
+
+	go func() {
+		for {
+			e := <-raftLeaderWatchCh
+			if e == nil {
+				return
+			}
+
+			updaterFunc(e.key, e.value)
+		}
+	}()
+
 	return raftLeaderAddrChan
 }
 
@@ -178,7 +197,18 @@ func (c *cluster2) membershipUpdater() {
 	}
 
 	updaterFunc(consensusMembersRootName+c.config.longMemberId, bites)
-	c.consensusStore.addWatcher(consensusMembersRootName+c.config.longMemberId, updaterFunc)
+	raftMemberWatcherCh := c.consensusStore.addWatcher(consensusMembersRootName + c.config.longMemberId)
+
+	go func() {
+		for {
+			e := <-raftMemberWatcherCh
+			if e == nil {
+				return
+			}
+
+			updaterFunc(e.key, e.value)
+		}
+	}()
 }
 
 func (c *cluster2) eventProcessorLoop() {

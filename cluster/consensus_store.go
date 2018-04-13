@@ -395,12 +395,12 @@ func (cs *consensusStoreImpl) getNonvoters() (map[string]string, error) {
 	return res, nil
 }
 
-func (cs *consensusStoreImpl) addWatcher(prefix string, fn func(string, []byte)) {
-	cs.raftFsm.addWatcher(prefix, fn)
+func (cs *consensusStoreImpl) addWatcher(prefix string) watcherChannel {
+	return cs.raftFsm.addWatcher(prefix)
 }
 
-func (cs *consensusStoreImpl) removeWatcher(prefix string) {
-	cs.raftFsm.removeWatcher(prefix)
+func (cs *consensusStoreImpl) removeWatcher(prefix string, ch watcherChannel) {
+	cs.raftFsm.removeWatcher(prefix, ch)
 }
 
 func (cs *consensusStoreImpl) close() error {

@@ -211,7 +211,11 @@ func TestConsensusStoreWatcher(t *testing.T) {
 		store2.logger.Infof("Got key in watcher %s", key)
 		watcherFired <- key
 	}
-	store2.addWatcher("prefix___aaa", fn1)
+	ch := store2.addWatcher("prefix___aaa")
+	go func() {
+		e := <-ch
+		fn1(e.key, e.value)
+	}()
 
 	// the test goes here
 	key := "prefix___aaa"
